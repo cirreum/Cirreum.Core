@@ -1,0 +1,27 @@
+<Solution>
+  <Folder Name="/build/">
+    <File Path="../.github/workflows/publish.yml" />
+    <File Path="../build/Author.props" />
+    <File Path="../build/Common.props" />
+    <File Path="../build/icon.png" />
+    <File Path="../build/Icon.props" />
+    <File Path="../build/PackageInfo.props" />
+    <File Path="../build/SourceLink.props" />
+    <File Path="../build/Versioning.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <File Path="Directory.Build.props" />
+    <Project Path="Cirreum.Core/Cirreum.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="../tests/Cirreum.Conductor.Tests/Cirreum.Conductor.Tests.csproj" Id="4a9ec354-8a69-46ce-b02a-f655e82874f9" />
+  </Folder>
+  <Folder Name="/_solution items/">
+    <File Path="../.editorconfig" />
+    <File Path="../.gitattributes" />
+    <File Path="../.gitignore" />
+    <File Path="../LICENSE" />
+    <File Path="../README.md" />
+    <File Path="global.json" />
+  </Folder>
+</Solution>

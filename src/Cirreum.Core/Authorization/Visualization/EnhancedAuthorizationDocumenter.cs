@@ -1,0 +1,751 @@
+﻿namespace Cirreum.Authorization.Visualization;
+
+using Cirreum.Authorization.Analysis;
+using Cirreum.Authorization.Analysis.Analyzers;
+using System.Text;
+
+public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
+
+	private readonly IAuthorizationRoleRegistry _roleRegistry;
+	private readonly IServiceProvider _services;
+
+	public EnhancedAuthorizationDocumenter(IAuthorizationRoleRegistry roleRegistry, IServiceProvider services) {
+		this._roleRegistry = roleRegistry;
+		this._services = services;
+		EnhancedAuthorizationRuleProvider.Instance.Initialize(services);
+	}
+
+	public async Task<string> GenerateMarkdown() {
+		var sb = new StringBuilder();
+		var combinedInfo = EnhancedAuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
+
+		sb.AppendLine("# Authorization System Documentation");
+		sb.AppendLine();
+
+		// Executive Summary
+		sb.AppendLine("## Executive Summary");
+		sb.AppendLine();
+		sb.AppendLine($"- **Total Authorization Protection Points**: {combinedInfo.TotalProtectionPoints}");
+		sb.AppendLine($"- **Resource-Specific Validators**: {combinedInfo.ResourceRules.Count}");
+		sb.AppendLine($"- **Policy Validators**: {combinedInfo.PolicyRules.Count}");
+		sb.AppendLine($"- **Protected Resource Types**: {combinedInfo.ResourceRules.Select(r => r.ResourceType).Distinct().Count()}");
+		sb.AppendLine();
+
+		// Policy Validators Section
+		sb.AppendLine("## Policy Validators");
+		sb.AppendLine();
+		sb.AppendLine("Global and attribute-based policies that apply across multiple resources:");
+		sb.AppendLine();
+
+		if (combinedInfo.PolicyRules.Any()) {
+			sb.AppendLine("| Policy Name | Type | Order | Runtime Support | Target Attribute |");
+			sb.AppendLine("|-------------|------|-------|-----------------|------------------|");
+
+			foreach (var policy in combinedInfo.PolicyRules.OrderBy(p => p.Order)) {
+				var runtimeSupport = string.Join(", ", policy.SupportedRuntimeTypes);
+				var targetAttribute = policy.TargetAttributeType?.Name ?? "N/A (Global)";
+
+				sb.AppendLine($"| {policy.PolicyName} | {(policy.IsAttributeBased ? "Attribute-Based" : "Global")} | {policy.Order} | {runtimeSupport} | {targetAttribute} |");
+			}
+		} else {
+			sb.AppendLine("No policy validators configured.");
+		}
+
+		sb.AppendLine();
+
+		// Rest of the existing documentation...
+		sb.AppendLine("## Role Hierarchy");
+		sb.AppendLine();
+		sb.AppendLine("```text");
+		sb.AppendLine(RoleHierarchyRenderer.ToTextTree(this._roleRegistry));
+		sb.AppendLine("```");
+		sb.AppendLine();
+
+		// Enhanced Analysis Results
+		var analysisReport = await this.GetEnhancedAnalysisReportAsync();
+		sb.Append(analysisReport.ToMarkdown());
+
+		return sb.ToString();
+	}
+
+	public async Task<string> GenerateCsv() {
+		var sb = new StringBuilder();
+		var combinedInfo = EnhancedAuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
+		var allRoles = _roleRegistry.GetRegisteredRoles();
+
+		sb.AppendLine("# ENHANCED AUTHORIZATION SYSTEM EXPORT");
+		sb.AppendLine($"# Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+		sb.AppendLine($"# Total Protection Points: {combinedInfo.TotalProtectionPoints}");
+		sb.AppendLine();
+
+		// Policy Validators Section
+		sb.AppendLine("## POLICY VALIDATORS");
+		sb.AppendLine("Section,PolicyName,ValidatorType,Order,IsAttributeBased,TargetAttribute,RuntimeTypes,Description");
+
+		foreach (var policy in combinedInfo.PolicyRules) {
+			var runtimeTypes = string.Join(";", policy.SupportedRuntimeTypes);
+			var targetAttribute = policy.TargetAttributeType?.Name ?? "";
+
+			sb.AppendLine(
+				$"PolicyValidator," +
+				$"{EscapeCsvField(policy.PolicyName)}," +
+				$"{EscapeCsvField(policy.ValidatorType.Name)}," +
+				$"{policy.Order}," +
+				$"{policy.IsAttributeBased}," +
+				$"{EscapeCsvField(targetAttribute)}," +
+				$"{EscapeCsvField(runtimeTypes)}," +
+				$"{EscapeCsvField(policy.Description)}");
+		}
+
+		sb.AppendLine();
+
+		// SECTION 1: Role hierarchy with improved structure
+		sb.AppendLine("## ROLE HIERARCHY");
+		sb.AppendLine("Section,ParentRole,ChildRole,InheritanceDepth");
+
+		var processedRoles = new HashSet<string>();
+		foreach (var role in allRoles) {
+			var childRoles = _roleRegistry.GetInheritedRoles(role);
+			foreach (var childRole in childRoles) {
+				// Calculate an approximate inheritance depth for visualization tools
+				var inheritanceDepth = 1; // Default to direct inheritance
+
+				// Add relationship to CSV
+				sb.AppendLine(
+					$"RoleHierarchy," +
+					$"{EscapeCsvField(role.ToString())}," +
+					$"{EscapeCsvField(childRole.ToString())}," +
+					$"{inheritanceDepth}");
+
+				processedRoles.Add(role.ToString());
+				processedRoles.Add(childRole.ToString());
+			}
+		}
+
+		// Add standalone roles (not in any hierarchy)
+		foreach (var role in allRoles) {
+			if (!processedRoles.Contains(role.ToString())) {
+				sb.AppendLine(
+					$"RoleHierarchy," +
+					$"{EscapeCsvField(role.ToString())}," +
+					$"," + // No child
+					$"0"); // Zero depth (standalone)
+			}
+		}
+
+		sb.AppendLine();
+
+		// SECTION 2: Authorization rules with improved structure for visualization
+		var rules = AuthorizationRuleProvider.Instance.GetAllRules();
+		sb.AppendLine("## AUTHORIZATION RULES");
+		sb.AppendLine("Section,ResourceName,ValidatorName,PropertyPath,ValidationType,Message,Condition,IncludesRBAC,SortOrder");
+
+		var sortOrder = 0;
+		foreach (var rule in rules) {
+			sortOrder++;
+
+			// Determine if the ABAC rule includes RBAC
+			var includesRBAC =
+				!string.IsNullOrWhiteSpace(rule.PropertyPath)
+				&& rule.PropertyPath == nameof(AuthorizationContext<IAuthorizableResource>.UserRoles);
+
+			// Extract validation type for better categorization
+			var validationType = ExtractValidationType(rule.ValidationLogic);
+
+			sb.AppendLine(
+				$"AuthRule," +
+				$"{EscapeCsvField(rule.ResourceType.Name)}," +
+				$"{EscapeCsvField(rule.ValidatorType.Name)}," +
+				$"{EscapeCsvField(rule.PropertyPath ?? "AuthorizationContext")}," +
+				$"{EscapeCsvField(validationType)}," +
+				$"{EscapeCsvField(rule.Message)}," +
+				$"{EscapeCsvField(rule.Condition ?? "")}," +
+				$"{(includesRBAC ? "True" : "False")}," +
+				$"{sortOrder}");
+		}
+
+		sb.AppendLine();
+
+		// SECTION 3: Resource-Role Matrix (excellent for heat map visualizations)
+		sb.AppendLine("## RESOURCE ROLE MATRIX");
+		sb.AppendLine("Section,ResourceName,RoleName,AccessConditions");
+
+		// Get unique resource types
+		var resourceTypes = rules
+			.Select(r => r.ResourceType.Name)
+			.Distinct();
+
+		// Generate the matrix
+		foreach (var resourceType in resourceTypes) {
+			foreach (var role in allRoles) {
+				// Check for explicit rules
+				var explicitRules = rules.Where(r =>
+					r.ResourceType.Name == resourceType &&
+					r.Message.Contains(role.ToString()));
+				if (explicitRules.Any()) {
+
+					// Get access conditions
+					var conditions = explicitRules
+						.Where(r => !string.IsNullOrEmpty(r.Condition))
+						.Select(r => r.Condition)
+						.Where(c => c != null);
+
+					var accessConditions = string.Join("; ", conditions);
+
+					sb.AppendLine(
+						$"ResourceRoleMatrix," +
+						$"{EscapeCsvField(resourceType)}," +
+						$"{EscapeCsvField(role.ToString())}," +
+						$"{EscapeCsvField(accessConditions)}");
+
+				}
+			}
+		}
+
+		sb.AppendLine();
+
+		// SECTION 4: Security analysis with improved structure
+		var analysisReport = await this.GetEnhancedAnalysisReportAsync();
+		sb.AppendLine("## SECURITY ANALYSIS");
+		sb.AppendLine("Section,Category,Severity,Description,RelatedObjects,ImpactedResources,ImpactedRoles");
+
+		foreach (var issue in analysisReport.Issues) {
+			// Join related objects with semicolon for CSV compatibility
+			var relatedObjs = string.Join(";", issue.RelatedObjects.Select(o => o.ToString()));
+
+			// Extract impacted resources
+			var impactedResources = string.Join(";",
+				issue.RelatedObjects
+					.OfType<Type>()
+					.Where(t => resourceTypes.Contains(t.Name))
+					.Select(t => t.Name));
+
+			// Extract impacted roles
+			var impactedRoles = string.Join(";",
+				issue.RelatedObjects
+					.Where(o => allRoles.Any(r => o.ToString()?.Contains(r.ToString()) ?? false))
+					.Select(o => o.ToString()));
+
+			sb.AppendLine(
+				$"SecurityIssue," +
+				$"{EscapeCsvField(issue.Category)}," +
+				$"{EscapeCsvField(issue.Severity.ToString())}," +
+				$"{EscapeCsvField(issue.Description)}," +
+				$"{EscapeCsvField(relatedObjs)}," +
+				$"{EscapeCsvField(impactedResources)}," +
+				$"{EscapeCsvField(impactedRoles)}");
+		}
+
+		return sb.ToString();
+
+	}
+	private static string ExtractValidationType(string validationLogic) {
+		return validationLogic.Replace(" ", "");
+	}
+	private static string EscapeCsvField(string field) {
+		if (string.IsNullOrEmpty(field)) {
+			return "";
+		}
+
+		if (field.Contains(',') || field.Contains('"') || field.Contains('\n')) {
+			return $"\"{field.Replace("\"", "\"\"")}\"";
+		}
+		return field;
+	}
+
+	public async Task<string> RenderHtmlPage() {
+		var sb = new StringBuilder();
+
+		sb.AppendLine("<!DOCTYPE html>");
+		sb.AppendLine("<html>");
+		sb.AppendLine("<head>");
+		sb.AppendLine("  <title>Authorization System Visualization</title>");
+		sb.AppendLine("  <style>");
+		sb.AppendLine("    body { font-family: Arial, sans-serif; margin: 20px; }");
+		sb.AppendLine("    .role { background-color: #f8f0ff; border: 1px solid #d0b0ff; border-radius: 4px; margin: 5px; padding: 10px; }");
+		sb.AppendLine("    .app-role { background-color: #f0f0ff; border: 1px solid #b0b0ff; }");
+		sb.AppendLine("    .custom-role { background-color: #fff0f0; border: 1px solid #ffb0b0; }");
+		sb.AppendLine("    .resource { background-color: #f0fff0; border: 1px solid #b0ffb0; border-radius: 4px; margin: 10px 0; padding: 10px; }");
+		sb.AppendLine("    .validator { margin-left: 20px; }");
+		sb.AppendLine("    .rule { margin-left: 40px; background-color: #fffff0; border: 1px solid #ffffd0; border-radius: 4px; padding: 8px; margin-bottom: 5px; }");
+		sb.AppendLine("    .inheritance { color: #666; }");
+		sb.AppendLine("    .error { background-color: #ffeeee; border: 1px solid #ffaaaa; border-radius: 4px; padding: 8px; margin: 5px 0; }");
+		sb.AppendLine("    .warning { background-color: #ffffee; border: 1px solid #ffffaa; border-radius: 4px; padding: 8px; margin: 5px 0; }");
+		sb.AppendLine("    .info { background-color: #eeeeff; border: 1px solid #aaaaff; border-radius: 4px; padding: 8px; margin: 5px 0; }");
+
+		// NEW: Policy-related styles
+		sb.AppendLine("    .policy { background-color: #fff9e6; border: 1px solid #ffcc80; border-radius: 4px; margin: 10px 0; padding: 10px; }");
+		sb.AppendLine("    .attribute-policy { background-color: #e8f5e8; border: 1px solid #a5d6a7; }");
+		sb.AppendLine("    .global-policy { background-color: #fce4ec; border: 1px solid #f8bbd9; }");
+		sb.AppendLine("    .policy-badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; margin-right: 5px; }");
+		sb.AppendLine("    .badge-attribute { background-color: #c8e6c9; color: #2e7d32; }");
+		sb.AppendLine("    .badge-global { background-color: #f8bbd9; color: #c2185b; }");
+		sb.AppendLine("    .badge-order { background-color: #e1bee7; color: #7b1fa2; }");
+		sb.AppendLine("    .runtime-support { font-size: 0.9em; color: #666; margin-top: 5px; }");
+		sb.AppendLine("    .policy-description { font-style: italic; color: #555; margin-top: 8px; }");
+		sb.AppendLine("    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }");
+		sb.AppendLine("    .stat-card { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; text-align: center; }");
+		sb.AppendLine("    .stat-number { font-size: 2em; font-weight: bold; color: #007bff; }");
+		sb.AppendLine("    .stat-label { color: #6c757d; font-size: 0.9em; }");
+
+		sb.AppendLine("    h1, h2, h3 { color: #444; }");
+		sb.AppendLine("    .diagram { margin: 20px 0; overflow: auto; max-height: 800px; }");
+		sb.AppendLine("    .tabs { display: flex; margin-bottom: 10px; }");
+		sb.AppendLine("    .tab { padding: 8px 16px; cursor: pointer; border: 1px solid #ccc; margin-right: 4px; }");
+		sb.AppendLine("    .tab.active { background-color: #f0f0f0; border-bottom: none; }");
+		sb.AppendLine("    .tab-content { display: none; padding: 20px; border: 1px solid #ccc; }");
+		sb.AppendLine("    .tab-content.active { display: block; }");
+		sb.AppendLine("  </style>");
+		sb.AppendLine("  <script src=\"https://unpkg.com/mermaid@11.7.0/dist/mermaid.min.js\"></script>");
+		sb.AppendLine("</head>");
+		sb.AppendLine("<body>");
+
+		sb.AppendLine("<h1>Authorization System Documentation</h1>");
+
+		// Get data for statistics
+		var combinedInfo = EnhancedAuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
+		var allRoles = _roleRegistry.GetRegisteredRoles();
+
+		// Add executive summary with statistics
+		sb.AppendLine("<div class=\"stats-grid\">");
+		sb.AppendLine("  <div class=\"stat-card\">");
+		sb.AppendLine($"    <div class=\"stat-number\">{combinedInfo.TotalProtectionPoints}</div>");
+		sb.AppendLine("    <div class=\"stat-label\">Total Protection Points</div>");
+		sb.AppendLine("  </div>");
+		sb.AppendLine("  <div class=\"stat-card\">");
+		sb.AppendLine($"    <div class=\"stat-number\">{combinedInfo.ResourceRules.Count}</div>");
+		sb.AppendLine("    <div class=\"stat-label\">Resource Validators</div>");
+		sb.AppendLine("  </div>");
+		sb.AppendLine("  <div class=\"stat-card\">");
+		sb.AppendLine($"    <div class=\"stat-number\">{combinedInfo.PolicyRules.Count}</div>");
+		sb.AppendLine("    <div class=\"stat-label\">Policy Validators</div>");
+		sb.AppendLine("  </div>");
+		sb.AppendLine("  <div class=\"stat-card\">");
+		sb.AppendLine($"    <div class=\"stat-number\">{allRoles.Count}</div>");
+		sb.AppendLine("    <div class=\"stat-label\">Total Roles</div>");
+		sb.AppendLine("  </div>");
+		sb.AppendLine("</div>");
+
+		// Enhanced tabs - ADD NEW POLICY TAB
+		sb.AppendLine("<div class=\"tabs\">");
+		sb.AppendLine("  <div class=\"tab active\" onclick=\"showTab('overview')\">Overview</div>");
+		sb.AppendLine("  <div class=\"tab\" onclick=\"showTab('policies')\">Policy Validators</div>");
+		sb.AppendLine("  <div class=\"tab\" onclick=\"showTab('roles')\">Roles</div>");
+		sb.AppendLine("  <div class=\"tab\" onclick=\"showTab('rules')\">Resource Rules</div>");
+		sb.AppendLine("  <div class=\"tab\" onclick=\"showTab('analysis')\">Security Analysis</div>");
+		sb.AppendLine("</div>");
+
+		// NEW: Overview Tab
+		sb.AppendLine("<div id=\"overview\" class=\"tab-content active\">");
+		sb.AppendLine("  <h2>Authorization System Overview</h2>");
+
+		sb.AppendLine("  <h3>Authorization Flow</h3>");
+		sb.AppendLine("  <div class=\"diagram\">");
+		sb.AppendLine("    <div class=\"mermaid\">");
+		sb.AppendLine("flowchart TD");
+		sb.AppendLine("    A[Request] --> B{Authenticated?}");
+		sb.AppendLine("    B -->|No| C[UnauthenticatedAccessException]");
+		sb.AppendLine("    B -->|Yes| D[Get User Roles]");
+		sb.AppendLine("    D --> E[Resolve Effective Roles]");
+		sb.AppendLine("    E --> F[Create Authorization Context]");
+		sb.AppendLine("    F --> G[Run Resource Validators]");
+		sb.AppendLine("    G --> H[Run Policy Validators]");
+		sb.AppendLine("    H --> I{All Validations Pass?}");
+		sb.AppendLine("    I -->|No| J[ForbiddenAccessException]");
+		sb.AppendLine("    I -->|Yes| K[Access Granted]");
+		sb.AppendLine("    ");
+		sb.AppendLine("    style A fill:#e1f5fe");
+		sb.AppendLine("    style K fill:#e8f5e8");
+		sb.AppendLine("    style C fill:#ffebee");
+		sb.AppendLine("    style J fill:#ffebee");
+		sb.AppendLine("    style G fill:#fff3e0");
+		sb.AppendLine("    style H fill:#f3e5f5");
+		sb.AppendLine("    </div>");
+		sb.AppendLine("  </div>");
+		sb.AppendLine("</div>");
+
+		// NEW: Policy Validators Tab
+		sb.AppendLine("<div id=\"policies\" class=\"tab-content\">");
+		sb.AppendLine("  <h2>Policy Validators</h2>");
+		sb.AppendLine("  <p>Cross-cutting authorization policies that apply to multiple resources based on attributes or global rules.</p>");
+
+		if (combinedInfo.PolicyRules.Any()) {
+			var attributePolicies = combinedInfo.PolicyRules.Where(p => p.IsAttributeBased).OrderBy(p => p.Order);
+			var globalPolicies = combinedInfo.PolicyRules.Where(p => !p.IsAttributeBased).OrderBy(p => p.Order);
+
+			// Attribute-based policies
+			if (attributePolicies.Any()) {
+				sb.AppendLine("  <h3>Attribute-Based Policies</h3>");
+				foreach (var policy in attributePolicies) {
+					sb.AppendLine($"  <div class=\"policy attribute-policy\">");
+					sb.AppendLine($"    <h4>");
+					sb.AppendLine($"      <span class=\"policy-badge badge-attribute\">Attribute</span>");
+					sb.AppendLine($"      <span class=\"policy-badge badge-order\">Order: {policy.Order}</span>");
+					sb.AppendLine($"      {policy.PolicyName}");
+					sb.AppendLine($"    </h4>");
+					sb.AppendLine($"    <div><strong>Target Attribute:</strong> {policy.TargetAttributeType?.Name}</div>");
+					sb.AppendLine($"    <div><strong>Validator Type:</strong> {policy.ValidatorType.Name}</div>");
+					sb.AppendLine($"    <div class=\"runtime-support\"><strong>Runtime Support:</strong> {string.Join(", ", policy.SupportedRuntimeTypes)}</div>");
+					sb.AppendLine($"    <div class=\"policy-description\">{policy.Description}</div>");
+					sb.AppendLine($"  </div>");
+				}
+			}
+
+			// Global policies
+			if (globalPolicies.Any()) {
+				sb.AppendLine("  <h3>Global Policies</h3>");
+				foreach (var policy in globalPolicies) {
+					sb.AppendLine($"  <div class=\"policy global-policy\">");
+					sb.AppendLine($"    <h4>");
+					sb.AppendLine($"      <span class=\"policy-badge badge-global\">Global</span>");
+					sb.AppendLine($"      <span class=\"policy-badge badge-order\">Order: {policy.Order}</span>");
+					sb.AppendLine($"      {policy.PolicyName}");
+					sb.AppendLine($"    </h4>");
+					sb.AppendLine($"    <div><strong>Validator Type:</strong> {policy.ValidatorType.Name}</div>");
+					sb.AppendLine($"    <div class=\"runtime-support\"><strong>Runtime Support:</strong> {string.Join(", ", policy.SupportedRuntimeTypes)}</div>");
+					sb.AppendLine($"    <div class=\"policy-description\">{policy.Description}</div>");
+					sb.AppendLine($"  </div>");
+				}
+			}
+
+			// Policy execution order diagram
+			var orderDG = new StringBuilder();
+			sb.AppendLine("  <h3>Policy Execution Order</h3>");
+			sb.AppendLine("  <div class=\"diagram\">");
+			sb.AppendLine("    <div class=\"mermaid\">");
+
+			orderDG.AppendLine("flowchart TD");
+			orderDG.AppendLine("    Start[Policy Validation Starts] --> Filter[Filter Applicable Policies]");
+
+			var orderedPolicies = combinedInfo.PolicyRules.OrderBy(p => p.Order).ToList();
+			for (var i = 0; i < orderedPolicies.Count && i < 10; i++) {
+				var policy = orderedPolicies[i];
+				var nodeId = $"P{i}";
+				var policyType = policy.IsAttributeBased ? "ATTR" : "GLOBAL";
+
+				// Create the node definition
+				orderDG.AppendLine($"    {nodeId}[\"{policyType}: {policy.PolicyName} (Order: {policy.Order})\"]");
+
+				// Create the connection FROM this node
+				if (i == 0) {
+					orderDG.AppendLine($"    Filter --> {nodeId}");
+				}
+
+				// Connect to next node or end
+				if (i == orderedPolicies.Count - 1 || i == 9) {
+					orderDG.AppendLine($"    {nodeId} --> End[All Policies Complete]");
+				} else {
+					orderDG.AppendLine($"    {nodeId} --> P{i + 1}");
+				}
+			}
+
+			orderDG.AppendLine("    ");
+			orderDG.AppendLine("    classDef attributePolicy fill:#e8f5e8,stroke:#4caf50");
+			orderDG.AppendLine("    classDef globalPolicy fill:#fce4ec,stroke:#e91e63");
+
+			for (var i = 0; i < orderedPolicies.Count && i < 10; i++) {
+				var policy = orderedPolicies[i];
+				var styleClass = policy.IsAttributeBased ? "attributePolicy" : "globalPolicy";
+				orderDG.AppendLine($"    class P{i} {styleClass}");
+			}
+			sb.Append(orderDG);
+			sb.AppendLine("    </div>");
+			sb.AppendLine("  </div>");
+		} else {
+			sb.AppendLine("  <div class=\"info\">");
+			sb.AppendLine("    <strong>No Policy Validators Configured</strong><br>");
+			sb.AppendLine("    Consider adding policy validators for cross-cutting authorization concerns like security clearance, business hours, or maintenance mode.");
+			sb.AppendLine("  </div>");
+		}
+		sb.AppendLine("</div>");
+
+		// Roles Tab (existing, but now not the first tab)
+		sb.AppendLine("<div id=\"roles\" class=\"tab-content\">");
+		sb.AppendLine("  <h2>Role Hierarchy</h2>");
+
+		foreach (var role in allRoles.OrderBy(r => r.ToString())) {
+			var roleClass = role.IsApplicationRole ? "app-role" : "custom-role";
+			sb.AppendLine($"  <div class=\"role {roleClass}\">");
+			sb.AppendLine($"    <h4>{role}</h4>");
+
+			var childRoles = _roleRegistry.GetInheritedRoles(role);
+			if (childRoles.Count > 0) {
+				sb.AppendLine("    <div class=\"inheritance\">");
+				sb.AppendLine("      <strong>Inherits from:</strong> " + string.Join(", ", childRoles));
+				sb.AppendLine("    </div>");
+			}
+
+			var parentRoles = _roleRegistry.GetInheritingRoles(role);
+			if (parentRoles.Count > 0) {
+				sb.AppendLine("    <div class=\"inheritance\">");
+				sb.AppendLine("      <strong>Inherited by:</strong> " + string.Join(", ", parentRoles));
+				sb.AppendLine("    </div>");
+			}
+
+			sb.AppendLine("  </div>");
+		}
+
+		sb.AppendLine("  <h3>Role Hierarchy Diagram</h3>");
+		sb.AppendLine("  <div class=\"diagram\">");
+		sb.AppendLine("    <div class=\"mermaid\">");
+		sb.AppendLine("graph TD");
+
+		// Add role relationships for diagram
+		foreach (var role in allRoles) {
+			var roleId = role.ToString().Replace(":", "_");
+			var childRoles = _roleRegistry.GetInheritedRoles(role);
+
+			foreach (var childRole in childRoles) {
+				var childRoleId = childRole.ToString().Replace(":", "_");
+				sb.AppendLine($"      {roleId}[\"{role}\"] --> {childRoleId}[\"{childRole}\"]");
+			}
+		}
+
+		sb.AppendLine("    </div>");
+		sb.AppendLine("  </div>");
+		sb.AppendLine("</div>");
+
+		// Resource Rules Tab (renamed from "Rules")
+		sb.AppendLine("<div id=\"rules\" class=\"tab-content\">");
+		sb.AppendLine("  <h2>Resource-Specific Authorization Rules</h2>");
+
+		// Group rules by resource
+		var rulesByResource = combinedInfo.ResourceRules
+			.GroupBy(r => r.ResourceType)
+			.OrderBy(g => g.Key.Name);
+
+		foreach (var resourceGroup in rulesByResource) {
+			sb.AppendLine($"  <div class=\"resource\">");
+			sb.AppendLine($"    <h3>Resource: {resourceGroup.Key.Name}</h3>");
+
+			// Show which policies might also apply to this resource
+			var applicablePolicies = combinedInfo.PolicyRules
+				.Where(p => p.IsAttributeBased && p.TargetAttributeType is not null && resourceGroup.Key.GetCustomAttributes(p.TargetAttributeType, false).Length != 0)
+				.ToList();
+
+			if (applicablePolicies.Count != 0) {
+				sb.AppendLine($"    <div class=\"info\" style=\"margin-bottom: 10px;\">");
+				sb.AppendLine($"      <strong>Applicable Policy Validators:</strong> {string.Join(", ", applicablePolicies.Select(p => p.PolicyName))}");
+				sb.AppendLine($"    </div>");
+			}
+
+			// Group by validator
+			var validatorGroups = resourceGroup
+				.GroupBy(r => r.ValidatorType)
+				.OrderBy(g => g.Key.Name);
+
+			foreach (var validatorGroup in validatorGroups) {
+				sb.AppendLine($"    <div class=\"validator\">");
+				sb.AppendLine($"      <h4>Validator: {validatorGroup.Key.Name}</h4>");
+
+				foreach (var rule in validatorGroup) {
+					sb.AppendLine($"      <div class=\"rule\">");
+					sb.AppendLine($"        <strong>{rule.PropertyPath ?? "AuthorizationContext"}</strong>");
+					sb.AppendLine($"        <div>Validation: {rule.ValidationLogic}</div>");
+					sb.AppendLine($"        <div>Message: {rule.Message}</div>");
+
+					if (!string.IsNullOrEmpty(rule.Condition)) {
+						sb.AppendLine($"        <div>Condition: {rule.Condition}</div>");
+					}
+
+					// If rule mentions roles, display them
+					var relatedRoles = allRoles.Where(r => rule.ValidationLogic.Contains(r.ToString())).ToList();
+					if (relatedRoles.Count != 0) {
+						sb.AppendLine($"        <div>Related Roles: {string.Join(", ", relatedRoles)}</div>");
+					}
+
+					sb.AppendLine($"      </div>");
+				}
+
+				sb.AppendLine($"    </div>");
+			}
+
+			sb.AppendLine($"  </div>");
+		}
+		sb.AppendLine("</div>");
+
+		// Analysis Tab (existing - gets enhanced analysis report)
+		sb.AppendLine("<div id=\"analysis\" class=\"tab-content\">");
+		sb.AppendLine("  <h2>Security Analysis</h2>");
+
+		var analysisReport = await this.GetEnhancedAnalysisReportAsync();
+
+		// Overall Status
+		sb.AppendLine("  <div class=\"resource\">");
+		sb.AppendLine("    <h3>Overall Status</h3>");
+		sb.AppendLine($"    <div>Issues Found: {(analysisReport.HasIssues ? "Yes" : "No")}</div>");
+		sb.AppendLine($"    <div>Total Issues: {analysisReport.Issues.Count}</div>");
+
+		// Quick Summary
+		sb.AppendLine("    <h4>Summary</h4>");
+		var errorCount = analysisReport.Issues.Count(i => i.Severity == IssueSeverity.Error);
+		var warningCount = analysisReport.Issues.Count(i => i.Severity == IssueSeverity.Warning);
+		var infoCount = analysisReport.Issues.Count(i => i.Severity == IssueSeverity.Info);
+
+		sb.AppendLine($"    <div><span style=\"color: #cc0000; font-weight: bold;\">&#9679;</span> Error: {errorCount}</div>");
+		sb.AppendLine($"    <div><span style=\"color: #cccc00; font-weight: bold;\">&#9679;</span> Warning: {warningCount}</div>");
+		sb.AppendLine($"    <div><span style=\"color: #00cc00; font-weight: bold;\">&#9679;</span> Info: {infoCount}</div>");
+		sb.AppendLine("  </div>");
+
+		// Detailed Issues
+		sb.AppendLine("  <div class=\"resource\">");
+		sb.AppendLine("    <h3>Detailed Issues</h3>");
+
+		foreach (var category in analysisReport.AnalyzerCategories.OrderBy(c => c)) {
+			sb.AppendLine($"    <h4>{category}</h4>");
+			var categoryIssues = analysisReport.Issues.Where(i => i.Category == category);
+
+			if (!categoryIssues.Any()) {
+				sb.AppendLine("    <div>No issues found</div>");
+				continue;
+			}
+
+			foreach (var severityGroup in categoryIssues.GroupBy(issue => issue.Severity)) {
+				var severityClass = severityGroup.Key.ToString().ToLower();
+				var issueIndex = 1;
+				foreach (var issue in severityGroup) {
+					sb.AppendLine($"    <div class=\"{severityClass}\">");
+					sb.AppendLine($"      <strong>Issue {issueIndex++}: {issue.Description}</strong>");
+					if (issue.RelatedObjects != null && issue.RelatedObjects.Any()) {
+						sb.AppendLine($"      <div>Related Objects: {string.Join(", ", issue.RelatedObjects)}</div>");
+					}
+					sb.AppendLine("    </div>");
+				}
+			}
+		}
+		sb.AppendLine("  </div>");
+
+		// Security Issues Diagram (existing)
+		var analysisIssues = analysisReport.Issues.Where(i => i.Severity == IssueSeverity.Error || i.Severity == IssueSeverity.Warning).ToList();
+		if (analysisIssues.Count != 0) {
+			sb.AppendLine("  <h3>Security Issues Diagram</h3>");
+			sb.AppendLine("  <div class=\"diagram\">");
+			sb.AppendLine("    <div class=\"mermaid\">");
+			sb.AppendLine("graph TD");
+
+			for (var i = 0; i < analysisIssues.Count; i++) {
+				var issue = analysisIssues[i];
+				var issueId = $"Issue_{i}";
+				var severity = issue.Severity == IssueSeverity.Error ? "ERROR" : "WARNING";
+				var description = issue.Description.Replace("\"", "'").Replace("\n", "<br/>");
+				sb.AppendLine($"    {issueId}[\"{severity}: {description}\"]");
+
+				// Connect issues to related roles if applicable
+				foreach (var relatedObj in issue.RelatedObjects) {
+					if (relatedObj is Role role) {
+						var roleId = role.ToString().Replace(":", "_");
+						sb.AppendLine($"    {issueId} -.-> {roleId}[\"{role}\"]");
+					}
+				}
+			}
+
+			sb.AppendLine("    %% Styling");
+			sb.AppendLine("    classDef error fill:#ffcccc,stroke:#990000,stroke-width:2px;");
+			sb.AppendLine("    classDef warning fill:#ffffcc,stroke:#999900,stroke-width:1px;");
+
+			// Apply styles
+			for (var i = 0; i < analysisIssues.Count; i++) {
+				var issue = analysisIssues[i];
+				var issueId = $"Issue_{i}";
+				var styleClass = issue.Severity == IssueSeverity.Error ? "error" : "warning";
+				sb.AppendLine($"    class {issueId} {styleClass};");
+			}
+
+			sb.AppendLine("    </div>");
+			sb.AppendLine("  </div>");
+		}
+
+		sb.AppendLine("</div>");
+
+		// Enhanced JavaScript (existing with minor updates)
+		sb.AppendLine("<script>");
+		sb.AppendLine("// Initialize mermaid with configuration");
+		sb.AppendLine("mermaid.initialize({");
+		sb.AppendLine("  startOnLoad: false,");  // Changed from true to false
+		sb.AppendLine("  securityLevel: 'loose',");
+		sb.AppendLine("  theme: 'default',");
+		sb.AppendLine("  flowchart: { useMaxWidth: false, htmlLabels: true }");
+		sb.AppendLine("});");
+		sb.AppendLine("");
+		sb.AppendLine("function showTab(tabId) {");
+		sb.AppendLine("  // Hide all tab contents");
+		sb.AppendLine("  document.querySelectorAll('.tab-content').forEach(content => {");
+		sb.AppendLine("    content.classList.remove('active');");
+		sb.AppendLine("  });");
+		sb.AppendLine("  ");
+		sb.AppendLine("  // Show the selected tab content");
+		sb.AppendLine("  document.getElementById(tabId).classList.add('active');");
+		sb.AppendLine("  ");
+		sb.AppendLine("  // Update tab buttons");
+		sb.AppendLine("  document.querySelectorAll('.tab').forEach(tab => {");
+		sb.AppendLine("    tab.classList.remove('active');");
+		sb.AppendLine("  });");
+		sb.AppendLine("  ");
+		sb.AppendLine("  // Add active class to clicked tab");
+		sb.AppendLine("  document.querySelectorAll('.tab').forEach(tab => {");
+		sb.AppendLine("    if (tab.textContent.toLowerCase().includes(tabId.replace('policies', 'policy'))) {");
+		sb.AppendLine("      tab.classList.add('active');");
+		sb.AppendLine("    }");
+		sb.AppendLine("  });");
+		sb.AppendLine("  ");
+		sb.AppendLine("  // Re-render mermaid diagrams when switching tabs");
+		sb.AppendLine("  if (document.getElementById(tabId).querySelector('.mermaid')) {");
+		sb.AppendLine("    setTimeout(() => {");
+		sb.AppendLine("      try {");
+		sb.AppendLine("        // Reset all mermaid diagrams in this tab");
+		sb.AppendLine("        const mermaidElements = document.getElementById(tabId).querySelectorAll('.mermaid');");
+		sb.AppendLine("        mermaidElements.forEach(element => {");
+		sb.AppendLine("          // Store original content if not already stored");
+		sb.AppendLine("          if (!element.dataset.originalContent) {");
+		sb.AppendLine("            element.dataset.originalContent = element.textContent;");
+		sb.AppendLine("          }");
+		sb.AppendLine("          // Restore original content and reset processed flag");
+		sb.AppendLine("          element.innerHTML = element.dataset.originalContent;");
+		sb.AppendLine("          element.removeAttribute('data-processed');");
+		sb.AppendLine("        });");
+		sb.AppendLine("        ");
+		sb.AppendLine("        // Re-initialize");
+		sb.AppendLine("        mermaid.init(undefined, mermaidElements);");
+		sb.AppendLine("      } catch (error) {");
+		sb.AppendLine("        console.error('Error initializing mermaid:', error);");
+		sb.AppendLine("      }");
+		sb.AppendLine("    }, 250);");
+		sb.AppendLine("  }");
+		sb.AppendLine("}");
+		sb.AppendLine("");
+		sb.AppendLine("// Initialize on page load");
+		sb.AppendLine("window.addEventListener('load', function() {");
+		sb.AppendLine("  // Store original content for all mermaid elements before any processing");
+		sb.AppendLine("  document.querySelectorAll('.mermaid').forEach(element => {");
+		sb.AppendLine("    element.dataset.originalContent = element.textContent;");
+		sb.AppendLine("  });");
+		sb.AppendLine("  ");
+		sb.AppendLine("  // Initialize only the active tab on page load");
+		sb.AppendLine("  try {");
+		sb.AppendLine("    mermaid.init(undefined, document.querySelectorAll('.tab-content.active .mermaid'));");
+		sb.AppendLine("  } catch (error) {");
+		sb.AppendLine("    console.error('Error initializing mermaid:', error);");
+		sb.AppendLine("  }");
+		sb.AppendLine("});");
+		sb.AppendLine("</script>");
+
+		sb.AppendLine("</body>");
+		sb.AppendLine("</html>");
+
+		return sb.ToString();
+
+	}
+
+	private Task<AnalysisReport> GetEnhancedAnalysisReportAsync() {
+		var analyzers = new List<IAuthorizationAnalyzer> {
+			new RoleHierarchyAnalyzer(this._roleRegistry),
+			new EnhancedAuthorizationRuleAnalyzer(this._services),
+			new PolicyValidatorAnalyzer(this._services)
+		};
+
+		var analyzer = new CompositeAnalyzer(analyzers);
+		return analyzer.AnalyzeAllAsync();
+	}
+
+
+}
