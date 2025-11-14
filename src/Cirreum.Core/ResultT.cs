@@ -296,4 +296,38 @@ public readonly struct Result<T> : IResult, IEquatable<Result<T>> {
 	/// <returns>A failed <see cref="Result{T}"/> containing the specified exception.</returns>
 	public static implicit operator Result<T>(Exception exception) => Fail(exception);
 
+	#region IResult Implementation
+
+	/// <summary>
+	/// Gets the underlying value as an object for IResult interface compatibility.
+	/// </summary>
+	/// <returns>The boxed value if successful; otherwise, null.</returns>
+	object? IResult.GetValue() => this._value;
+
+	/// <summary>
+	/// Executes the appropriate action based on success or failure state.
+	/// </summary>
+	/// <param name="onSuccess">Action to execute with the value if successful.</param>
+	/// <param name="onFailure">Action to execute with the error if failed.</param>
+	/// <exception cref="ArgumentNullException">Thrown when either parameter is null.</exception>
+	/// <remarks>
+	/// This method is an explicit interface implementation to avoid confusion with the strongly-typed
+	/// <see cref="OnSuccess"/> and <see cref="OnFailure"/> methods. The actions are invoked based on
+	/// the result state, and any exceptions thrown by the actions are allowed to propagate to the caller.
+	/// </remarks>
+	void IResult.Switch(Action<object?> onSuccess, Action<Exception> onFailure) {
+		ArgumentNullException.ThrowIfNull(onSuccess);
+		ArgumentNullException.ThrowIfNull(onFailure);
+
+		if (this.IsSuccess) {
+			onSuccess(this._value);
+		} else {
+			// Debug assertion to catch internal consistency issues
+			Debug.Assert(this._error is not null, "Failed result must have a non-null error.");
+			onFailure(this._error!);
+		}
+	}
+
+	#endregion
+
 }

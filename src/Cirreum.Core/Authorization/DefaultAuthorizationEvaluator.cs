@@ -68,7 +68,7 @@ sealed class DefaultAuthorizationEvaluator(
 		// Get all authorizors for this resource type
 		var resourceAuthorizors = services
 			.GetServices<IAuthorizationResourceValidator<TResource>>()
-			.Cast<AuthorizationValidatorBase<TResource>>()
+			.OfType<AuthorizationValidatorBase<TResource>>()
 			.ToList();
 
 		// Get all policy validators that support the current runtime
@@ -85,11 +85,8 @@ sealed class DefaultAuthorizationEvaluator(
 			//
 			// Throw invalid operation exception to prevent access...
 			//
-			if (resourceAuthorizors.Count == 0) {
-				throw new InvalidOperationException(
-					$"Resource '{resourceName}' has no authorizors or applicable policies.");
-				//******************************************
-			}
+			throw new InvalidOperationException(
+				$"Resource '{resourceName}' has no authorizors or applicable policies.");
 		}
 
 		// Check cancellation before potentially expensive user state retrieval
@@ -153,8 +150,10 @@ sealed class DefaultAuthorizationEvaluator(
 
 				// Run all Resource Authorizors
 				if (resourceAuthorizors.Count > 0) {
-					var failures = resourceAuthorizors
-						.Select(v => v.Validate(validationContext))
+					var resourceTasks = resourceAuthorizors
+						.Select(v => v.ValidateAsync(validationContext, cancellationToken));
+					var resourceResults = await Task.WhenAll(resourceTasks);
+					var failures = resourceResults
 						.SelectMany(result => result.Errors)
 						.Where(f => f != null)
 						.ToList();

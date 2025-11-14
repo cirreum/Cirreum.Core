@@ -177,4 +177,40 @@ public readonly struct Result : IResult, IEquatable<Result> {
 	public static bool operator ==(Result left, Result right) => left.Equals(right);
 	public static bool operator !=(Result left, Result right) => !left.Equals(right);
 
+	#region IResult Implementation
+
+	/// <summary>
+	/// Gets the underlying value - always null for non-generic Result.
+	/// </summary>
+	/// <returns>Always returns null since non-generic Result carries no value.</returns>
+	object? IResult.GetValue() => null;
+
+	/// <summary>
+	/// Executes the appropriate action based on success or failure state.
+	/// </summary>
+	/// <param name="onSuccess">Action to execute if successful (receives null).</param>
+	/// <param name="onFailure">Action to execute with the error if failed.</param>
+	/// <exception cref="ArgumentNullException">Thrown when either parameter is null.</exception>
+	/// <remarks>
+	/// This method is an explicit interface implementation to avoid confusion with the strongly-typed
+	/// <see cref="OnSuccess"/> and <see cref="OnFailure"/> methods. For non-generic Result, the success
+	/// action always receives null since there is no value to pass. Any exceptions thrown by the actions
+	/// are allowed to propagate to the caller.
+	/// </remarks>
+	void IResult.Switch(Action<object?> onSuccess, Action<Exception> onFailure) {
+		ArgumentNullException.ThrowIfNull(onSuccess);
+		ArgumentNullException.ThrowIfNull(onFailure);
+
+		if (this.IsSuccess) {
+			onSuccess(null);  // Non-generic Result has no value
+		} else {
+			// Debug assertion to catch internal consistency issues
+			Debug.Assert(this._error is not null, "Failed result must have a non-null error.");
+			onFailure(this._error!);
+		}
+	}
+
+	#endregion
+
+
 }
