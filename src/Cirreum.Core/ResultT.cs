@@ -302,7 +302,14 @@ public readonly struct Result<T> : IResult<T>, IEquatable<Result<T>> {
 	object? IResult.GetValue() => this._value;
 
 	void IResult.Switch(Action onSuccess, Action<Exception> onFailure) {
-		throw new NotImplementedException();
+		ArgumentNullException.ThrowIfNull(onSuccess);
+		ArgumentNullException.ThrowIfNull(onFailure);
+
+		if (this.IsSuccess) {
+			onSuccess();
+		} else {
+			onFailure(this.Error);
+		}
 	}
 
 	public T? GetValue() => this._value;
