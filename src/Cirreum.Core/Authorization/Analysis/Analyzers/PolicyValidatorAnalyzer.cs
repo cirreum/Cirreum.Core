@@ -110,7 +110,7 @@ public class PolicyValidatorAnalyzer(
 
 		// ✅ Check if the CURRENT runtime type has policy coverage using bitwise flags
 		var policiesForCurrentRuntime = policyValidators
-			.Where(pv => pv.SupportedRuntimeTypes.Any(rt => (rt & currentRuntimeType) == currentRuntimeType))
+			.Where(pv => pv.SupportedRuntimeTypes.Contains(currentRuntimeType))
 			.ToList();
 
 		if (policiesForCurrentRuntime.Count == 0 && policyValidators.Count > 0) {
@@ -121,10 +121,10 @@ public class PolicyValidatorAnalyzer(
 				RelatedObjects: [currentRuntimeType]));
 		}
 
-		// ✅ Warn about policies that don't support the current runtime (with bitwise check)
+		// ✅ Warn about policies that don't support the current runtime
 		var irrelevantPolicies = policyValidators
 			.Where(pv => pv.SupportedRuntimeTypes.Length > 0 &&
-						!pv.SupportedRuntimeTypes.Any(rt => (rt & currentRuntimeType) == currentRuntimeType))
+						 !pv.SupportedRuntimeTypes.Contains(currentRuntimeType))
 			.ToList();
 
 		foreach (var policy in irrelevantPolicies) {

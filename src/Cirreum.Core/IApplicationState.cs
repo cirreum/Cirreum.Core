@@ -50,5 +50,4 @@
 /// }
 /// </code>
 /// </example>
-public interface IApplicationState {
-}
+public interface IApplicationState;

@@ -72,19 +72,18 @@ public class ExceptionIntegrationTests {
 
 	[TestMethod]
 	public async Task Should_return_failed_result_for_dispatch_when_no_handler_registered() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
 
-		var serviceProvider = services.BuildServiceProvider();
-		var dispatcher = serviceProvider.GetRequiredService<IDispatcher>();
+		var services = Shared.ArrangeServices()
+			.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		var sp = services.BuildServiceProvider();
+		var dispatcher = sp.GetRequiredService<IDispatcher>();
 
 		var result = await dispatcher.DispatchAsync(new Ping(), this.TestContext.CancellationToken);
 
@@ -95,19 +94,8 @@ public class ExceptionIntegrationTests {
 
 	[TestMethod]
 	public async Task Should_return_failed_result_for_void_dispatch_when_no_handler_registered() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
 
-		var serviceProvider = services.BuildServiceProvider();
-		var dispatcher = serviceProvider.GetRequiredService<IDispatcher>();
+		var dispatcher = Shared.ArrangeSimpleDispatcher();
 
 		var result = await dispatcher.DispatchAsync(new VoidPing(), this.TestContext.CancellationToken);
 
@@ -118,19 +106,10 @@ public class ExceptionIntegrationTests {
 
 	[TestMethod]
 	public async Task Should_not_throw_for_publish_when_no_handlers() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
+		var services = Shared.ArrangeServices();
+		var sp = services.BuildServiceProvider();
 
-		var serviceProvider = services.BuildServiceProvider();
-		var publisher = serviceProvider.GetRequiredService<IPublisher>();
+		var publisher = sp.GetRequiredService<IPublisher>();
 
 		var result = await publisher.PublishAsync(new Pinged(), cancellationToken: this.TestContext.CancellationToken);
 
@@ -139,19 +118,17 @@ public class ExceptionIntegrationTests {
 
 	[TestMethod]
 	public async Task Should_throw_argument_null_exception_for_dispatch_when_request_is_null() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
-
-		var serviceProvider = services.BuildServiceProvider();
-		var dispatcher = serviceProvider.GetRequiredService<IDispatcher>();
+		var services = Shared.ArrangeServices()
+			.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		var sp = services.BuildServiceProvider();
+		var dispatcher = sp.GetRequiredService<IDispatcher>();
 
 		NullPing request = null!;
 
@@ -161,19 +138,17 @@ public class ExceptionIntegrationTests {
 
 	[TestMethod]
 	public async Task Should_throw_argument_null_exception_for_void_dispatch_when_request_is_null() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
-
-		var serviceProvider = services.BuildServiceProvider();
-		var dispatcher = serviceProvider.GetRequiredService<IDispatcher>();
+		var services = Shared.ArrangeServices()
+			.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		var sp = services.BuildServiceProvider();
+		var dispatcher = sp.GetRequiredService<IDispatcher>();
 
 		VoidNullPing request = null!;
 
@@ -183,19 +158,10 @@ public class ExceptionIntegrationTests {
 
 	[TestMethod]
 	public async Task Should_throw_argument_null_exception_for_publish_when_notification_is_null() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
+		var services = Shared.ArrangeServices();
+		var sp = services.BuildServiceProvider();
 
-		var serviceProvider = services.BuildServiceProvider();
-		var publisher = serviceProvider.GetRequiredService<IPublisher>();
+		var publisher = sp.GetRequiredService<IPublisher>();
 
 		NullPinged notification = null!;
 
@@ -205,19 +171,17 @@ public class ExceptionIntegrationTests {
 
 	[TestMethod]
 	public async Task Should_return_failed_result_when_handler_throws() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
-
-		var serviceProvider = services.BuildServiceProvider();
-		var dispatcher = serviceProvider.GetRequiredService<IDispatcher>();
+		var services = Shared.ArrangeServices()
+			.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		var sp = services.BuildServiceProvider();
+		var dispatcher = sp.GetRequiredService<IDispatcher>();
 
 		var result = await dispatcher.DispatchAsync(new PingException(), this.TestContext.CancellationToken);
 
@@ -228,20 +192,17 @@ public class ExceptionIntegrationTests {
 
 	[TestMethod]
 	public async Task Should_return_failed_result_for_generic_dispatch_when_handler_throws() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
-
-		var serviceProvider = services.BuildServiceProvider();
-		var dispatcher = serviceProvider.GetRequiredService<IDispatcher>();
-
+		var services = Shared.ArrangeServices()
+			.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		var sp = services.BuildServiceProvider();
+		var dispatcher = sp.GetRequiredService<IDispatcher>();
 		var result = await dispatcher.DispatchAsync(new PingExceptionWithResponse(), this.TestContext.CancellationToken);
 
 		Assert.IsFalse(result.IsSuccess);
@@ -251,64 +212,58 @@ public class ExceptionIntegrationTests {
 
 	[TestMethod]
 	public async Task Should_capture_handler_exception_in_result_for_sequential_publish() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
+		var services = Shared.ArrangeServices()
+			.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		var sp = services.BuildServiceProvider();
 
-		var serviceProvider = services.BuildServiceProvider();
-		var publisher = serviceProvider.GetRequiredService<IPublisher>();
+		var publisher = sp.GetRequiredService<IPublisher>();
 
 		var result = await publisher.PublishAsync(new FailingNotification(), cancellationToken: this.TestContext.CancellationToken);
 
 		Assert.IsFalse(result.IsSuccess);
 		Assert.IsNotNull(result.Error);
 		Assert.IsInstanceOfType<AggregateException>(result.Error);
+		Assert.IsInstanceOfType<NotImplementedException>(result.Error.InnerException);
 	}
 
 	[TestMethod]
 	public async Task Should_capture_handler_exception_in_result_for_parallel_publish() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.ParallelSettings);
+		var services = Shared.ArrangeServices()
+			.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.ParallelSettings);
+		var sp = services.BuildServiceProvider();
 
-		var serviceProvider = services.BuildServiceProvider();
-		var publisher = serviceProvider.GetRequiredService<IPublisher>();
+		var publisher = sp.GetRequiredService<IPublisher>();
 
-		var result = await publisher.PublishAsync(new FailingNotification(), cancellationToken: this.TestContext.CancellationToken);
+		var result = await publisher.PublishAsync(
+			new FailingNotification(),
+			cancellationToken: this.TestContext.CancellationToken);
 
 		Assert.IsFalse(result.IsSuccess);
 		Assert.IsNotNull(result.Error);
 		Assert.IsInstanceOfType<AggregateException>(result.Error);
+		Assert.IsInstanceOfType<NotImplementedException>(result.Error.InnerException);
 	}
 
 	[TestMethod]
 	public async Task Should_return_success_for_fire_and_forget_even_when_handler_throws() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(ExceptionIntegrationTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.FireAndForgetSettings);
-		var serviceProvider = services.BuildServiceProvider();
-		var publisher = serviceProvider.GetRequiredService<IPublisher>();
+		var services = Shared.ArrangeServices();
+		var sp = services.BuildServiceProvider();
+
+		var publisher = sp.GetRequiredService<IPublisher>();
 
 		var result = await publisher.PublishAsync(new FailingNotification(), cancellationToken: this.TestContext.CancellationToken);
 

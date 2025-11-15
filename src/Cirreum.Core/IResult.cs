@@ -36,7 +36,7 @@ public interface IResult {
 	/// Executes the appropriate action based on success or failure state.
 	/// This method is designed for side effects such as logging, UI updates, or state changes.
 	/// </summary>
-	/// <param name="onSuccess">Action to execute with the value (or null) if successful.</param>
+	/// <param name="onSuccess">Action to execute if successful.</param>
 	/// <param name="onFailure">Action to execute with the error if failed.</param>
 	/// <example>
 	/// <code>
@@ -46,5 +46,31 @@ public interface IResult {
 	/// );
 	/// </code>
 	/// </example>
-	void Switch(Action<object?> onSuccess, Action<Exception> onFailure);
+	void Switch(Action onSuccess, Action<Exception> onFailure);
+}
+
+public interface IResult<out T> : IResult {
+
+	/// <summary>
+	/// 
+	/// </summary>
+	/// <returns></returns>
+	new T? GetValue();
+
+	/// <summary>
+	/// Executes the appropriate action based on success or failure state.
+	/// This method is designed for side effects such as logging, UI updates, or state changes.
+	/// </summary>
+	/// <param name="onSuccess">Action to execute with the value if successful.</param>
+	/// <param name="onFailure">Action to execute with the error if failed.</param>
+	/// <example>
+	/// <code>
+	/// result.Switch(
+	///     onSuccess: value => _logger.LogInformation("Success: {Value}", value),
+	///     onFailure: error => _logger.LogError(error, "Failed: {Message}", error.Message)
+	/// );
+	/// </code>
+	/// </example>
+	void Switch(Action<T> onSuccess, Action<Exception> onFailure);
+
 }

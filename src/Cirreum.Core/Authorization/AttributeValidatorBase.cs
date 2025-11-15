@@ -1,6 +1,7 @@
 ﻿namespace Cirreum.Authorization;
 
 using FluentValidation.Results;
+using System.Collections.Concurrent;
 using System.Reflection;
 
 /// <summary>
@@ -17,6 +18,10 @@ using System.Reflection;
 public abstract class AttributeValidatorBase<TAttribute>
 	: IAuthorizationPolicyValidator where TAttribute : Attribute {
 
+	// Cache attributes per resource type to avoid repeated reflection
+	private static readonly ConcurrentDictionary<Type, TAttribute?> _attributeCache = new();
+
+
 	/// <inheritdoc/>
 	public abstract string PolicyName { get; }
 
@@ -27,9 +32,12 @@ public abstract class AttributeValidatorBase<TAttribute>
 	public abstract ApplicationRuntimeType[] SupportedRuntimeTypes { get; }
 
 	/// <inheritdoc/>
-	public virtual bool AppliesTo<TResource>(TResource resource, ExecutionContext context)
+	public virtual bool AppliesTo<TResource>(
+		TResource resource,
+		ApplicationRuntimeType runtimeType,
+		DateTimeOffset timestamp)
 		where TResource : notnull, IAuthorizableResource =>
-		resource.GetType().GetCustomAttribute<TAttribute>() != null;
+		GetAttributeCached(resource.GetType()) != null;
 
 	/// <summary>
 	/// Retrieves a custom attribute of the specified type from the provided resource.
@@ -41,13 +49,22 @@ public abstract class AttributeValidatorBase<TAttribute>
 	/// <typeparam name="TResource">The type of the resource from which the attribute is retrieved. Must be a non-nullable type.</typeparam>
 	/// <param name="resource">The resource object whose type is inspected for the custom attribute. Cannot be <see langword="null"/>.</param>
 	/// <returns>An instance of the specified attribute type if found; otherwise, <see langword="null"/>.</returns>
-	protected virtual TAttribute? GetAttribute<TResource>(TResource resource) where TResource : notnull =>
-		resource.GetType().GetCustomAttribute<TAttribute>();
+	protected virtual TAttribute? GetAttribute<TResource>(TResource resource)
+		where TResource : notnull =>
+		GetAttributeCached(resource.GetType());
 
 	/// <inheritdoc/>
 	public abstract Task<ValidationResult> ValidateAsync<TResource>(
 		AuthorizationContext<TResource> context,
 		CancellationToken cancellationToken = default)
 		where TResource : IAuthorizableResource;
+
+	/// <summary>
+	/// Gets the attribute from cache or performs reflection and caches the result.
+	/// </summary>
+	private static TAttribute? GetAttributeCached(Type resourceType) =>
+		_attributeCache.GetOrAdd(
+			resourceType,
+			static type => type.GetCustomAttribute<TAttribute>());
 
 }

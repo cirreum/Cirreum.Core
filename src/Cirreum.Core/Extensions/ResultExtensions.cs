@@ -1,5 +1,4 @@
 ﻿namespace Cirreum;
-
 /// <summary>
 /// Provides extension methods for async operations with <see cref="Result{T}"/>.
 /// </summary>
@@ -510,5 +509,34 @@ public static class ResultAsyncExtensions {
 		}
 	}
 
+
+	// =============== SWITCH ASYNC ===============
+
+	/// <summary>
+	/// Executes the appropriate action based on success or failure state.
+	/// </summary>
+	/// <param name="result">The result to evaluate.</param>
+	/// <param name="onSuccess">Action to execute if successful (receives null).</param>
+	/// <param name="onFailure">Action to execute with the error if failed.</param>
+	/// <exception cref="ArgumentNullException">Thrown when either parameter is null.</exception>
+	/// <remarks>
+	/// For non-generic Result, the success action always receives null since there is
+	/// no value to pass. Any exceptions thrown by the actions
+	/// are allowed to propagate to the caller.
+	/// </remarks>
+	public static ValueTask SwitchAsync(
+		this Result result,
+		Action onSuccess,
+		Action<Exception> onFailure) {
+		ArgumentNullException.ThrowIfNull(onSuccess);
+		ArgumentNullException.ThrowIfNull(onFailure);
+
+		result.Switch(
+			onSuccess,
+			onFailure);
+
+		return ValueTask.CompletedTask;
+
+	}
 
 }

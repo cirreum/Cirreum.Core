@@ -3,12 +3,12 @@
 using Cirreum.Conductor;
 
 /// <summary>
-/// Marker interface to represent an authorizable request with a void response
+/// Marker interface that represents an authorizable <see cref="IRequest"/> instance.
 /// </summary>
 public interface IAuthorizableRequest : IRequest, IAuthorizableRequestBase;
 
 /// <summary>
-/// Marker interface to represent an authorizable request with a response
+/// Marker interface that represents an authorizable <see cref="IRequest{TResponse}"/> instance.
 /// </summary>
 /// <typeparam name="TResponse"></typeparam>
 public interface IAuthorizableRequest<TResponse> : IRequest<TResponse>, IAuthorizableRequestBase;

@@ -5,9 +5,9 @@
 /// </summary>
 public enum ApplicationRuntimeType {
 	/// <summary>
-	/// A Spa base front-end such as Blazor, React etc.
+	/// A Client such as Blazor WASM.
 	/// </summary>
-	Spa,
+	Client,
 	/// <summary>
 	/// A server that hosts a Web API (Jwt/Authorization)
 	/// </summary>

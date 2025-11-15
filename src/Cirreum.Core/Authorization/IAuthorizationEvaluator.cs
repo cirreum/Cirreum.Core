@@ -1,82 +1,44 @@
 ﻿namespace Cirreum.Authorization;
 
-using Cirreum.Exceptions;
-using System.Threading;
-using System.Threading.Tasks;
-
 /// <summary>
-/// Service responsible for evaluating authorization rules against any resource type.
+/// Defines the contract for evaluating authorization rules for resources.
 /// </summary>
-/// <remarks>
-/// <para>
-/// This service provides a centralized mechanism for evaluating authorization rules on any <see cref="IAuthorizableResource"/>
-/// via an <see cref="AuthorizationValidatorBase{TResource}"/>.
-/// </para>
-/// <para>
-/// For Conductor requests: Authorization is automatically handled by the pipeline intercept.
-/// You do not need to use this evaluator directly. Instead, implement <see cref="IAuthorizableResource"/> on your request
-/// and create a corresponding <see cref="AuthorizationValidatorBase{TResource}"/> for rule enforcement.
-/// </para>
-/// <para>
-/// For other use cases, this service can be injected directly into your components to perform authorization checks, ensuring 
-/// consistent ABAC (Attribute-Based Access Control) enforcement across various scenarios:
-/// <list type="bullet">
-/// <item><description>Domain entities within service methods</description></item>
-/// <item><description>UI components or views</description></item>
-/// <item><description>API endpoints outside the request pipeline</description></item>
-/// <item><description>Background jobs or scheduled tasks</description></item>
-/// </list>
-/// </para>
-/// </remarks>
 public interface IAuthorizationEvaluator {
+
 	/// <summary>
-	/// Evaluates authorization rules for the specified resource and returns a <see cref="Result"/>.
+	/// Evaluates authorization for a resource in ad-hoc mode.
+	/// Builds the operation context from scratch by retrieving current user state.
 	/// </summary>
+	/// <typeparam name="TResource">The type of resource being authorized.</typeparam>
+	/// <param name="resource">The resource to authorize.</param>
+	/// <param name="cancellationToken">Cancellation token.</param>
+	/// <returns>A result indicating success or failure of the authorization check.</returns>
 	/// <remarks>
-	/// Use this method when you want to handle authorization failures gracefully as part of your application flow.
-	/// Failed authorization returns a <see cref="Result"/> containing the appropriate exception
-	/// (<see cref="UnauthenticatedAccessException"/> or <see cref="ForbiddenAccessException"/>).
+	/// Use this overload when calling authorization outside of the request pipeline,
+	/// such as in background jobs, API controllers, or other ad-hoc scenarios.
 	/// </remarks>
-	/// <typeparam name="TResource">The type of the <see cref="IAuthorizableResource"/> being evaluated.</typeparam>
-	/// <param name="resource">The resource instance to evaluate authorization for.</param>
-	/// <param name="requestId">A unique identifier for tracking this authorization request across logs and telemetry.</param>
-	/// <param name="correlationId">A unique identifier for correlating related operations across service boundaries.</param>
-	/// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-	/// <exception cref="InvalidOperationException">Thrown when no applicable authorization rules are configured for the resource.</exception>
-	/// <exception cref="OperationCanceledException">Thrown when the operation is canceled via the cancellation token.</exception>
-	/// <returns>
-	/// A <see cref="ValueTask{TResult}"/> containing a <see cref="Result"/> that indicates whether authorization succeeded.
-	/// On failure, the result contains the authorization exception.
-	/// </returns>
 	ValueTask<Result> Evaluate<TResource>(
 		TResource resource,
-		string requestId,
-		string correlationId,
 		CancellationToken cancellationToken = default)
 		where TResource : IAuthorizableResource;
 
 	/// <summary>
-	/// Enforces authorization rules for the specified resource by throwing an exception if access is denied.
+	/// Evaluates authorization for a resource using an existing operation context.
 	/// </summary>
+	/// <typeparam name="TResource">The type of resource being authorized.</typeparam>
+	/// <param name="resource">The resource to authorize.</param>
+	/// <param name="operation">The operation context containing user state and environment information.</param>
+	/// <param name="cancellationToken">Cancellation token.</param>
+	/// <returns>A result indicating success or failure of the authorization check.</returns>
 	/// <remarks>
-	/// Use this method when unauthorized access should halt execution immediately.
-	/// This is appropriate for scenarios where authorization failure is an exceptional condition
-	/// that cannot be handled gracefully.
+	/// Use this overload when calling from the Conductor pipeline or when you already
+	/// have an OperationContext available. This avoids rebuilding user state and
+	/// environment information, improving performance.
 	/// </remarks>
-	/// <typeparam name="TResource">The type of the <see cref="IAuthorizableResource"/> being evaluated.</typeparam>
-	/// <param name="resource">The resource instance to evaluate authorization for.</param>
-	/// <param name="requestId">A unique identifier for tracking this authorization request across logs and telemetry.</param>
-	/// <param name="correlationId">A unique identifier for correlating related operations across service boundaries.</param>
-	/// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-	/// <exception cref="UnauthenticatedAccessException">Thrown when the current user is not authenticated.</exception>
-	/// <exception cref="ForbiddenAccessException">Thrown when the current user lacks sufficient authorization.</exception>
-	/// <exception cref="InvalidOperationException">Thrown when no applicable authorization rules are configured for the resource.</exception>
-	/// <exception cref="OperationCanceledException">Thrown when the operation is canceled via the cancellation token.</exception>
-	/// <returns>A <see cref="ValueTask"/> representing the asynchronous authorization operation.</returns>
-	ValueTask Enforce<TResource>(
+	ValueTask<Result> Evaluate<TResource>(
 		TResource resource,
-		string requestId,
-		string correlationId,
+		OperationContext operation,
 		CancellationToken cancellationToken = default)
 		where TResource : IAuthorizableResource;
+
 }

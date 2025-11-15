@@ -10,8 +10,10 @@ internal abstract class RequestHandlerWrapper {
 	/// Handles the request by resolving the handler and building the intercept pipeline.
 	/// </summary>
 	public abstract ValueTask<Result> Handle(
+		string environment,
 		IRequest request,
 		IServiceProvider serviceProvider,
+		IPublisher publisher,
 		ILogger logger,
 		CancellationToken cancellationToken);
 }

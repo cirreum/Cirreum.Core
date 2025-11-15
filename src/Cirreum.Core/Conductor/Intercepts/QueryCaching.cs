@@ -21,7 +21,7 @@ public class QueryCaching<TRequest, TResponse>(
 		description: "Cache operation duration");
 
 	public async ValueTask<Result<TResponse>> HandleAsync(
-		TRequest request,
+		RequestContext<TRequest> context,
 		RequestHandlerDelegate<TResponse> next,
 		CancellationToken cancellationToken) {
 
@@ -29,28 +29,28 @@ public class QueryCaching<TRequest, TResponse>(
 		if (conductorSettings.Cache.Provider == CacheProvider.HybridCache &&
 			cache is NoCacheQueryService) {
 			logger.LogWarning(
-				"CacheProvider is set to HybridCache but ICacheableQueryService is not registered. " +
+				"CacheProvider is set to 'HybridCache' yet the service is not registered. " +
 				"Did you forget to call AddConductorHybridCache()?");
 		}
 
 		var queryTypeName = typeof(TRequest).Name;
-		var category = request.CacheCategory ?? "uncategorized";
+		var category = context.Request.CacheCategory ?? "uncategorized";
 
-		if (logger.IsEnabled(LogLevel.Information)) {
-			logger.LogInformation(
+		if (logger.IsEnabled(LogLevel.Debug)) {
+			logger.LogDebug(
 				"Processing cacheable query: {QueryType} (Category: {Category}, CacheKey: {CacheKey})",
 				queryTypeName,
 				category,
-				request.CacheKey);
+				context.Request.CacheKey);
 		}
 
-		var effectiveSettings = this.BuildEffectiveSettings(request, queryTypeName);
-		var tags = request.CacheTags;
+		var effectiveSettings = this.BuildEffectiveSettings(context.Request, queryTypeName);
+		var tags = context.Request.CacheTags;
 
 		var startTime = Stopwatch.GetTimestamp();
 
 		var result = await cache.GetOrCreateAsync(
-			request.CacheKey,
+			context.Request.CacheKey,
 			async ct => await next(ct),
 			effectiveSettings,
 			tags,
@@ -61,13 +61,13 @@ public class QueryCaching<TRequest, TResponse>(
 		var telemetryTags = new TagList {
 			{ ConductorTelemetry.QueryNameTag, queryTypeName },
 			{ ConductorTelemetry.QueryCategoryTag, category },
-			{ ConductorTelemetry.ResultStatusTag, result.IsSuccess ? "success" : "failure" }
+			{ ConductorTelemetry.QueryStatusTag, result.IsSuccess ? "success" : "failure" }
 		};
 
 		_cacheDuration.Record(elapsed, telemetryTags);
 
-		if (logger.IsEnabled(LogLevel.Information)) {
-			logger.LogInformation(
+		if (logger.IsEnabled(LogLevel.Debug)) {
+			logger.LogDebug(
 				"Query {QueryType} completed: Status={Status}, Category={Category}, Duration={Duration}ms",
 				queryTypeName,
 				result.IsSuccess ? "Success" : "Failed",

@@ -13,21 +13,23 @@ public sealed class Validation<TRequest, TResponse>(
 
 	private readonly IEnumerable<IValidator<TRequest>> _validators = validators;
 
-	public ValueTask<Result<TResponse>> HandleAsync(
-		TRequest request,
+	public async ValueTask<Result<TResponse>> HandleAsync(
+		RequestContext<TRequest> context,
 		RequestHandlerDelegate<TResponse> next,
 		CancellationToken cancellationToken) {
 
 		if (this._validators.Any()) {
 
-			var context = new ValidationContext<TRequest>(request);
+			List<ValidationFailure> failures = [];
 
-			List<ValidationFailure>? failures = null;
+			var validationContext = new ValidationContext<TRequest>(context.Request);
 
 			foreach (var validator in this._validators) {
-				var result = validator.Validate(context);
-				if (result.Errors.Count > 0) {
-					failures ??= new List<ValidationFailure>(result.Errors.Count);
+				var result = await validator.ValidateAsync(validationContext, cancellationToken);
+				if (result == null) {
+					continue;
+				}
+				if (result.Errors?.Count > 0) {
 					foreach (var error in result.Errors) {
 						if (error != null) {
 							failures.Add(error);
@@ -36,13 +38,13 @@ public sealed class Validation<TRequest, TResponse>(
 				}
 			}
 
-			if (failures?.Count > 0) {
-				throw new ValidationException(failures!);
+			if (failures.Count > 0) {
+				return Result<TResponse>.Fail(new ValidationException(failures));
 			}
 
 		}
 
-		return next(cancellationToken);
+		return await next(cancellationToken);
 
 	}
 

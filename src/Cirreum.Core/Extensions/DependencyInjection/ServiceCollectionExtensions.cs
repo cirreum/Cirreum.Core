@@ -127,7 +127,7 @@ public static class ServiceCollectionExtensions {
 				.AddOpenIntercept(typeof(Validation<,>))
 				.AddOpenIntercept(typeof(Authorization<,>))
 				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
+				.AddOpenIntercept(typeof(HandlerPerformance<,>));
 		}, conductorSettings);
 
 		return services;

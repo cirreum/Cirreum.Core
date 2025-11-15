@@ -1,13 +1,23 @@
-﻿// Conductor.Tests/DispatcherTests.cs
-namespace Cirreum.Conductor.Tests;
+﻿namespace Cirreum.Conductor.Tests;
 
+using Cirreum.Auditing;
+using Cirreum.Authorization;
+using Cirreum.Conductor.Intercepts;
+using Cirreum.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 
 [TestClass]
 public sealed class DispatcherTests {
 
 	// ===== Fakes =====
+
+	public sealed class CancelAwareEchoHandler : IRequestHandler<Echo, string> {
+		public async ValueTask<Result<string>> HandleAsync(Echo r, CancellationToken ct) {
+			await Task.Delay(200, ct); // should cancel
+			return Result<string>.Success(r.Text);
+		}
+	}
+
 	private sealed record Ping() : IRequest;
 
 	private sealed class PingHandler : IRequestHandler<Ping> {
@@ -38,17 +48,34 @@ public sealed class DispatcherTests {
 			=> ValueTask.FromResult(Result.Fail("boom"));
 	}
 
+	private sealed record AuthRequest() : IAuthorizableRequest, IAuditableRequest;
+
+	private sealed class AuthRequestHandler : IRequestHandler<AuthRequest> {
+		public bool Called { get; private set; }
+		public ValueTask<Result> HandleAsync(AuthRequest request, CancellationToken cancellationToken = default) {
+			this.Called = true;
+			return ValueTask.FromResult(Result.Success);
+		}
+	}
+
+	private sealed class AuthRequestAuthorizor : AuthorizationValidatorBase<AuthRequest> {
+		public AuthRequestAuthorizor() {
+			this.HasRole(ApplicationRoles.AppUserRole);
+		}
+	}
+	private sealed class AuthAdminRequestAuthorizor : AuthorizationValidatorBase<AuthRequest> {
+		public AuthAdminRequestAuthorizor() {
+			this.HasRole(ApplicationRoles.AppAdminRole);
+		}
+	}
+
 	[TestMethod]
 	public async Task Dispatch_VoidRequest_InvokesHandler_AndReturnsOk() {
 		// Arrange
-		var services = new ServiceCollection();
-		services.AddSingleton<IDispatcher>(sp =>
-			new Dispatcher(sp, NullLogger<Dispatcher>.Instance));
 		var pingHandler = new PingHandler();
-		services.AddTransient<IRequestHandler<Ping>>(_ => pingHandler);
-
-		using var sp = services.BuildServiceProvider();
-		var dispatcher = sp.GetRequiredService<IDispatcher>();
+		var dispatcher = Shared.ArrangeSimpleDispatcher(builder => {
+			builder.AddSingleton<IRequestHandler<Ping>>(pingHandler);
+		});
 
 		// Act
 		var result = await dispatcher.DispatchAsync(new Ping(), this.TestContext.CancellationToken);
@@ -61,13 +88,9 @@ public sealed class DispatcherTests {
 	[TestMethod]
 	public async Task Dispatch_TResponseRequest_InvokesHandler_AndReturnsPayload() {
 		// Arrange
-		var services = new ServiceCollection();
-		services.AddSingleton<IDispatcher>(sp =>
-			new Dispatcher(sp, NullLogger<Dispatcher>.Instance));
-		services.AddTransient<IRequestHandler<Echo, string>, EchoHandler>();
-
-		using var sp = services.BuildServiceProvider();
-		var dispatcher = sp.GetRequiredService<IDispatcher>();
+		var dispatcher = Shared.ArrangeSimpleDispatcher(builder => {
+			builder.AddTransient<IRequestHandler<Echo, string>, EchoHandler>();
+		});
 
 		// Act
 		var result = await dispatcher.DispatchAsync(new Echo("hello"), this.TestContext.CancellationToken);
@@ -80,13 +103,7 @@ public sealed class DispatcherTests {
 	[TestMethod]
 	public async Task Dispatch_VoidRequest_PropagatesFailure() {
 		// Arrange
-		var services = new ServiceCollection();
-		services.AddSingleton<IDispatcher>(sp =>
-			new Dispatcher(sp, NullLogger<Dispatcher>.Instance));
-		services.AddTransient<IRequestHandler<Fail>, FailHandler>();
-
-		using var sp = services.BuildServiceProvider();
-		var dispatcher = sp.GetRequiredService<IDispatcher>();
+		var dispatcher = Shared.ArrangeSimpleDispatcher();
 
 		// Act
 		var result = await dispatcher.DispatchAsync(new Fail(), this.TestContext.CancellationToken);
@@ -98,12 +115,9 @@ public sealed class DispatcherTests {
 
 	[TestMethod]
 	public async Task Dispatch_honors_cancellation_token() {
-		var services = new ServiceCollection();
-		services.AddSingleton<IDispatcher>(sp => new Dispatcher(sp, NullLogger<Dispatcher>.Instance));
-		services.AddTransient<IRequestHandler<Echo, string>, CancelAwareEchoHandler>();
-
-		using var sp = services.BuildServiceProvider();
-		var dispatcher = sp.GetRequiredService<IDispatcher>();
+		var dispatcher = Shared.ArrangeSimpleDispatcher(sp => {
+			sp.AddTransient<IRequestHandler<Echo, string>, CancelAwareEchoHandler>();
+		});
 
 		using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(10));
 		var result = await dispatcher.DispatchAsync(new Echo("hello"), cts.Token);
@@ -112,11 +126,59 @@ public sealed class DispatcherTests {
 		Assert.IsInstanceOfType<TaskCanceledException>(result.Error);
 	}
 
-	public sealed class CancelAwareEchoHandler : IRequestHandler<Echo, string> {
-		public async ValueTask<Result<string>> HandleAsync(Echo r, CancellationToken ct) {
-			await Task.Delay(200, ct); // should cancel
-			return Result<string>.Success(r.Text);
-		}
+	[TestMethod]
+	public async Task Dispatch_abac_authorizes_appuser_role() {
+
+		var authHandler = new AuthRequestHandler();
+		var services = Shared.ArrangeServices(sp => {
+			sp.AddTransient<IAuthorizationResourceValidator<AuthRequest>, AuthRequestAuthorizor>();
+			sp.AddTransient<IRequestHandler<AuthRequest>>(sp => authHandler);
+			sp.AddSingleton<IAuthorizationRoleRegistry, TestAuthorizationRoleRegistry>();
+			sp.AddConductor(options => {
+				options.AddOpenIntercept(typeof(Authorization<,>));
+			}, Shared.SequentialSettings);
+		});
+		var sp = services.BuildServiceProvider();
+
+		var authRegistry = sp.GetRequiredService<IAuthorizationRoleRegistry>();
+		await ((TestAuthorizationRoleRegistry)authRegistry).InitializeAsync();
+
+		var dispatcher = sp.GetRequiredService<IDispatcher>();
+
+		var result = await dispatcher.DispatchAsync(new AuthRequest(), this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.IsTrue(authHandler.Called);
+
+	}
+
+	[TestMethod]
+	public async Task Dispatch_abac_forbiddenaccess_for_appuser() {
+
+		var authHandler = new AuthRequestHandler();
+		var services = Shared.ArrangeServices(sp => {
+			sp.AddTransient<IAuthorizationResourceValidator<AuthRequest>, AuthAdminRequestAuthorizor>();
+			sp.AddTransient<IRequestHandler<AuthRequest>>(sp => authHandler);
+			sp.AddSingleton<IAuthorizationRoleRegistry, TestAuthorizationRoleRegistry>();
+			sp.AddConductor(options => {
+				options.AddOpenIntercept(typeof(Authorization<,>));
+			}, Shared.SequentialSettings);
+		});
+		var sp = services.BuildServiceProvider();
+
+		var authRegistry = sp.GetRequiredService<IAuthorizationRoleRegistry>();
+		await ((TestAuthorizationRoleRegistry)authRegistry).InitializeAsync();
+
+		var dispatcher = sp.GetRequiredService<IDispatcher>();
+
+		var result = await dispatcher.DispatchAsync(new AuthRequest(), this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsFailure);
+		Assert.IsFalse(authHandler.Called);
+		Assert.IsTrue(result.Error is ForbiddenAccessException, "Should be 'ForbiddenAccessException' exception");
+		this.TestContext.WriteLine(result.Error.Message);
 	}
 
 	public TestContext TestContext { get; set; }

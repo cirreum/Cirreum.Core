@@ -209,7 +209,7 @@ sealed class DefaultAuthorizationDocumenter(
 			// Determine if the ABAC rule includes RBAC
 			var includesRBAC =
 				!string.IsNullOrWhiteSpace(rule.PropertyPath)
-				&& rule.PropertyPath == nameof(AuthorizationContext<IAuthorizableResource>.UserRoles);
+				&& rule.PropertyPath == nameof(AuthorizationContext<>.EffectiveRoles);
 
 			// Extract validation type for better categorization
 			var validationType = ExtractValidationType(rule.ValidationLogic);

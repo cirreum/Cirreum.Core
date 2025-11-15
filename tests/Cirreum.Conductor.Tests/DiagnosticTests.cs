@@ -1,18 +1,12 @@
 ﻿namespace Cirreum.Conductor.Tests;
 
-using Microsoft.Extensions.DependencyInjection;
-
 [TestClass]
 public class DiagnosticTests {
 
 	[TestMethod]
 	public async Task What_happens_when_no_handler_exists() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddSingleton<IDispatcher, Dispatcher>();
 
-		var serviceProvider = services.BuildServiceProvider();
-		var dispatcher = serviceProvider.GetRequiredService<IDispatcher>();
+		var dispatcher = Shared.ArrangeSimpleDispatcher();
 
 		try {
 			var result = await dispatcher.DispatchAsync(new TestRequest(), this.TestContext.CancellationToken);

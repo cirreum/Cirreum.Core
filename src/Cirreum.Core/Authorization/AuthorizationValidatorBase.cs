@@ -29,7 +29,7 @@ public abstract class AuthorizationValidatorBase<TResource>
 			.NotNull()
 			.WithMessage("User state cannot be null");
 
-		this.RuleFor(context => context.UserRoles)
+		this.RuleFor(context => context.EffectiveRoles)
 			.NotNull()
 			.WithMessage("User roles cannot be null");
 
@@ -45,7 +45,7 @@ public abstract class AuthorizationValidatorBase<TResource>
 	/// </summary>
 	/// <param name="role">The role to check.</param>
 	protected void HasRole(Role role) {
-		this.RuleFor(context => context.UserRoles)
+		this.RuleFor(context => context.EffectiveRoles)
 			.HasRole(role);
 	}
 
@@ -54,7 +54,7 @@ public abstract class AuthorizationValidatorBase<TResource>
 	/// </summary>
 	/// <param name="roles">The roles to evaluate for inclusion.</param>
 	protected void HasAnyRole(params Role[] roles) {
-		this.RuleFor(context => context.UserRoles)
+		this.RuleFor(context => context.EffectiveRoles)
 			.HasAnyRole(roles);
 	}
 
@@ -63,7 +63,7 @@ public abstract class AuthorizationValidatorBase<TResource>
 	/// </summary>
 	/// <param name="roles">The roles to evaluate for inclusion.</param>
 	protected void HasAllRoles(params Role[] roles) {
-		this.RuleFor(context => context.UserRoles)
+		this.RuleFor(context => context.EffectiveRoles)
 			.HasAllRoles(roles);
 	}
 
@@ -71,7 +71,7 @@ public abstract class AuthorizationValidatorBase<TResource>
 	/// The user must have 2 or more roles.
 	/// </summary>
 	protected void HasTwoOrMoreRoles() {
-		this.RuleFor(context => context.UserRoles)
+		this.RuleFor(context => context.EffectiveRoles)
 			.HasTwoOrMoreRoles();
 	}
 

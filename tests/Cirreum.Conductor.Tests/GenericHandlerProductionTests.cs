@@ -49,16 +49,16 @@ public class GenericHandlerProductionTests {
 
 	[TestMethod]
 	public async Task Should_handle_concrete_typed_request() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(GenericHandlerProductionTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(GenericHandlerProductionTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		});
 
 		var provider = services.BuildServiceProvider();
 		var dispatcher = provider.GetRequiredService<IDispatcher>();
@@ -73,18 +73,16 @@ public class GenericHandlerProductionTests {
 
 	[TestMethod]
 	public async Task Should_handle_multiple_concrete_types() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(GenericHandlerProductionTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
-
-
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(GenericHandlerProductionTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		});
 		var provider = services.BuildServiceProvider();
 		var dispatcher = provider.GetRequiredService<IDispatcher>();
 
@@ -103,17 +101,16 @@ public class GenericHandlerProductionTests {
 
 	[TestMethod]
 	public void Should_register_handlers_that_inherit_from_generic_base() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(GenericHandlerProductionTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
-
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(GenericHandlerProductionTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		});
 		var provider = services.BuildServiceProvider();
 
 		// Verify handlers inheriting from generic base are registered
@@ -128,18 +125,16 @@ public class GenericHandlerProductionTests {
 
 	[TestMethod]
 	public async Task Should_execute_handlers_that_inherit_from_generic_base() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(GenericHandlerProductionTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
-
-
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(GenericHandlerProductionTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		});
 		var provider = services.BuildServiceProvider();
 		var dispatcher = provider.GetRequiredService<IDispatcher>();
 
@@ -153,17 +148,16 @@ public class GenericHandlerProductionTests {
 
 	[TestMethod]
 	public async Task Should_handle_inherited_handlers_independently() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(GenericHandlerProductionTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
-
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(GenericHandlerProductionTests).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		});
 		var provider = services.BuildServiceProvider();
 		var dispatcher = provider.GetRequiredService<IDispatcher>();
 

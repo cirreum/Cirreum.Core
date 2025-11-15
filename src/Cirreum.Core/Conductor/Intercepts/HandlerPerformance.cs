@@ -5,15 +5,15 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
-public sealed class Performance<TRequest, TResponse>(
-	ILogger<Performance<TRequest, TResponse>> logger
+public sealed class HandlerPerformance<TRequest, TResponse>(
+	ILogger<HandlerPerformance<TRequest, TResponse>> logger
 ) : IIntercept<TRequest, TResponse>
 	where TRequest : notnull {
 
 	private const int LongRunningThresholdMs = 500;
 
 	public async ValueTask<Result<TResponse>> HandleAsync(
-		TRequest request,
+		RequestContext<TRequest> context,
 		RequestHandlerDelegate<TResponse> next,
 		CancellationToken cancellationToken) {
 
@@ -25,7 +25,7 @@ public sealed class Performance<TRequest, TResponse>(
 			var elapsedMs = sw.ElapsedMilliseconds;
 
 			if (elapsedMs > LongRunningThresholdMs) {
-				var requestName = request.GetType().Name;
+				var requestName = context.GetType().Name;
 				logger.LogLongRunningRequest(requestName, elapsedMs);
 			}
 		}

@@ -1,7 +1,6 @@
 ﻿namespace Cirreum.Conductor.Intercepts;
 
 using Cirreum.Authorization;
-using System.Diagnostics;
 
 /// <summary>
 /// Intercept behavior that enforces authorization rules for any <see cref="IAuthorizableRequestBase"/>
@@ -20,25 +19,26 @@ using System.Diagnostics;
 /// </para>
 /// </remarks>
 public sealed class Authorization<TRequest, TResponse>(
-	IAuthorizationEvaluator evaluator
+	IAuthorizationEvaluator authorizor
 ) : IIntercept<TRequest, TResponse>
 	where TRequest : IAuthorizableRequestBase {
 
 	public async ValueTask<Result<TResponse>> HandleAsync(
-		TRequest request,
+		RequestContext<TRequest> context,
 		RequestHandlerDelegate<TResponse> next,
 		CancellationToken cancellationToken) {
 
-		var requestId = Activity.Current?.SpanId.ToString() ?? Guid.NewGuid().ToString("N")[..16];
-		var correlationId = Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
+		// Pass the OperationContext we already have from the pipeline
+		// This avoids rebuilding user state and environment information
+		var authResult = await authorizor.Evaluate(
+			context.Request,
+			context.Operation,
+			cancellationToken);
 
-		var authResult = await evaluator.Evaluate(request, requestId, correlationId, cancellationToken);
-		if (!authResult.IsSuccess) {
-			return Result<TResponse>.Fail(authResult.Error!);
+		if (authResult.IsFailure) {
+			return Result<TResponse>.Fail(authResult.Error);
 		}
 
 		return await next(cancellationToken);
-
 	}
-
 }

@@ -12,7 +12,7 @@ using System.Diagnostics.CodeAnalysis;
 /// inspect the outcome, retrieve the value or error, and compose further operations in a fluent manner. This type is
 /// thread-safe for read-only usage and is commonly used in functional and error-handling scenarios.</remarks>
 /// <typeparam name="T">The type of the value returned if the operation is successful.</typeparam>
-public readonly struct Result<T> : IResult, IEquatable<Result<T>> {
+public readonly struct Result<T> : IResult<T>, IEquatable<Result<T>> {
 
 	/// <summary>
 	/// Creates a successful result with the specified value.
@@ -72,6 +72,7 @@ public readonly struct Result<T> : IResult, IEquatable<Result<T>> {
 	/// <summary>
 	/// Gets a value indicating whether the result represents a failure state.
 	/// </summary>
+	[MemberNotNullWhen(true, nameof(Error))]
 	public bool IsFailure => !_isSuccess;
 
 	/// <summary>
@@ -298,11 +299,13 @@ public readonly struct Result<T> : IResult, IEquatable<Result<T>> {
 
 	#region IResult Implementation
 
-	/// <summary>
-	/// Gets the underlying value as an object for IResult interface compatibility.
-	/// </summary>
-	/// <returns>The boxed value if successful; otherwise, null.</returns>
 	object? IResult.GetValue() => this._value;
+
+	void IResult.Switch(Action onSuccess, Action<Exception> onFailure) {
+		throw new NotImplementedException();
+	}
+
+	public T? GetValue() => this._value;
 
 	/// <summary>
 	/// Executes the appropriate action based on success or failure state.
@@ -311,21 +314,54 @@ public readonly struct Result<T> : IResult, IEquatable<Result<T>> {
 	/// <param name="onFailure">Action to execute with the error if failed.</param>
 	/// <exception cref="ArgumentNullException">Thrown when either parameter is null.</exception>
 	/// <remarks>
-	/// This method is an explicit interface implementation to avoid confusion with the strongly-typed
-	/// <see cref="OnSuccess"/> and <see cref="OnFailure"/> methods. The actions are invoked based on
-	/// the result state, and any exceptions thrown by the actions are allowed to propagate to the caller.
+	/// The actions are invoked based on the result state, and any exceptions thrown by the actions
+	/// are allowed to propagate to the caller.
 	/// </remarks>
-	void IResult.Switch(Action<object?> onSuccess, Action<Exception> onFailure) {
+	public void Switch(Action<T> onSuccess, Action<Exception> onFailure) {
 		ArgumentNullException.ThrowIfNull(onSuccess);
 		ArgumentNullException.ThrowIfNull(onFailure);
 
 		if (this.IsSuccess) {
-			onSuccess(this._value);
+			onSuccess(this.Value);
 		} else {
-			// Debug assertion to catch internal consistency issues
-			Debug.Assert(this._error is not null, "Failed result must have a non-null error.");
-			onFailure(this._error!);
+			onFailure(this.Error);
 		}
+
+	}
+
+	/// <summary>
+	/// Asynchronously executes the appropriate function based on the success or failure state
+	/// of the result.
+	/// </summary>
+	/// <param name="onSuccess">
+	/// A function to invoke when the result is successful.  
+	/// The function receives the result value of type <typeparamref name="T"/>.
+	/// </param>
+	/// <param name="onFailure">
+	/// A function to invoke when the result represents a failure.  
+	/// The function receives the associated <see cref="Exception"/>.
+	/// </param>
+	/// <returns>
+	/// A <see cref="ValueTask"/> that completes when the invoked function has completed.
+	/// </returns>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown when <paramref name="onSuccess"/> or <paramref name="onFailure"/> is <c>null</c>.
+	/// </exception>
+	/// <remarks>
+	/// This method enables asynchronous branching based on the result's state.  
+	/// If the result is successful, <paramref name="onSuccess"/> is invoked with the value.  
+	/// If the result is a failure, <paramref name="onFailure"/> is invoked with the error.  
+	/// Any exception thrown by either function is allowed to propagate to the caller.
+	/// </remarks>
+	public ValueTask SwitchAsync(
+		Func<T, ValueTask> onSuccess,
+		Func<Exception, ValueTask> onFailure) {
+		ArgumentNullException.ThrowIfNull(onSuccess);
+		ArgumentNullException.ThrowIfNull(onFailure);
+
+		return this.IsSuccess
+			? onSuccess(this.Value)
+			: onFailure(this.Error!);
 	}
 
 	#endregion

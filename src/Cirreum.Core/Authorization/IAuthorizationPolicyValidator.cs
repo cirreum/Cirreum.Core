@@ -55,9 +55,11 @@ public interface IAuthorizationPolicyValidator {
 	/// <param name="resource">
 	/// The resource instance to evaluate for validator applicability. Cannot be <see langword="null"/>.
 	/// </param>
-	/// <param name="context">
-	/// The execution context providing environmental information for the applicability determination.
-	/// Cannot be <see langword="null"/>.
+	/// <param name="runtimeType">
+	/// The application runtime type in which the authorization is being evaluated.
+	/// </param>
+	/// <param name="timestamp">
+	/// The timestamp of when the authorization check is occurring, useful for time-based policies.
 	/// </param>
 	/// <returns>
 	/// <see langword="true"/> if this validator should be applied to the specified resource within the given context;
@@ -65,10 +67,13 @@ public interface IAuthorizationPolicyValidator {
 	/// </returns>
 	/// <remarks>
 	/// This method allows validators to conditionally apply their logic based on resource characteristics,
-	/// execution context, or other environmental factors. Implementations should return <see langword="true"/>
+	/// runtime type, timestamp, or other environmental factors. Implementations should return <see langword="true"/>
 	/// only when the validator's policy is relevant to the provided resource and context combination.
 	/// </remarks>
-	bool AppliesTo<TResource>(TResource resource, ExecutionContext context)
+	bool AppliesTo<TResource>(
+		TResource resource,
+		ApplicationRuntimeType runtimeType,
+		DateTimeOffset timestamp)
 		where TResource : notnull, IAuthorizableResource;
 
 	/// <summary>
@@ -97,6 +102,11 @@ public interface IAuthorizationPolicyValidator {
 	/// access should be authorized.
 	/// </para>
 	/// <para>
+	/// The authorization context provides access to the OperationContext (via context.Operation), which contains
+	/// runtime type, timestamp, user state, and other execution details. Validators can use these to implement
+	/// sophisticated authorization logic.
+	/// </para>
+	/// <para>
 	/// A successful validation (indicated by <see cref="ValidationResult.IsValid"/> being <see langword="true"/>)
 	/// means the authorization policy permits the requested access. A failed validation should include
 	/// descriptive error information in the <see cref="ValidationResult.Errors"/> collection.
@@ -106,5 +116,4 @@ public interface IAuthorizationPolicyValidator {
 		AuthorizationContext<TResource> context,
 		CancellationToken cancellationToken = default)
 		where TResource : notnull, IAuthorizableResource;
-
 }

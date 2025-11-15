@@ -55,12 +55,13 @@ public readonly struct Result : IResult, IEquatable<Result> {
 	/// <summary>
 	/// Gets a value indicating whether the operation succeeded.
 	/// </summary>
-	[MemberNotNullWhen(true, nameof(Error))]
+	[MemberNotNullWhen(false, nameof(Error))]
 	public bool IsSuccess => this._isSuccess;
 
 	/// <summary>
 	/// Gets a value indicating whether the result represents a failure state.
 	/// </summary>
+	[MemberNotNullWhen(true, nameof(Error))]
 	public bool IsFailure => !_isSuccess;
 
 	/// <summary>
@@ -151,12 +152,42 @@ public readonly struct Result : IResult, IEquatable<Result> {
 
 
 	/// <summary>
-	/// Implicitly converts a <see cref="Result"/> to <see cref="Result{T}"/> with <see cref="Unit"/> as the value type.
+	/// Implicitly converts a non-generic <see cref="Result"/> into a
+	/// <see cref="Result{T}"/> with <see cref="Unit"/> as the value type.
 	/// </summary>
+	/// <remarks>
+	/// This conversion preserves the success or failure state of the original
+	/// <see cref="Result"/>. On success, the resulting <see cref="Result{T}"/>
+	/// contains <see cref="Unit.Value"/>. On failure, the error is propagated
+	/// to the resulting <see cref="Result{T}"/>.
+	/// </remarks>
+	/// <param name="result">
+	/// The <see cref="Result"/> instance to convert.
+	/// </param>
 	public static implicit operator Result<Unit>(Result result) =>
 		result._isSuccess
 			? Result<Unit>.Success(Unit.Value)
 			: Result<Unit>.Fail(result._error!);
+
+
+	/// <summary>
+	/// Implicitly converts a <see cref="Result{T}"/> with <see cref="Unit"/>
+	/// as the value type into a non-generic <see cref="Result"/>.
+	/// </summary>
+	/// <remarks>
+	/// This conversion discards the <see cref="Unit"/> value and preserves
+	/// only the success or failure state. If the source result represents a
+	/// failure, the associated error is propagated to the resulting
+	/// <see cref="Result"/>.
+	/// </remarks>
+	/// <param name="result">
+	/// The <see cref="Result{Unit}"/> instance to convert.
+	/// </param>
+	public static implicit operator Result(Result<Unit> result) =>
+		result.IsSuccess
+			? Success
+			: Fail(result.Error!);
+
 
 	public bool Equals(Result other) =>
 		this._isSuccess == other._isSuccess &&
@@ -197,16 +228,14 @@ public readonly struct Result : IResult, IEquatable<Result> {
 	/// action always receives null since there is no value to pass. Any exceptions thrown by the actions
 	/// are allowed to propagate to the caller.
 	/// </remarks>
-	void IResult.Switch(Action<object?> onSuccess, Action<Exception> onFailure) {
+	public void Switch(Action onSuccess, Action<Exception> onFailure) {
 		ArgumentNullException.ThrowIfNull(onSuccess);
 		ArgumentNullException.ThrowIfNull(onFailure);
 
 		if (this.IsSuccess) {
-			onSuccess(null);  // Non-generic Result has no value
+			onSuccess();
 		} else {
-			// Debug assertion to catch internal consistency issues
-			Debug.Assert(this._error is not null, "Failed result must have a non-null error.");
-			onFailure(this._error!);
+			onFailure(this.Error);
 		}
 	}
 

@@ -1,8 +1,8 @@
 ﻿namespace Cirreum;
+
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-
 
 /// <summary>
 /// Validates internet domain names according to standard formatting rules.

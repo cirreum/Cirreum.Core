@@ -104,11 +104,7 @@ public class InterceptTests {
 	public class LoggingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
 		where TRequest : notnull {
 
-		public async ValueTask<Result<TResponse>> HandleAsync(
-			TRequest request,
-			RequestHandlerDelegate<TResponse> next,
-			CancellationToken cancellationToken) {
-
+		public async ValueTask<Result<TResponse>> HandleAsync(RequestContext<TRequest> context, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken) {
 			ExecutionLog.Add($"LoggingIntercept: Before {typeof(TRequest).Name}");
 			var result = await next(cancellationToken);
 			ExecutionLog.Add($"LoggingIntercept: After {typeof(TRequest).Name}");
@@ -120,11 +116,7 @@ public class InterceptTests {
 	public class TimingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
 		where TRequest : notnull {
 
-		public async ValueTask<Result<TResponse>> HandleAsync(
-			TRequest request,
-			RequestHandlerDelegate<TResponse> next,
-			CancellationToken cancellationToken) {
-
+		public async ValueTask<Result<TResponse>> HandleAsync(RequestContext<TRequest> context, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken) {
 			ExecutionLog.Add($"TimingIntercept: Start {typeof(TRequest).Name}");
 			var result = await next(cancellationToken);
 			ExecutionLog.Add($"TimingIntercept: End {typeof(TRequest).Name}");
@@ -134,11 +126,7 @@ public class InterceptTests {
 
 	// Specific intercept for TestRequest only
 	public class SpecificIntercept : IIntercept<TestRequest, string> {
-		public async ValueTask<Result<string>> HandleAsync(
-			TestRequest request,
-			RequestHandlerDelegate<string> next,
-			CancellationToken cancellationToken) {
-
+		public async ValueTask<Result<string>> HandleAsync(RequestContext<TestRequest> context, RequestHandlerDelegate<string> next, CancellationToken cancellationToken) {
 			ExecutionLog.Add("SpecificIntercept: Before");
 			var result = await next(cancellationToken);
 			ExecutionLog.Add("SpecificIntercept: After");
@@ -149,12 +137,7 @@ public class InterceptTests {
 	// Intercept that modifies the result
 	public class ResultModifyingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
 		where TRequest : notnull {
-
-		public async ValueTask<Result<TResponse>> HandleAsync(
-			TRequest request,
-			RequestHandlerDelegate<TResponse> next,
-			CancellationToken cancellationToken) {
-
+		public async ValueTask<Result<TResponse>> HandleAsync(RequestContext<TRequest> context, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken) {
 			var result = await next(cancellationToken);
 
 			if (result.IsSuccess && result.Value is string str) {
@@ -171,11 +154,7 @@ public class InterceptTests {
 	public class ErrorHandlingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
 		where TRequest : notnull {
 
-		public async ValueTask<Result<TResponse>> HandleAsync(
-			TRequest request,
-			RequestHandlerDelegate<TResponse> next,
-			CancellationToken cancellationToken) {
-
+		public async ValueTask<Result<TResponse>> HandleAsync(RequestContext<TRequest> context, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken) {
 			try {
 				return await next(cancellationToken);
 			} catch (Exception ex) {
@@ -183,19 +162,21 @@ public class InterceptTests {
 				return Result<TResponse>.Fail(ex);
 			}
 		}
+
 	}
 
 	public sealed class ShortCircuitIntercept : IIntercept<TestRequest, string> {
 		public ValueTask<Result<string>> HandleAsync(
-			TestRequest request,
+			RequestContext<TestRequest> context,
 			RequestHandlerDelegate<string> next,
-			CancellationToken ct) => ValueTask.FromResult(Result<string>.Fail("blocked"));
+			CancellationToken cancellationToken) => ValueTask.FromResult(Result<string>.Fail("blocked"));
 	}
 
 	public sealed class VoidShortCircuit : IIntercept<VoidTestRequest, Unit> {
 		public ValueTask<Result<Unit>> HandleAsync(
-			VoidTestRequest r, RequestHandlerDelegate<Unit> next, CancellationToken ct)
-			=> ValueTask.FromResult(Result<Unit>.Fail("nope"));
+			RequestContext<VoidTestRequest> context,
+			RequestHandlerDelegate<Unit> next,
+			CancellationToken cancellationToken) => ValueTask.FromResult(Result<Unit>.Fail("nope"));
 	}
 
 
@@ -206,13 +187,13 @@ public class InterceptTests {
 
 	[TestMethod]
 	public async Task Should_register_and_execute_open_generic_intercept() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-				.AddOpenIntercept(typeof(LoggingIntercept<,>));
-		}, Shared.SequentialSettings);
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddOpenIntercept(typeof(LoggingIntercept<,>));
+			}, Shared.SequentialSettings);
+		});
 
 		var provider = services.BuildServiceProvider();
 		var dispatcher = provider.GetRequiredService<IDispatcher>();
@@ -233,14 +214,14 @@ public class InterceptTests {
 
 	[TestMethod]
 	public async Task Should_execute_multiple_intercepts_in_order() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-				.AddOpenIntercept(typeof(LoggingIntercept<,>))
-				.AddOpenIntercept(typeof(TimingIntercept<,>));
-		}, Shared.SequentialSettings);
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddOpenIntercept(typeof(LoggingIntercept<,>))
+					.AddOpenIntercept(typeof(TimingIntercept<,>));
+			}, Shared.SequentialSettings);
+		});
 
 		var provider = services.BuildServiceProvider();
 		var dispatcher = provider.GetRequiredService<IDispatcher>();
@@ -262,17 +243,14 @@ public class InterceptTests {
 
 	[TestMethod]
 	public async Task Should_allow_intercept_to_modify_result() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(ResultModifyingIntercept<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddOpenIntercept(typeof(ResultModifyingIntercept<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		});
 
 		var provider = services.BuildServiceProvider();
 		var dispatcher = provider.GetRequiredService<IDispatcher>();
@@ -323,14 +301,13 @@ public class InterceptTests {
 
 	[TestMethod]
 	public async Task Should_apply_open_generic_intercept_to_different_request_types() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-				.AddOpenIntercept(typeof(LoggingIntercept<,>));
-		}, Shared.SequentialSettings);
-
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddOpenIntercept(typeof(LoggingIntercept<,>));
+			}, Shared.SequentialSettings);
+		});
 		var provider = services.BuildServiceProvider();
 		var dispatcher = provider.GetRequiredService<IDispatcher>();
 
@@ -349,13 +326,13 @@ public class InterceptTests {
 
 	[TestMethod]
 	public async Task Should_apply_intercepts_to_void_requests() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-				.AddOpenIntercept(typeof(LoggingIntercept<,>));
-		}, Shared.SequentialSettings);
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddOpenIntercept(typeof(LoggingIntercept<,>));
+			}, Shared.SequentialSettings);
+		});
 
 		var provider = services.BuildServiceProvider();
 		var dispatcher = provider.GetRequiredService<IDispatcher>();
@@ -374,17 +351,15 @@ public class InterceptTests {
 
 	[TestMethod]
 	public async Task Should_allow_intercept_to_short_circuit_handler() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddIntercept<ShortCircuitIntercept>()
-				.AddOpenIntercept(typeof(Performance<,>));
-		}, Shared.SequentialSettings);
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddIntercept<ShortCircuitIntercept>()
+					.AddOpenIntercept(typeof(HandlerPerformance<,>));
+			}, Shared.SequentialSettings);
+		});
+
 
 		using var sp = services.BuildServiceProvider();
 		var dispatcher = sp.GetRequiredService<IDispatcher>();
@@ -400,14 +375,15 @@ public class InterceptTests {
 	public async Task Open_generic_then_Specific_order_is_preserved() {
 		// Arrange
 		ExecutionLog.Clear();
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-				.AddOpenIntercept(typeof(LoggingIntercept<,>))
-				.AddIntercept<SpecificIntercept>();
-		}, Shared.SequentialSettings);
+
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddOpenIntercept(typeof(LoggingIntercept<,>))
+					.AddIntercept<SpecificIntercept>();
+			}, Shared.SequentialSettings);
+		});
 
 		using var sp = services.BuildServiceProvider();
 		var dispatcher = sp.GetRequiredService<IDispatcher>();
@@ -447,14 +423,13 @@ public class InterceptTests {
 
 	[TestMethod]
 	public async Task Void_request_intercept_can_short_circuit_with_failure() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-				.AddIntercept<VoidShortCircuit>();
-		}, Shared.SequentialSettings);
-
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddIntercept<VoidShortCircuit>();
+			}, Shared.SequentialSettings);
+		});
 		using var sp = services.BuildServiceProvider();
 		var dispatcher = sp.GetRequiredService<IDispatcher>();
 		var result = await dispatcher.DispatchAsync(new VoidTestRequest(), this.TestContext.CancellationToken);
@@ -465,13 +440,13 @@ public class InterceptTests {
 
 	[TestMethod]
 	public async Task ErrorHandlingIntercept_should_convert_handler_throw_to_failed_result() {
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-				.AddOpenIntercept(typeof(ErrorHandlingIntercept<,>));
-		}, Shared.SequentialSettings);
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddOpenIntercept(typeof(ErrorHandlingIntercept<,>));
+			}, Shared.SequentialSettings);
+		});
 
 		using var sp = services.BuildServiceProvider();
 		var dispatcher = sp.GetRequiredService<IDispatcher>();
@@ -501,7 +476,7 @@ public class InterceptTests {
 				.AddOpenIntercept(typeof(QueryCaching<,>))
 				.AddOpenIntercept(typeof(ErrorHandlingIntercept<,>))
 				.AddIntercept<ShortCircuitIntercept>()
-				.AddOpenIntercept(typeof(Performance<,>));
+				.AddOpenIntercept(typeof(HandlerPerformance<,>));
 		}, Shared.SequentialSettings);
 
 		var sp = services.BuildServiceProvider();
@@ -530,7 +505,7 @@ public class InterceptTests {
 		CollectionAssert.Contains(implementationTypes, typeof(Authorization<,>));
 		CollectionAssert.Contains(implementationTypes, typeof(QueryCaching<,>));
 		CollectionAssert.Contains(implementationTypes, typeof(ErrorHandlingIntercept<,>));
-		CollectionAssert.Contains(implementationTypes, typeof(Performance<,>));
+		CollectionAssert.Contains(implementationTypes, typeof(HandlerPerformance<,>));
 
 	}
 
@@ -547,7 +522,7 @@ public class InterceptTests {
 				.AddOpenIntercept(typeof(Authorization<,>))
 				.AddOpenIntercept(typeof(QueryCaching<,>))
 				.AddOpenIntercept(typeof(ErrorHandlingIntercept<,>))
-				.AddOpenIntercept(typeof(Performance<,>));
+				.AddOpenIntercept(typeof(HandlerPerformance<,>));
 		}, Shared.SequentialSettings);
 
 		var sp = services.BuildServiceProvider();
@@ -561,7 +536,7 @@ public class InterceptTests {
 
 		Assert.IsInstanceOfType<Validation<ErrRequest, Unit>>(intercepts[0]);
 		Assert.IsInstanceOfType<ErrorHandlingIntercept<ErrRequest, Unit>>(intercepts[1]);
-		Assert.IsInstanceOfType<Performance<ErrRequest, Unit>>(intercepts[2]);
+		Assert.IsInstanceOfType<HandlerPerformance<ErrRequest, Unit>>(intercepts[2]);
 
 	}
 
@@ -608,7 +583,7 @@ public class InterceptTests {
 				.AddOpenIntercept(typeof(Validation<,>))      // 1st
 				.AddOpenIntercept(typeof(Authorization<,>))   // 2nd
 				.AddOpenIntercept(typeof(QueryCaching<,>))    // 3rd
-				.AddOpenIntercept(typeof(Performance<,>));    // 4th
+				.AddOpenIntercept(typeof(HandlerPerformance<,>));    // 4th
 		}, Shared.SequentialSettings);
 
 		var sp = services.BuildServiceProvider();
@@ -618,7 +593,7 @@ public class InterceptTests {
 
 		Assert.HasCount(2, intercepts);
 		Assert.IsInstanceOfType<Validation<ErrRequest, Unit>>(intercepts[0], "First should be Validation");
-		Assert.IsInstanceOfType<Performance<ErrRequest, Unit>>(intercepts[1], "Second should be Performance");
+		Assert.IsInstanceOfType<HandlerPerformance<ErrRequest, Unit>>(intercepts[1], "Second should be Performance");
 
 	}
 
@@ -633,7 +608,7 @@ public class InterceptTests {
 				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 				.AddOpenIntercept(typeof(Validation<,>))
 				.AddIntercept<ShortCircuitIntercept>()  // Closed
-				.AddOpenIntercept(typeof(Performance<,>));
+				.AddOpenIntercept(typeof(HandlerPerformance<,>));
 		}, Shared.SequentialSettings);
 
 		var sp = services.BuildServiceProvider();
@@ -647,7 +622,7 @@ public class InterceptTests {
 
 		Assert.IsInstanceOfType<Validation<TestRequest, string>>(intercepts[0]);
 		Assert.IsInstanceOfType<ShortCircuitIntercept>(intercepts[1]);
-		Assert.IsInstanceOfType<Performance<TestRequest, string>>(intercepts[2]);
+		Assert.IsInstanceOfType<HandlerPerformance<TestRequest, string>>(intercepts[2]);
 
 	}
 

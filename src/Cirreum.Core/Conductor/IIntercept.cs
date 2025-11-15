@@ -19,9 +19,9 @@ public delegate ValueTask<Result<TResponse>> RequestHandlerDelegate<TResponse>(
 /// response, or both.</remarks>
 /// <typeparam name="TRequest">The type of the request to be intercepted. Must be a non-nullable type.</typeparam>
 /// <typeparam name="TResponse">The type of the response returned after processing the request.</typeparam>
-public interface IIntercept<in TRequest, TResponse> where TRequest : notnull {
+public interface IIntercept<TRequest, TResponse> where TRequest : notnull {
 	ValueTask<Result<TResponse>> HandleAsync(
-		TRequest request,
+		RequestContext<TRequest> context,
 		RequestHandlerDelegate<TResponse> next,
 		CancellationToken cancellationToken);
 
