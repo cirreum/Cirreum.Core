@@ -36,7 +36,7 @@ jobs:
       run: echo "Building version ${{ steps.get_version.outputs.VERSION }}"
     
     - name: Restore dependencies
-      run: dotnet restore Cirreum.slnx
+      run: dotnet restore Cirreum.Core.slnx
       working-directory: ./src
     
     - name: Build
