@@ -41,11 +41,19 @@ internal static partial class Logging {
 		long elapsedMilliseconds);
 
 	[LoggerMessage(
-			EventId = LoggingEventId.AuditLoggingFailedId,
-			Level = LogLevel.Error,
-			Message = "AuditLoggingFailed")]
+		EventId = LoggingEventId.RecordTelemetryFailedId,
+		Level = LogLevel.Error,
+		Message = "Exception encountered recording telemetry.")]
+	public static partial void LogRecordTelemetryFailed(
+		this ILogger logger,
+		Exception ex);
+
+	[LoggerMessage(
+		EventId = LoggingEventId.AuditLoggingFailedId,
+		Level = LogLevel.Error,
+		Message = "Exception enountered logging audit entry")]
 	public static partial void LogAuditLoggingFailed(
-			this ILogger logger,
-			Exception ex);
+		this ILogger logger,
+		Exception ex);
 
 }

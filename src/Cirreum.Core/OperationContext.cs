@@ -10,21 +10,22 @@ using Cirreum.Security;
 /// This is the single source of truth for operational context that flows through
 /// authorization, auditing, telemetry, and other cross-cutting concerns.
 /// </remarks>
-/// <param name="Environment">The environment in which the operation is being processed (e.g., Development, Staging, Production).</param>
-/// <param name="Runtime">The runtime environment in which the operation is being executed.</param>
+/// <param name="DomainEnvironment">The domain environment information.</param>
 /// <param name="Timestamp">The timestamp indicating when the operation was created.</param>
 /// <param name="UserState">The current user's state, including identity and authentication information.</param>
 /// <param name="OperationId">A unique identifier for this operation. Can be used for tracking or logging purposes.</param>
 /// <param name="CorrelationId">An identifier used to correlate this operation with related operations or events.</param>
 public sealed record OperationContext(
-	string Environment,
-	ApplicationRuntimeType Runtime,
+	IDomainEnvironment DomainEnvironment,
 	DateTimeOffset Timestamp,
 	IUserState UserState,
 	string OperationId,
 	string CorrelationId) {
 
 	// User convenience properties
+	public string Environment => this.DomainEnvironment.EnvironmentName;
+	public DomainRuntimeType RuntimeType => this.DomainEnvironment.RuntimeType;
+
 	public string UserId => this.UserState.Id;
 	public string UserName => this.UserState.Name;
 	public string? TenantId => this.UserState.Profile.Organization.OrganizationId;
@@ -43,13 +44,12 @@ public sealed record OperationContext(
 	/// Creates an OperationContext for the current runtime.
 	/// </summary>
 	public static OperationContext Create(
-		string environment,
+		IDomainEnvironment domainEnvironment,
 		IUserState userState,
 		string operationId,
 		string correlationId) =>
 		new(
-			environment,
-			ApplicationRuntime.Current.RuntimeType,
+			domainEnvironment,
 			DateTimeOffset.UtcNow,
 			userState,
 			operationId,

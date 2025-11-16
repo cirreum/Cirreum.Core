@@ -57,7 +57,7 @@ public static class ClaimsHelper {
 			// Microsoft Entra ID (formerly Azure AD)
 			var i when i.Contains("login.microsoftonline.com") => IdentityProviderType.Entra,
 
-			// Microsoft Entra ID External (formerly Azure B2C)
+			// Microsoft Entra External ID (formerly Azure B2C)
 			var i when i.Contains("ciamlogin.com") => IdentityProviderType.EntraExt,
 
 			// Auth0
@@ -66,7 +66,7 @@ public static class ClaimsHelper {
 			// Okta
 			var i when i.Contains("okta.com") || i.Contains("oktapreview.com") => IdentityProviderType.Okta,
 
-			// PingIdentity
+			// Ping Identity
 			var i when i.Contains("pingidentity.com") || i.Contains("ping-eng.com") => IdentityProviderType.PingIdentity,
 
 			// Descope
@@ -75,7 +75,7 @@ public static class ClaimsHelper {
 			// Keycloak
 			var i when i.Contains("auth.keycloak.org") || i.Contains("/auth/realms/") => IdentityProviderType.Keycloak,
 
-			// Akamai
+			// Akamai Identity Cloud
 			var i when i.Contains("secureidentity.akamai.com") || i.Contains("identity.akamai.com") => IdentityProviderType.Akamai,
 
 			// Authlete
@@ -86,8 +86,8 @@ public static class ClaimsHelper {
 
 			// Duende IdentityServer
 			var i when i.Contains("duendesoftware.com") ||
-					i.Contains("identityserver.io") ||
-					i.Contains("identityserver4.io") => IdentityProviderType.Duende,
+					 i.Contains("identityserver.io") ||
+					 i.Contains("identityserver4.io") => IdentityProviderType.Duende,
 
 			// Google
 			var i when i.Contains("accounts.google.com") => IdentityProviderType.Google,
@@ -95,11 +95,31 @@ public static class ClaimsHelper {
 			// Facebook
 			var i when i.Contains("facebook.com") || i.Contains("graph.facebook.com") => IdentityProviderType.Facebook,
 
+			// Apple
+			var i when i.Contains("appleid.apple.com") => IdentityProviderType.Apple,
+
+			// GitHub
+			var i when i.Contains("github.com") => IdentityProviderType.GitHub,
+
+			// LinkedIn
+			var i when i.Contains("linkedin.com") => IdentityProviderType.LinkedIn,
+
+			// Salesforce
+			var i when i.Contains("salesforce.com") || i.Contains("force.com") => IdentityProviderType.Salesforce,
+
+			// Twitter (X)
+			var i when i.Contains("twitter.com") || i.Contains("api.twitter.com") => IdentityProviderType.Twitter,
+
+			// Slack
+			var i when i.Contains("slack.com") => IdentityProviderType.Slack,
+
+			// AWS Cognito
+			var i when i.Contains("cognito-idp") || i.Contains("amazonaws.com") => IdentityProviderType.AWS_Cognito,
+
 			// Default case for unknown providers
 			_ => IdentityProviderType.Unknown
 		};
 	}
-
 
 	/// <summary>
 	/// Attempt to determine the id of the principal.

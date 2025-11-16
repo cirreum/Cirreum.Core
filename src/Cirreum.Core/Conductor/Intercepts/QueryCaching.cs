@@ -1,5 +1,6 @@
 ﻿namespace Cirreum.Conductor.Intercepts;
 
+using Cirreum.Conductor;
 using Cirreum.Conductor.Caching;
 using Cirreum.Conductor.Configuration;
 using Microsoft.Extensions.Logging;

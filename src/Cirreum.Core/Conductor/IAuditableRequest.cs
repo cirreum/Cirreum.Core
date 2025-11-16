@@ -1,6 +1,6 @@
-﻿namespace Cirreum.Auditing;
+﻿namespace Cirreum.Conductor;
 
-using Cirreum.Conductor;
+// ===== Auditable Requests =====
 
 /// <summary>
 /// Marker interface to represent an auditable request with a void response
@@ -11,7 +11,7 @@ public interface IAuditableRequest : IRequest, IAuditableRequestBase;
 /// Marker interface to represent an auditable request with a response
 /// </summary>
 /// <typeparam name="TResponse"></typeparam>
-public interface IAuditableRequest<TResponse> : IRequest<TResponse>, IAuditableRequestBase;
+public interface IAuditableRequest<out TResponse> : IRequest<TResponse>, IAuditableRequestBase;
 
 /// <summary>
 /// Marker interface to allow requests to be audited.

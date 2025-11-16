@@ -1,6 +1,8 @@
-﻿namespace Cirreum.Authorization;
+﻿namespace Cirreum.Conductor;
 
-using Cirreum.Conductor;
+using Cirreum.Authorization;
+
+// ===== Authorizable Requests =====
 
 /// <summary>
 /// Marker interface that represents an authorizable <see cref="IRequest"/> instance.
@@ -11,7 +13,7 @@ public interface IAuthorizableRequest : IRequest, IAuthorizableRequestBase;
 /// Marker interface that represents an authorizable <see cref="IRequest{TResponse}"/> instance.
 /// </summary>
 /// <typeparam name="TResponse"></typeparam>
-public interface IAuthorizableRequest<TResponse> : IRequest<TResponse>, IAuthorizableRequestBase;
+public interface IAuthorizableRequest<out TResponse> : IRequest<TResponse>, IAuthorizableRequestBase;
 
 /// <summary>
 /// Marker interface to allow requests to be treated as a resource, and participate in

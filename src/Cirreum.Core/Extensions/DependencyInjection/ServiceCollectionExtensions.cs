@@ -116,7 +116,7 @@ public static class ServiceCollectionExtensions {
 		//
 		var conductorSettings = new ConductorSettings();
 		configuration.GetSection(ConductorSettings.SectionName).Bind(conductorSettings);
-		services.AddSingleton(conductorSettings);
+		services.TryAddSingleton(conductorSettings);
 
 		//
 		// Conductor

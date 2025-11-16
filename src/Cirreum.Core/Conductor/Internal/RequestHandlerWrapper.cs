@@ -9,8 +9,8 @@ internal abstract class RequestHandlerWrapper {
 	/// <summary>
 	/// Handles the request by resolving the handler and building the intercept pipeline.
 	/// </summary>
-	public abstract ValueTask<Result> Handle(
-		string environment,
+	public abstract Task<Result> HandleAsync(
+		IDomainEnvironment domainEnvironment,
 		IRequest request,
 		IServiceProvider serviceProvider,
 		IPublisher publisher,

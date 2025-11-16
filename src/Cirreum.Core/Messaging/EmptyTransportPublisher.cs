@@ -2,6 +2,13 @@
 
 using Microsoft.Extensions.Logging;
 
+public static class EmptyTransportPublisherCounter {
+	private static long _callCount;
+	public static long CallCount => Interlocked.Read(ref _callCount);
+	public static void ResetCallCount() => Interlocked.Exchange(ref _callCount, 0);
+	public static void IncrementCallCount() => Interlocked.Increment(ref _callCount);
+}
+
 /// <summary>
 /// A no-operation publisher that logs messages but does not send them to any external system.
 /// </summary>
@@ -29,6 +36,7 @@ public sealed class EmptyTransportPublisher(
 			logger.LogWarning("{Publisher} received Message {MessageType} - not published",
 				nameof(EmptyTransportPublisher), message.GetType().Name);
 		}
+		EmptyTransportPublisherCounter.IncrementCallCount();
 		return Task.CompletedTask;
 	}
 

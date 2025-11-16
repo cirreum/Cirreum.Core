@@ -3,11 +3,15 @@
 /// <summary>
 /// The support runtime types.
 /// </summary>
-public enum ApplicationRuntimeType {
+public enum DomainRuntimeType {
 	/// <summary>
-	/// A Client such as Blazor WASM.
+	/// A Blazor WASM client.
 	/// </summary>
-	Client,
+	BlazorWasm,
+	/// <summary>
+	/// A MAUI Blazer Hybrid client.
+	/// </summary>
+	MauiHybrid,
 	/// <summary>
 	/// A server that hosts a Web API (Jwt/Authorization)
 	/// </summary>
@@ -19,5 +23,9 @@ public enum ApplicationRuntimeType {
 	/// <summary>
 	/// A daemon client application
 	/// </summary>
-	Function
+	Function,
+	/// <summary>
+	/// A unit test runtime.
+	/// </summary>
+	UnitTest
 }

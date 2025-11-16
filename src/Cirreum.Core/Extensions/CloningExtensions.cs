@@ -41,9 +41,9 @@ public static class CloningExtensions {
 	public static T JsonClone<T>(this T source) {
 
 		// Don't serialize a null objects
-		var obj = Check.NotNull(source);
+		ArgumentNullException.ThrowIfNull(source);
 
-		var newVal = JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(obj));
+		var newVal = JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(source));
 
 		return newVal ?? throw new InvalidOperationException("Deserialization returned null.");
 
@@ -61,10 +61,10 @@ public static class CloningExtensions {
 	public static T JsonClone<T>(this T source, JsonSerializerOptions options) {
 
 		// Don't serialize a null objects
-		var obj = Check.NotNull(source);
-		var opt = Check.NotNull(options);
+		ArgumentNullException.ThrowIfNull(source);
+		ArgumentNullException.ThrowIfNull(options);
 
-		var newVal = JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(obj, opt), opt);
+		var newVal = JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(source, options), options);
 
 		return newVal ?? throw new InvalidOperationException("Deserialization returned null.");
 
@@ -82,9 +82,9 @@ public static class CloningExtensions {
 	public static TResult JsonConvertTo<TResult>(this object source) {
 
 		// Don't serialize a null objects
-		var obj = Check.NotNull(source);
+		ArgumentNullException.ThrowIfNull(source);
 
-		var data = JsonSerializer.Serialize(obj);
+		var data = JsonSerializer.Serialize(source);
 
 		var newVal = JsonSerializer.Deserialize<TResult>(data);
 		return newVal ?? throw new InvalidOperationException("Deserialization returned null.");
@@ -104,9 +104,9 @@ public static class CloningExtensions {
 	public static TResult JsonConvertTo<TResult>(this object source, JsonTypeInfo<TResult> resultTypeInfo) {
 
 		// Don't serialize a null objects
-		var obj = Check.NotNull(source);
+		ArgumentNullException.ThrowIfNull(source);
 
-		var data = JsonSerializer.Serialize(obj);
+		var data = JsonSerializer.Serialize(source);
 
 		var newVal = JsonSerializer.Deserialize(data, resultTypeInfo);
 
@@ -128,9 +128,9 @@ public static class CloningExtensions {
 	public static TResult JsonConvertTo<TResult>(this object source, Type sourceType, JsonTypeInfo<TResult> resultTypeInfo) {
 
 		// Don't serialize a null objects
-		var obj = Check.NotNull(source);
+		ArgumentNullException.ThrowIfNull(source);
 
-		var data = JsonSerializer.Serialize(obj, sourceType);
+		var data = JsonSerializer.Serialize(source, sourceType);
 
 		var newVal = JsonSerializer.Deserialize(data, resultTypeInfo);
 
@@ -184,12 +184,12 @@ public static class CloningExtensions {
 	/// <exception cref="ArgumentException">Thrown when <paramref name="json"/> is null or empty.</exception>
 	/// <exception cref="InvalidOperationException">Thrown when deserialization results in null.</exception>
 	public static T FromJson<T>(this string json, bool enumNames = false) {
-		var text = Check.NotEmpty(json);
+		ArgumentException.ThrowIfNullOrEmpty(json);
 		if (enumNames) {
-			var newVal1 = JsonSerializer.Deserialize<T>(text, GetOptions(false, enumNames));
+			var newVal1 = JsonSerializer.Deserialize<T>(json, GetOptions(false, enumNames));
 			return newVal1 ?? throw new InvalidOperationException("Deserialization returned null.");
 		}
-		var newVal2 = JsonSerializer.Deserialize<T>(text);
+		var newVal2 = JsonSerializer.Deserialize<T>(json);
 		return newVal2 ?? throw new InvalidOperationException("Deserialization returned null.");
 	}
 
@@ -203,8 +203,8 @@ public static class CloningExtensions {
 	/// <exception cref="ArgumentException">Thrown when <paramref name="json"/> is null or empty.</exception>
 	/// <exception cref="InvalidOperationException">Thrown when deserialization results in null.</exception>
 	public static T FromJson<T>(this string json, JsonSerializerOptions serializerOptions) {
-		var text = Check.NotEmpty(json);
-		var newVal = JsonSerializer.Deserialize<T>(text, serializerOptions);
+		ArgumentException.ThrowIfNullOrEmpty(json);
+		var newVal = JsonSerializer.Deserialize<T>(json, serializerOptions);
 		return newVal ?? throw new InvalidOperationException("Deserialization returned null.");
 	}
 
@@ -218,8 +218,8 @@ public static class CloningExtensions {
 	/// <exception cref="ArgumentException">Thrown when <paramref name="json"/> is null or empty.</exception>
 	/// <exception cref="InvalidOperationException">Thrown when deserialization results in null.</exception>
 	public static T FromJson<T>(this string json, JsonTypeInfo<T> typeInfo) {
-		var text = Check.NotEmpty(json);
-		var newVal = JsonSerializer.Deserialize<T>(text, typeInfo);
+		ArgumentException.ThrowIfNullOrEmpty(json);
+		var newVal = JsonSerializer.Deserialize<T>(json, typeInfo);
 		return newVal ?? throw new InvalidOperationException("Deserialization returned null.");
 	}
 

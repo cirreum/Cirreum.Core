@@ -1,6 +1,7 @@
 ﻿namespace Cirreum.Conductor.Intercepts;
 
 using Cirreum.Authorization;
+using Cirreum.Conductor;
 
 /// <summary>
 /// Intercept behavior that enforces authorization rules for any <see cref="IAuthorizableRequestBase"/>

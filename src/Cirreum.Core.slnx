@@ -14,7 +14,9 @@
     <Project Path="Cirreum.Core/Cirreum.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="../tests/Cirreum.Conductor.Benchmarks/Cirreum.Conductor.Benchmarks.csproj" Id="d6591e76-376f-423d-b193-e8fccfb42bd9" />
     <Project Path="../tests/Cirreum.Conductor.Tests/Cirreum.Conductor.Tests.csproj" Id="4a9ec354-8a69-46ce-b02a-f655e82874f9" />
+    <Project Path="../tests/Cirreum.ResultMonad.Tests/Cirreum.ResultMonad.Tests.csproj" Id="5abee630-2292-411e-a2eb-37771f5566f1" />
   </Folder>
   <Folder Name="/_solution items/">
     <File Path="../.editorconfig" />

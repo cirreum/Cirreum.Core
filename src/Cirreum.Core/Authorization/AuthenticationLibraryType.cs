@@ -1,4 +1,4 @@
-﻿namespace Cirreum;
+﻿namespace Cirreum.Authorization;
 
 using System.ComponentModel;
 
@@ -19,7 +19,7 @@ public enum AuthenticationLibraryType {
 	[Description("msal")]
 	MSAL = 1,
 	/// <summary>
-	/// Standard OpenID Connect Library
+	/// Standards based OpenID Connect Library
 	/// </summary>
 	[Description("oidc")]
 	OIDC = 2

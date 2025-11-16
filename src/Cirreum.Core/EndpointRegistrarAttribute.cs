@@ -10,9 +10,9 @@
 /// <c>public static void {MethodName}(IEndpointRouteBuilder app)</c>
 /// </para>
 /// <para>
-/// During compilation, the Cirreum.FeatureEndpoints source generator scans for methods decorated with this attribute
-/// and generates a centralized registration method that calls each of these endpoint registrars. This approach
-/// enables clean organization of endpoints by feature while maintaining compatibility with AOT compilation and trimming.
+/// This attribute can be used by source generators or other tooling to locate endpoint registration methods
+/// and generate centralized registration code. This approach enables clean organization of endpoints by feature
+/// while maintaining compatibility with AOT compilation and trimming.
 /// </para>
 /// </remarks>
 /// <example>

@@ -15,15 +15,19 @@ public abstract class BaseApiClient {
 	/// <summary>
 	/// The current <see cref="HttpClient"/> that is configured for this client.
 	/// </summary>
-	protected readonly HttpClient Client;
+	protected HttpClient Client { get; init; }
 	/// <summary>
 	/// The <see cref="ILogger"/> configured for this client.
 	/// </summary>
-	protected readonly ILogger Logger;
+	protected ILogger Logger { get; init; }
+	/// <summary>
+	/// Gets the current domain environment service.
+	/// </summary>
+	protected IDomainEnvironment DomainEnvironment { get; init; }
 	/// <summary>
 	/// The configured or defaulted serialization options.
 	/// </summary>
-	protected readonly JsonSerializerOptions JsonOptions;
+	protected JsonSerializerOptions JsonOptions { get; init; }
 
 	/// <summary>
 	/// The current UserAgent string for this client.
@@ -35,6 +39,7 @@ public abstract class BaseApiClient {
 	/// </summary>
 	/// <param name="client">Injected HttpClient.</param>
 	/// <param name="logger">Injected logger.</param>
+	/// <param name="domainEnvironment">Injected <see cref="IDomainEnvironment"/>.</param>
 	/// <param name="jsonOptions">Injected jsonOptions.</param>
 	/// <remarks>
 	/// <para>
@@ -49,9 +54,11 @@ public abstract class BaseApiClient {
 	protected BaseApiClient(
 		HttpClient client,
 		ILogger logger,
+		IDomainEnvironment domainEnvironment,
 		JsonSerializerOptions? jsonOptions = null) {
 		this.Client = client;
 		this.Logger = logger;
+		this.DomainEnvironment = domainEnvironment;
 		this.JsonOptions = jsonOptions ?? new JsonSerializerOptions {
 			PropertyNameCaseInsensitive = true,
 			PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -65,7 +72,7 @@ public abstract class BaseApiClient {
 	/// </summary>
 	protected virtual void SetUserAgent() {
 		var clientVersion = this.GetType().GetTypeInfo().Assembly.GetName().Version?.ToString() ?? "v0";
-		this.UserAgent = $"{this.GetType().Name}/{clientVersion}/{ApplicationRuntime.Current.RuntimeType}";
+		this.UserAgent = $"{this.GetType().Name}/{clientVersion}/{this.DomainEnvironment.RuntimeType}";
 		this.Client.DefaultRequestHeaders.UserAgent.TryParseAdd(this.UserAgent);
 	}
 
@@ -88,19 +95,22 @@ public abstract class BaseApiClient {
 				return await operation(cancellationToken);
 			} catch (Exception ex) when (attempt < maxAttempts - 1 && this.IsTransient(ex)) {
 				lastException = ex;
-				this.Logger.LogWarning(ex,
+				if (this.Logger.IsEnabled(LogLevel.Warning)) {
+					this.Logger.LogWarning(ex,
 					"Attempt {Attempt} of {MaxAttempts} failed, retrying...",
 					attempt + 1,
 					maxAttempts);
+				}
 
 				var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
 				await Task.Delay(delay, cancellationToken);
 			}
 		}
-
-		this.Logger.LogError(lastException,
+		if (this.Logger.IsEnabled(LogLevel.Error)) {
+			this.Logger.LogError(lastException,
 			"All {MaxAttempts} retry attempts failed",
 			maxAttempts);
+		}
 		throw lastException!;
 	}
 
@@ -803,9 +813,11 @@ public abstract class BaseApiClient {
 			}
 
 			var exceptionModel = await this.ParseErrorResponse(response);
-			this.Logger.LogError("API error: {Title}. Details: {Detail}",
-				exceptionModel.Title,
-				exceptionModel.Detail);
+			if (this.Logger.IsEnabled(LogLevel.Error)) {
+				this.Logger.LogError("API error: {Title}. Details: {Detail}",
+					exceptionModel.Title,
+					exceptionModel.Detail);
+			}
 
 			throw new ApiException(exceptionModel);
 		} catch (Exception ex) when (ex is not ApiException) {

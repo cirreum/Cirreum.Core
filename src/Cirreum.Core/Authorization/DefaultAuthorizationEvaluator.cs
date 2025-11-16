@@ -10,17 +10,37 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Immutable;
 
+public static class DefaultAuthorizationEvaluatorCounter {
+
+	private static readonly Lock @lock = new();
+
+	private static long _callCount;
+
+	public static long CallCount => Interlocked.Read(ref _callCount);
+
+	public static void ResetCallCount() => Interlocked.Exchange(ref _callCount, 0);
+
+	public static void IncrementCallCount() {
+
+		lock (@lock) {
+			_callCount++;
+			//Interlocked.Increment(ref _callCount);
+		}
+	}
+
+}
+
 /// <summary>
 /// The default implementation of the <see cref="IAuthorizationEvaluator"/>.
 /// </summary>
 /// <param name="registry">The authorization role registry for resolving effective roles.</param>
-/// <param name="applicationEnvironment">The application environment information.</param>
+/// <param name="domainEnvironment">The application environment information.</param>
 /// <param name="userAccessor">The accessor for retrieving current user state.</param>
 /// <param name="services">The service provider for resolving validators.</param>
 /// <param name="logger">The logger for authorization events.</param>
 public sealed class DefaultAuthorizationEvaluator(
 	IAuthorizationRoleRegistry registry,
-	IApplicationEnvironment applicationEnvironment,
+	IDomainEnvironment domainEnvironment,
 	IUserStateAccessor userAccessor,
 	IServiceProvider services,
 	ILogger<DefaultAuthorizationEvaluator> logger
@@ -39,7 +59,7 @@ public sealed class DefaultAuthorizationEvaluator(
 		// Build OperationContext for ad-hoc evaluation
 		var userState = await userAccessor.GetUser().ConfigureAwait(false);
 		var operation = OperationContext.Create(
-			applicationEnvironment.EnvironmentName,
+			domainEnvironment,
 			userState,
 			operationId: Guid.NewGuid().ToString("N")[..16],
 			correlationId: Guid.NewGuid().ToString("N"));
@@ -83,7 +103,7 @@ public sealed class DefaultAuthorizationEvaluator(
 		// Get all policy validators that support the current runtime
 		var policyAuthorizors = services
 			.GetServices<IAuthorizationPolicyValidator>()
-			.Where(pv => pv.SupportedRuntimeTypes.Contains(operation.Runtime))
+			.Where(pv => pv.SupportedRuntimeTypes.Contains(operation.RuntimeType))
 			.ToList();
 
 		if (resourceAuthorizors.Count == 0 && policyAuthorizors.Count == 0) {
@@ -180,7 +200,7 @@ public sealed class DefaultAuthorizationEvaluator(
 
 			// Run applicable Policy Authorizors
 			var applicablePolicyValidators = policyAuthorizors
-				.Where(pv => pv.AppliesTo(resource, operation.Runtime, operation.Timestamp))
+				.Where(pv => pv.AppliesTo(resource, operation.RuntimeType, operation.Timestamp))
 				.OrderBy(pv => pv.Order)
 				.ToList();
 
@@ -221,6 +241,9 @@ public sealed class DefaultAuthorizationEvaluator(
 			logger.LogAuthorizingResourceAllowed(
 				operation.UserName,
 				resourceName);
+
+			// TODO: Remove this!
+			DefaultAuthorizationEvaluatorCounter.IncrementCallCount();
 
 			return Result.Success;
 

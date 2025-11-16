@@ -1,6 +1,5 @@
 ﻿namespace Cirreum.Conductor.Tests;
 
-using Cirreum.Authorization;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Messaging;
 using Cirreum.Security;
@@ -53,7 +52,7 @@ public static class Shared {
 			lb.SetMinimumLevel(LogLevel.Trace);
 		});
 
-		services.AddSingleton<IApplicationEnvironment>(sp =>
+		services.AddSingleton<IDomainEnvironment>(sp =>
 			new TestApplicationEnvironment());
 
 		services.AddSingleton<IUserState>(sp => {
@@ -61,8 +60,6 @@ public static class Shared {
 		});
 
 		services.AddSingleton<IUserStateAccessor, MockUserStateAccessor>();
-
-		services.AddSingleton<IAuthorizationEvaluator, DefaultAuthorizationEvaluator>();
 
 		services.AddSingleton<IDistributedTransportPublisher, EmptyTransportPublisher>();
 
@@ -93,9 +90,10 @@ public static class Shared {
 
 }
 
-public class TestApplicationEnvironment : IApplicationEnvironment {
+public class TestApplicationEnvironment : IDomainEnvironment {
 	public string ApplicationName => "Test";
 	public string EnvironmentName => "Development";
+	public DomainRuntimeType RuntimeType { get; } = DomainRuntimeType.UnitTest;
 }
 
 public class MockUserStateAccessor : IUserStateAccessor {

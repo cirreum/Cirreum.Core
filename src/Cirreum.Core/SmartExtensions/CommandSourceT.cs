@@ -20,7 +20,7 @@ public abstract class CommandSource<T>(string key) : Source {
 	/// <summary>
 	/// Gets the Key that identifies this command source.
 	/// </summary>
-	protected string Key { get; private set; } = Check.NotEmpty(key, nameof(key));
+	protected string Key { get; private set; } = key;
 
 	/// <summary>
 	/// Validates the string specified is not null and matches this instances <see cref="Key"/>.

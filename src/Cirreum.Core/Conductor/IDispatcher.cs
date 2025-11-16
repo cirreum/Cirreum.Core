@@ -17,10 +17,10 @@ public interface IDispatcher {
 	/// A token to monitor for cancellation requests. The default value is <see cref="CancellationToken.None"/>.
 	/// </param>
 	/// <returns>
-	/// A <see cref="ValueTask{TResult}"/> representing the asynchronous operation.
+	/// A <see cref="Task{TResult}"/> representing the asynchronous operation.
 	/// The returned <see cref="Result"/> indicates whether the request was handled successfully.
 	/// </returns>
-	ValueTask<Result> DispatchAsync(
+	Task<Result> DispatchAsync(
 		IRequest request,
 		CancellationToken cancellationToken = default);
 
@@ -37,10 +37,10 @@ public interface IDispatcher {
 	/// A token to monitor for cancellation requests. The default value is <see cref="CancellationToken.None"/>.
 	/// </param>
 	/// <returns>
-	/// A <see cref="ValueTask{TResult}"/> representing the asynchronous operation.
+	/// A <see cref="Task{TResult}"/> representing the asynchronous operation.
 	/// The returned <see cref="Result{T}"/> contains the response of type <typeparamref name="TResponse"/>.
 	/// </returns>
-	ValueTask<Result<TResponse>> DispatchAsync<TResponse>(
+	Task<Result<TResponse>> DispatchAsync<TResponse>(
 		IRequest<TResponse> request,
 		CancellationToken cancellationToken = default);
 

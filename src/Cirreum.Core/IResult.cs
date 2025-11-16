@@ -9,6 +9,7 @@
 /// (Server, WASM, Functions).
 /// </remarks>
 public interface IResult {
+
 	/// <summary>
 	/// Gets a value indicating whether the operation completed successfully.
 	/// </summary>
@@ -34,19 +35,95 @@ public interface IResult {
 
 	/// <summary>
 	/// Executes the appropriate action based on success or failure state.
-	/// This method is designed for side effects such as logging, UI updates, or state changes.
 	/// </summary>
 	/// <param name="onSuccess">Action to execute if successful.</param>
 	/// <param name="onFailure">Action to execute with the error if failed.</param>
-	/// <example>
-	/// <code>
-	/// result.Switch(
-	///     onSuccess: value => _logger.LogInformation("Success: {Value}", value),
-	///     onFailure: error => _logger.LogError(error, "Failed: {Message}", error.Message)
-	/// );
-	/// </code>
-	/// </example>
-	void Switch(Action onSuccess, Action<Exception> onFailure);
+	/// <param name="onCallbackError">
+	/// Optional action invoked if <paramref name="onSuccess"/> or
+	/// <paramref name="onFailure"/> throws.  
+	/// If this parameter is <c>null</c>, any exception thrown by the selected
+	/// action is rethrown to the caller.  
+	/// If it is non-null, the exception is passed to this handler and is
+	/// not rethrown.
+	/// </param>
+	/// <exception cref="ArgumentNullException">Thrown when either parameter is null.</exception>
+	void Switch(
+		Action onSuccess,
+		Action<Exception> onFailure,
+		Action<Exception>? onCallbackError = null);
+
+	/// <summary>
+	/// Asynchronously executes the appropriate function based on the success or failure state
+	/// of the result.
+	/// </summary>
+	/// <param name="onSuccess">
+	/// A function to invoke when the result is successful.  
+	/// </param>
+	/// <param name="onFailure">
+	/// A function to invoke when the result represents a failure.  
+	/// The function receives the associated <see cref="Exception"/>.
+	/// </param>
+	/// <param name="onCallbackError">
+	/// Optional func invoked if <paramref name="onSuccess"/> or
+	/// <paramref name="onFailure"/> throws.  
+	/// If this parameter is <c>null</c>, any exception thrown by the selected
+	/// funcs is rethrown to the caller.  
+	/// If it is non-null, the exception is passed to this handler and is
+	/// not rethrown.
+	/// </param>
+	/// <returns>
+	/// A <see cref="ValueTask"/> that completes when the invoked function has completed.
+	/// </returns>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown when <paramref name="onSuccess"/> or <paramref name="onFailure"/> is <c>null</c>.
+	/// </exception>
+	/// <remarks>
+	/// This method provides a way to attach asynchronous side-effect processors.  
+	/// If the result is successful, <paramref name="onSuccess"/> is invoked with the value.  
+	/// If the result is a failure, <paramref name="onFailure"/> is invoked with the error.  
+	/// Any exception thrown by either function is allowed to propagate to the caller.
+	/// </remarks>
+	ValueTask SwitchAsync(
+		Func<ValueTask> onSuccess,
+		Func<Exception, ValueTask> onFailure,
+		Func<Exception, ValueTask>? onCallbackError = null);
+
+	/// <summary>
+	/// Asynchronously executes the appropriate function based on the success or failure state
+	/// of the result.
+	/// </summary>
+	/// <param name="onSuccess">
+	/// A function to invoke when the result is successful.  
+	/// </param>
+	/// <param name="onFailure">
+	/// A function to invoke when the result represents a failure.  
+	/// The function receives the associated <see cref="Exception"/>.
+	/// </param>
+	/// <param name="onCallbackError">
+	/// Optional func invoked if <paramref name="onSuccess"/> or
+	/// <paramref name="onFailure"/> throws.  
+	/// If this parameter is <c>null</c>, any exception thrown by the selected
+	/// funcs is rethrown to the caller.  
+	/// If it is non-null, the exception is passed to this handler and is
+	/// not rethrown.
+	/// </param>
+	/// <returns>
+	/// A <see cref="Task"/> that completes when the invoked function has completed.
+	/// </returns>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown when <paramref name="onSuccess"/> or <paramref name="onFailure"/> is <c>null</c>.
+	/// </exception>
+	/// <remarks>
+	/// This method provides a way to attach asynchronous side-effect processors.  
+	/// If the result is successful, <paramref name="onSuccess"/> is invoked with the value.  
+	/// If the result is a failure, <paramref name="onFailure"/> is invoked with the error.  
+	/// Any exception thrown by either function is allowed to propagate to the caller.
+	/// </remarks>
+	Task SwitchAsyncTask(
+		Func<Task> onSuccess,
+		Func<Exception, Task> onFailure,
+		Func<Exception, Task>? onCallbackError = null);
+
 }
 
 public interface IResult<out T> : IResult {
@@ -58,19 +135,106 @@ public interface IResult<out T> : IResult {
 	new T? GetValue();
 
 	/// <summary>
-	/// Executes the appropriate action based on success or failure state.
-	/// This method is designed for side effects such as logging, UI updates, or state changes.
+	/// Executes one of the provided actions depending on whether the result
+	/// represents success or failure, without modifying the result.
 	/// </summary>
-	/// <param name="onSuccess">Action to execute with the value if successful.</param>
-	/// <param name="onFailure">Action to execute with the error if failed.</param>
-	/// <example>
-	/// <code>
-	/// result.Switch(
-	///     onSuccess: value => _logger.LogInformation("Success: {Value}", value),
-	///     onFailure: error => _logger.LogError(error, "Failed: {Message}", error.Message)
-	/// );
-	/// </code>
-	/// </example>
-	void Switch(Action<T> onSuccess, Action<Exception> onFailure);
+	/// <param name="onSuccess">
+	/// The action to invoke when the result is successful.
+	/// Receives the value of type <typeparamref name="T"/>.
+	/// </param>
+	/// <param name="onFailure">
+	/// The action to invoke when the result represents a failure.
+	/// Receives the associated <see cref="IResult.Error"/>.
+	/// </param>
+	/// <param name="onCallbackError">
+	/// Optional action invoked if <paramref name="onSuccess"/> or
+	/// <paramref name="onFailure"/> throws.  
+	/// If this parameter is <c>null</c>, any exception thrown by the selected
+	/// action is rethrown to the caller.  
+	/// If it is non-null, the exception is passed to this handler and is
+	/// not rethrown.
+	/// </param>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown when <paramref name="onSuccess"/> or <paramref name="onFailure"/>
+	/// is <c>null</c>.
+	/// </exception>
+	void Switch(
+		Action<T> onSuccess,
+		Action<Exception> onFailure,
+		Action<Exception>? onCallbackError = null);
+
+	/// <summary>
+	/// Asynchronously executes the appropriate function based on the success or failure state
+	/// of the result.
+	/// </summary>
+	/// <param name="onSuccess">
+	/// A function to invoke when the result is successful.  
+	/// The function receives the result value of type <typeparamref name="T"/>.
+	/// </param>
+	/// <param name="onFailure">
+	/// A function to invoke when the result represents a failure.  
+	/// The function receives the associated <see cref="Exception"/>.
+	/// </param>
+	/// <param name="onCallbackError">
+	/// Optional func invoked if <paramref name="onSuccess"/> or
+	/// <paramref name="onFailure"/> throws.  
+	/// If this parameter is <c>null</c>, any exception thrown by the selected
+	/// funcs is rethrown to the caller.  
+	/// If it is non-null, the exception is passed to this handler and is
+	/// not rethrown.
+	/// </param>
+	/// <returns>
+	/// A <see cref="ValueTask"/> that completes when the invoked function has completed.
+	/// </returns>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown when <paramref name="onSuccess"/> or <paramref name="onFailure"/> is <c>null</c>.
+	/// </exception>
+	/// <remarks>
+	/// This method provides a way to attach asynchronous side-effect processors.  
+	/// If the result is successful, <paramref name="onSuccess"/> is invoked with the value.  
+	/// If the result is a failure, <paramref name="onFailure"/> is invoked with the error.  
+	/// Any exception thrown by either function is allowed to propagate to the caller.
+	/// </remarks>
+	ValueTask SwitchAsync(
+		Func<T, ValueTask> onSuccess,
+		Func<Exception, ValueTask> onFailure,
+		Func<Exception, ValueTask>? onCallbackError = null);
+
+	/// <summary>
+	/// Asynchronously executes the appropriate function based on the success or failure state
+	/// of the result.
+	/// </summary>
+	/// <param name="onSuccess">
+	/// A function to invoke when the result is successful.  
+	/// The function receives the result value of type <typeparamref name="T"/>.
+	/// </param>
+	/// <param name="onFailure">
+	/// A function to invoke when the result represents a failure.  
+	/// The function receives the associated <see cref="Exception"/>.
+	/// </param>
+	/// <param name="onCallbackError">
+	/// Optional func invoked if <paramref name="onSuccess"/> or
+	/// <paramref name="onFailure"/> throws.  
+	/// If this parameter is <c>null</c>, any exception thrown by the selected
+	/// funcs is rethrown to the caller.  
+	/// If it is non-null, the exception is passed to this handler and is
+	/// not rethrown.
+	/// </param>
+	/// <returns>
+	/// A <see cref="Task"/> that completes when the invoked function has completed.
+	/// </returns>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown when <paramref name="onSuccess"/> or <paramref name="onFailure"/> is <c>null</c>.
+	/// </exception>
+	/// <remarks>
+	/// This method provides a way to attach asynchronous side-effect processors.  
+	/// If the result is successful, <paramref name="onSuccess"/> is invoked with the value.  
+	/// If the result is a failure, <paramref name="onFailure"/> is invoked with the error.  
+	/// Any exception thrown by either function is allowed to propagate to the caller.
+	/// </remarks>
+	Task SwitchAsyncTask(
+		Func<T, Task> onSuccess,
+		Func<Exception, Task> onFailure,
+		Func<Exception, Task>? onCallbackError = null);
 
 }

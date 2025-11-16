@@ -17,6 +17,7 @@ public class PolicyValidatorAnalyzer(
 		var metrics = new Dictionary<string, object>();
 
 		var policyValidators = services.GetServices<IAuthorizationPolicyValidator>().ToList();
+		var domainEnvironment = services.GetRequiredService<IDomainEnvironment>();
 
 		// Basic metrics
 		metrics["PolicyCount"] = policyValidators.Count;
@@ -28,7 +29,7 @@ public class PolicyValidatorAnalyzer(
 		issues.AddRange(orderingIssues);
 
 		// Analyze runtime type coverage
-		var runtimeCoverageIssues = AnalyzeRuntimeTypeCoverage(policyValidators);
+		var runtimeCoverageIssues = AnalyzeRuntimeTypeCoverage(policyValidators, domainEnvironment.RuntimeType);
 		issues.AddRange(runtimeCoverageIssues);
 
 		// Analyze policy overlap and conflicts
@@ -93,10 +94,10 @@ public class PolicyValidatorAnalyzer(
 		return issues;
 	}
 
-	private static List<AnalysisIssue> AnalyzeRuntimeTypeCoverage(List<IAuthorizationPolicyValidator> policyValidators) {
+	private static List<AnalysisIssue> AnalyzeRuntimeTypeCoverage(
+		List<IAuthorizationPolicyValidator> policyValidators,
+		DomainRuntimeType currentRuntimeType) {
 		var issues = new List<AnalysisIssue>();
-
-		var currentRuntimeType = ApplicationRuntime.Current.RuntimeType;
 
 		// Check for policies that don't support any runtime types
 		var unsupportedPolicies = policyValidators.Where(pv => pv.SupportedRuntimeTypes.Length == 0);

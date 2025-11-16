@@ -29,12 +29,12 @@ public abstract class AttributeValidatorBase<TAttribute>
 	public abstract int Order { get; }
 
 	/// <inheritdoc/>
-	public abstract ApplicationRuntimeType[] SupportedRuntimeTypes { get; }
+	public abstract DomainRuntimeType[] SupportedRuntimeTypes { get; }
 
 	/// <inheritdoc/>
 	public virtual bool AppliesTo<TResource>(
 		TResource resource,
-		ApplicationRuntimeType runtimeType,
+		DomainRuntimeType runtimeType,
 		DateTimeOffset timestamp)
 		where TResource : notnull, IAuthorizableResource =>
 		GetAttributeCached(resource.GetType()) != null;

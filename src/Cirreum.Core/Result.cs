@@ -22,14 +22,6 @@ public readonly struct Result : IResult, IEquatable<Result> {
 		return new(false, error);
 	}
 
-	/// <summary>
-	/// Creates a failed result with an error message.
-	/// </summary>
-	public static Result Fail(string errorMessage) {
-		ArgumentException.ThrowIfNullOrWhiteSpace(errorMessage);
-		return new(false, new Exception(errorMessage));
-	}
-
 	private readonly bool _isSuccess;
 	private readonly Exception? _error;
 
@@ -83,31 +75,81 @@ public readonly struct Result : IResult, IEquatable<Result> {
 	}
 
 	/// <summary>
-	/// Executes an action if the result is successful
+	/// Executes an action if the result is successful.
 	/// </summary>
+	/// <param name="action">The action to execute with the value.</param>
+	/// <returns>The current <see cref="Result"/> for method chaining.</returns>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="action"/> is null.</exception>
 	public Result OnSuccess(Action action) {
 		ArgumentNullException.ThrowIfNull(action);
-		if (!this.IsSuccess) {
+		if (this.IsSuccess) {
+			action();
+		}
+		return this;
+	}
+
+	/// <summary>
+	/// Executes an action if the result is successful.
+	/// </summary>
+	/// <param name="action">The action to execute with the value.</param>
+	/// <param name="errorSelector">An optional function to transform any exception thrown by the action into a different exception.</param>
+	/// <returns>The current <see cref="Result"/> for method chaining.</returns>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="action"/> is null.</exception>
+	public Result OnSuccessTry(
+		Action action,
+		Func<Exception, Exception>? errorSelector = null) {
+		ArgumentNullException.ThrowIfNull(action);
+
+		if (this.IsSuccess) {
+			try {
+				action();
+				return this;
+			} catch (Exception ex) {
+				var error = errorSelector?.Invoke(ex) ?? ex;
+				return Fail(error);
+			}
+		}
+
+		return this;
+
+	}
+
+	/// <summary>
+	/// Executes an action if the result is failed.
+	/// </summary>
+	/// <param name="action">The action to execute with the exception.</param>
+	/// <returns>The current <see cref="Result{T}"/> for method chaining.</returns>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="action"/> is null.</exception>
+	public Result OnFailure(Action<Exception> action) {
+		ArgumentNullException.ThrowIfNull(action);
+		if (this.IsFailure) {
+			action(this.Error);
+		}
+		return this;
+	}
+
+	/// <summary>
+	/// Executes an action if the result is failed.
+	/// </summary>
+	/// <param name="action">The action to execute with the exception.</param>
+	/// <param name="errorSelector">An optional function to transform any exception thrown by the action into a different exception.</param>
+	/// <returns>The current <see cref="Result{T}"/> for method chaining.</returns>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="action"/> is null.</exception>
+	public Result OnFailureTry(
+		Action<Exception> action,
+		Func<Exception, Exception>? errorSelector = null) {
+		ArgumentNullException.ThrowIfNull(action);
+		if (this.IsSuccess || this.Error is null) {
 			return this;
 		}
 
 		try {
-			action();
+			action(this.Error);
 			return this;
 		} catch (Exception ex) {
-			return Fail(ex);
+			var error = errorSelector?.Invoke(ex) ?? ex;
+			return Fail(error);
 		}
-	}
-
-	/// <summary>
-	/// Executes an action if the result is failed
-	/// </summary>
-	public Result OnFailure(Action<Exception> action) {
-		ArgumentNullException.ThrowIfNull(action);
-		if (!this.IsSuccess && this.Error is not null) {
-			action(this.Error);
-		}
-		return this;
 	}
 
 	/// <summary>
@@ -149,6 +191,20 @@ public readonly struct Result : IResult, IEquatable<Result> {
 		}
 	}
 
+	/// <summary>
+	/// Projects the current result into a value of type <typeparamref name="TOut"/>
+	/// by invoking the appropriate function for the success or failure case.
+	/// </summary>
+	public TOut Match<TOut>(
+		Func<TOut> onSuccess,
+		Func<Exception, TOut> onFailure) {
+		ArgumentNullException.ThrowIfNull(onSuccess);
+		ArgumentNullException.ThrowIfNull(onFailure);
+
+		return this.IsSuccess
+			? onSuccess()
+			: onFailure(this.Error);
+	}
 
 
 	/// <summary>
@@ -208,38 +264,93 @@ public readonly struct Result : IResult, IEquatable<Result> {
 	public static bool operator ==(Result left, Result right) => left.Equals(right);
 	public static bool operator !=(Result left, Result right) => !left.Equals(right);
 
-	#region IResult Implementation
 
-	/// <summary>
-	/// Gets the underlying value - always null for non-generic Result.
-	/// </summary>
-	/// <returns>Always returns null since non-generic Result carries no value.</returns>
+	#region IResultT Implementation
+
+	// =============== IMPLEMENTATION ===============
+	// Normal implementations for IResult
+
+	// we implment explicitly to avoid polluting the public API
 	object? IResult.GetValue() => null;
 
-	/// <summary>
-	/// Executes the appropriate action based on success or failure state.
-	/// </summary>
-	/// <param name="onSuccess">Action to execute if successful (receives null).</param>
-	/// <param name="onFailure">Action to execute with the error if failed.</param>
-	/// <exception cref="ArgumentNullException">Thrown when either parameter is null.</exception>
-	/// <remarks>
-	/// This method is an explicit interface implementation to avoid confusion with the strongly-typed
-	/// <see cref="OnSuccess"/> and <see cref="OnFailure"/> methods. For non-generic Result, the success
-	/// action always receives null since there is no value to pass. Any exceptions thrown by the actions
-	/// are allowed to propagate to the caller.
-	/// </remarks>
-	public void Switch(Action onSuccess, Action<Exception> onFailure) {
+	public void Switch(
+		Action onSuccess,
+		Action<Exception> onFailure,
+		Action<Exception>? onCallbackError = null) {
 		ArgumentNullException.ThrowIfNull(onSuccess);
 		ArgumentNullException.ThrowIfNull(onFailure);
 
-		if (this.IsSuccess) {
-			onSuccess();
-		} else {
+		try {
+
+			if (this.IsSuccess) {
+				onSuccess();
+				return;
+			}
+
 			onFailure(this.Error);
+
+		} catch (Exception ex) {
+			if (onCallbackError is not null) {
+				onCallbackError(ex);
+				return;
+			}
+			throw;
 		}
+
+	}
+
+	public async ValueTask SwitchAsync(
+		Func<ValueTask> onSuccess,
+		Func<Exception, ValueTask> onFailure,
+		Func<Exception, ValueTask>? onCallbackError = null) {
+		ArgumentNullException.ThrowIfNull(onSuccess);
+		ArgumentNullException.ThrowIfNull(onFailure);
+
+		try {
+
+			if (this.IsSuccess) {
+				await onSuccess().ConfigureAwait(false);
+				return;
+			}
+
+			await onFailure(this.Error).ConfigureAwait(false);
+
+		} catch (Exception ex) {
+			if (onCallbackError is not null) {
+				await onCallbackError(ex).ConfigureAwait(false);
+				return;
+			}
+			throw;
+		}
+
+	}
+
+	public async Task SwitchAsyncTask(
+		Func<Task> onSuccess,
+		Func<Exception, Task> onFailure,
+		Func<Exception, Task>? onCallbackError = null) {
+		ArgumentNullException.ThrowIfNull(onSuccess);
+		ArgumentNullException.ThrowIfNull(onFailure);
+
+		try {
+
+			if (this.IsSuccess) {
+				await onSuccess().ConfigureAwait(false);
+				return;
+			}
+
+			await onFailure(this.Error).ConfigureAwait(false);
+
+		} catch (Exception ex) {
+			if (onCallbackError is not null) {
+				await onCallbackError(ex).ConfigureAwait(false);
+				return;
+			}
+			throw;
+		}
+
 	}
 
 	#endregion
-
 
 }

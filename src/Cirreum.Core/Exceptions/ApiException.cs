@@ -14,7 +14,7 @@ public class ApiException(ExceptionModel exceptionModel) : Exception(exceptionMo
 	/// <summary>
 	/// Gets the <see cref="ExceptionModel"/> for the error.
 	/// </summary>
-	public ExceptionModel Model { get; init; } = Check.NotNull(exceptionModel);
+	public ExceptionModel Model { get; init; } = exceptionModel;
 
 	/// <summary>
 	/// Gets the <see cref="ExceptionModel.Title"/> for the error.

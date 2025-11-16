@@ -1,6 +1,7 @@
 ﻿namespace Cirreum.Conductor.Tests;
 
 using Cirreum.Authorization;
+using Cirreum.Conductor;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Conductor.Intercepts;
 using Microsoft.Extensions.DependencyInjection;
@@ -169,14 +170,14 @@ public class InterceptTests {
 		public ValueTask<Result<string>> HandleAsync(
 			RequestContext<TestRequest> context,
 			RequestHandlerDelegate<string> next,
-			CancellationToken cancellationToken) => ValueTask.FromResult(Result<string>.Fail("blocked"));
+			CancellationToken cancellationToken) => ValueTask.FromResult(Result<string>.Fail(new("blocked")));
 	}
 
 	public sealed class VoidShortCircuit : IIntercept<VoidTestRequest, Unit> {
 		public ValueTask<Result<Unit>> HandleAsync(
 			RequestContext<VoidTestRequest> context,
 			RequestHandlerDelegate<Unit> next,
-			CancellationToken cancellationToken) => ValueTask.FromResult(Result<Unit>.Fail("nope"));
+			CancellationToken cancellationToken) => ValueTask.FromResult(Result<Unit>.Fail(new("nope")));
 	}
 
 

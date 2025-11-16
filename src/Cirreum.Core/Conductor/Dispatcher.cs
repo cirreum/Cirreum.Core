@@ -14,9 +14,9 @@ using System.Collections.Concurrent;
 /// Request type wrappers are created once and cached for the lifetime of the application.
 /// </remarks>
 public sealed class Dispatcher(
-	IApplicationEnvironment applicationEnvironment,
-	IPublisher publisher,
+	IDomainEnvironment domainEnvironment,
 	IServiceProvider serviceProvider,
+	IPublisher publisher,
 	ILogger<Dispatcher> logger
 ) : IDispatcher {
 
@@ -24,7 +24,7 @@ public sealed class Dispatcher(
 	private static readonly ConcurrentDictionary<Type, object> _responseHandlerCache = new();
 
 	/// <inheritdoc />
-	public async ValueTask<Result> DispatchAsync(
+	public async Task<Result> DispatchAsync(
 		IRequest request,
 		CancellationToken cancellationToken = default) {
 		ArgumentNullException.ThrowIfNull(request);
@@ -36,8 +36,8 @@ public sealed class Dispatcher(
 					?? throw new InvalidOperationException($"Could not create wrapper for {rt.Name}"));
 			});
 
-			var result = await wrapper.Handle(
-				applicationEnvironment.EnvironmentName,
+			var result = await wrapper.HandleAsync(
+				domainEnvironment,
 				request,
 				serviceProvider,
 				publisher,
@@ -52,7 +52,7 @@ public sealed class Dispatcher(
 	}
 
 	/// <inheritdoc />
-	public async ValueTask<Result<TResponse>> DispatchAsync<TResponse>(
+	public Task<Result<TResponse>> DispatchAsync<TResponse>(
 		IRequest<TResponse> request,
 		CancellationToken cancellationToken = default) {
 		ArgumentNullException.ThrowIfNull(request);
@@ -64,18 +64,16 @@ public sealed class Dispatcher(
 					?? throw new InvalidOperationException($"Could not create wrapper for {rt.Name}");
 			});
 
-			var result = await wrapper.Handle(
-				applicationEnvironment.EnvironmentName,
+			return wrapper.HandleAsync(
+				domainEnvironment,
 				request,
 				serviceProvider,
 				publisher,
 				logger,
 				cancellationToken);
 
-			return result;
-
 		} catch (Exception ex) {
-			return ex;
+			return Task.FromResult(Result<TResponse>.Fail(ex));
 		}
 	}
 

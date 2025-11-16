@@ -1,7 +1,7 @@
 ﻿namespace Cirreum.Conductor.Tests;
 
-using Cirreum.Auditing;
 using Cirreum.Authorization;
+using Cirreum.Conductor;
 using Cirreum.Conductor.Intercepts;
 using Cirreum.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,7 +45,7 @@ public sealed class DispatcherTests {
 
 	private sealed class FailHandler : IRequestHandler<Fail> {
 		public ValueTask<Result> HandleAsync(Fail request, CancellationToken cancellationToken = default)
-			=> ValueTask.FromResult(Result.Fail("boom"));
+			=> ValueTask.FromResult(Result.Fail(new("boom")));
 	}
 
 	private sealed record AuthRequest() : IAuthorizableRequest, IAuditableRequest;

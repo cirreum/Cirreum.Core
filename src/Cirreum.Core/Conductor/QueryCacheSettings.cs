@@ -1,4 +1,4 @@
-﻿namespace Cirreum.Conductor.Intercepts;
+﻿namespace Cirreum.Conductor;
 
 /// <summary>
 /// Represents the settings for a cache entry, including its expiration policy and optional tags.
@@ -6,7 +6,7 @@
 /// <param name="Expiration">
 /// The absolute expiration time for distributed (L2) cache. If specified,
 /// the cache entry will expire after the given duration in the distributed cache.
-/// If null, uses the default expiration configured in HybridCache.
+/// If null, uses the default expiration configured in implemented caching service.
 /// </param>
 /// <param name="LocalExpiration">
 /// The absolute expiration time for local (L1) in-memory cache. If null, uses <paramref name="Expiration"/>.

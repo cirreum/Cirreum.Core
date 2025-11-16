@@ -26,9 +26,9 @@ public sealed record RequestContext<TRequest>(
 	where TRequest : notnull {
 
 	// Delegate to Operation for convenience
-	public string Environment => this.Operation.Environment;
+	public string Environment => this.Operation.DomainEnvironment.EnvironmentName;
 	public IUserState UserState => this.Operation.UserState;
-	public ApplicationRuntimeType Runtime => this.Operation.Runtime;
+	public DomainRuntimeType RuntimeType => this.Operation.RuntimeType;
 	public DateTimeOffset Timestamp => this.Operation.Timestamp;
 	public string RequestId => this.Operation.OperationId;
 	public string CorrelationId => this.Operation.CorrelationId;
@@ -45,11 +45,13 @@ public sealed record RequestContext<TRequest>(
 	public bool IsFromProvider(IdentityProviderType provider) => this.Operation.IsFromProvider(provider);
 	public bool IsInDepartment(string department) => this.Operation.IsInDepartment(department);
 
+	public long ElapsedMilliseconds => this.Stopwatch.ElapsedMilliseconds;
+
 	/// <summary>
 	/// Creates a RequestContext for the current runtime.
 	/// </summary>
 	public static RequestContext<TRequest> Create(
-		string environment,
+		IDomainEnvironment domainEnvironment,
 		Stopwatch stopwatch,
 		IUserState userState,
 		TRequest request,
@@ -57,7 +59,7 @@ public sealed record RequestContext<TRequest>(
 		string requestId,
 		string correlationId) =>
 		new(
-			OperationContext.Create(environment, userState, requestId, correlationId),
+			OperationContext.Create(domainEnvironment, userState, requestId, correlationId),
 			stopwatch,
 			request,
 			requestType);

@@ -1,11 +1,9 @@
 ﻿namespace Cirreum;
 
 /// <summary>
-/// Gets the name of the current application environment.
+/// Contains information regarding the domain environment.
 /// </summary>
-/// <remarks>The environment name typically indicates the runtime context, such as "Development", "Staging", or
-/// "Production". This value can be used to configure application behavior based on the environment.</remarks>
-public interface IApplicationEnvironment {
+public interface IDomainEnvironment {
 	/// <summary>
 	/// Gets the name of the application.
 	/// </summary>
@@ -20,4 +18,8 @@ public interface IApplicationEnvironment {
 	/// </para>
 	/// </remarks>
 	string EnvironmentName { get; }
+	/// <summary>
+	/// Gets the applications <see cref="DomainRuntimeType"/>.
+	/// </summary>
+	public DomainRuntimeType RuntimeType { get; }
 }

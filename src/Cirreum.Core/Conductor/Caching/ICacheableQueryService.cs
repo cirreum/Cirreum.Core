@@ -1,6 +1,6 @@
 ﻿namespace Cirreum.Conductor.Caching;
 
-using Cirreum.Conductor.Intercepts;
+using Cirreum.Conductor;
 
 /// <summary>
 /// Provides caching services specifically for <see cref="ICacheableQuery{TResponse}"/> instances

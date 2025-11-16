@@ -59,14 +59,24 @@ public static class ConductorTelemetry {
 	public const string ResponseTypeTag = "response.type";
 
 	/// <summary>
+	/// Tag: Request status (success/failure/canceled).
+	/// </summary>
+	public const string RequestStatusTag = "request.status";
+
+	/// <summary>
 	/// Tag: Request success (true/false).
 	/// </summary>
-	public const string RequestSucceededTag = "request.success";
+	public const string RequestSucceededTag = "request.succeeded";
 
 	/// <summary>
 	/// Tag: Request failed (true/false).
 	/// </summary>
 	public const string RequestFailedTag = "request.failed";
+
+	/// <summary>
+	/// Tag: Request canceled (true/false).
+	/// </summary>
+	public const string RequestCanceledTag = "request.canceled";
 
 	/// <summary>
 	/// Tag: Requests total.
@@ -79,8 +89,12 @@ public static class ConductorTelemetry {
 	public const string RequestsFailedTotalTag = "requests.failed";
 
 	/// <summary>
+	/// Tag: Requests canceled total.
+	/// </summary>
+	public const string RequestsCanceledTotalTag = "requests.canceled";
+
+	/// <summary>
 	/// Tag: Histogram of requests duration.
 	/// </summary>
 	public const string RequestsDurationTag = "requests.duration";
-
 }

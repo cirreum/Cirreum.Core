@@ -54,7 +54,7 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 			PublisherStrategy.FailFast => await publisher.PublishSequentialAsync(typedNotification, handlers, true, cancellationToken),
 			PublisherStrategy.Parallel => await publisher.PublishParallelAsync(typedNotification, handlers, cancellationToken),
 			PublisherStrategy.FireAndForget => await publisher.PublishFireAndForgetAsync(typedNotification, handlers),
-			_ => Result.Fail($"Unknown publisher strategy: {effectiveStrategy}")
+			_ => Result.Fail(new($"Unknown publisher strategy: {effectiveStrategy}"))
 		};
 
 	}

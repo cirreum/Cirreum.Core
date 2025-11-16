@@ -1,6 +1,6 @@
 ﻿namespace Cirreum.Conductor.Caching;
 
-using Cirreum.Conductor.Intercepts;
+using Cirreum.Conductor;
 
 /// <summary>
 /// No-op cache service that always executes queries without caching.

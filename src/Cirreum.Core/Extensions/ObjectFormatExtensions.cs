@@ -54,9 +54,9 @@ public static class ObjectFormatExtensions {
 	/// <typeparam name="T">The type of the object being processed.</typeparam>
 	/// <param name="obj">The object instance whose string properties will be formatted.</param>
 	public static void FormatProperties<T>(this T obj) where T : class {
-		var objVal = Check.NotNull(obj);
+		ArgumentNullException.ThrowIfNull(obj);
 		var visited = new HashSet<object>();
-		FormatProperties(objVal, objVal, typeof(T), Smart.Default, visited);
+		FormatProperties(obj, obj, typeof(T), Smart.Default, visited);
 	}
 
 	/// <summary>
@@ -80,10 +80,10 @@ public static class ObjectFormatExtensions {
 	/// <param name="obj">The object instance whose string properties will be formatted.</param>
 	/// <param name="formatter">The <see cref="SmartFormat.SmartFormatter"/> instance to use for formatting.</param>
 	public static void FormatProperties<T>(this T obj, SmartFormat.SmartFormatter formatter) where T : class {
-		var objVal = Check.NotNull(obj);
-		var formatterVal = Check.NotNull(formatter);
+		ArgumentNullException.ThrowIfNull(obj);
+		ArgumentNullException.ThrowIfNull(formatter);
 		var visited = new HashSet<object>();
-		FormatProperties(objVal, objVal, typeof(T), formatterVal, visited);
+		FormatProperties(obj, obj, typeof(T), formatter, visited);
 	}
 
 	/// <summary>
@@ -131,9 +131,10 @@ public static class ObjectFormatExtensions {
 	/// <param name="objectType">The specific type to use for reflection (useful when working with interfaces or base classes).</param>
 	/// <param name="formatter">The <see cref="SmartFormat.SmartFormatter"/> instance to use for formatting.</param>
 	public static void FormatProperties(this object obj, Type objectType, SmartFormat.SmartFormatter formatter) {
-		var formatterVal = Check.NotNull(formatter);
+		ArgumentNullException.ThrowIfNull(obj);
+		ArgumentNullException.ThrowIfNull(formatter);
 		var visited = new HashSet<object>();
-		FormatProperties(obj, obj, objectType, formatterVal, visited);
+		FormatProperties(obj, obj, objectType, formatter, visited);
 	}
 
 	private static void FormatProperties(

@@ -1,6 +1,6 @@
 ﻿namespace Cirreum.Conductor.Caching;
 
-using Cirreum.Conductor.Intercepts;
+using Cirreum.Conductor;
 using System.Collections.Concurrent;
 
 /// <summary>

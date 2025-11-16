@@ -41,10 +41,10 @@ public interface IAuthorizationPolicyValidator {
 	/// Gets the application runtime types that this validator is designed to operate within.
 	/// </summary>
 	/// <value>
-	/// An array of <see cref="ApplicationRuntimeType"/> values specifying the runtime environments
+	/// An array of <see cref="DomainRuntimeType"/> values specifying the runtime environments
 	/// where this validator is applicable and should be executed.
 	/// </value>
-	ApplicationRuntimeType[] SupportedRuntimeTypes { get; }
+	DomainRuntimeType[] SupportedRuntimeTypes { get; }
 
 	/// <summary>
 	/// Determines whether this validator should be applied to the specified resource within the given execution context.
@@ -72,7 +72,7 @@ public interface IAuthorizationPolicyValidator {
 	/// </remarks>
 	bool AppliesTo<TResource>(
 		TResource resource,
-		ApplicationRuntimeType runtimeType,
+		DomainRuntimeType runtimeType,
 		DateTimeOffset timestamp)
 		where TResource : notnull, IAuthorizableResource;
 

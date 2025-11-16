@@ -39,7 +39,7 @@ public sealed record AuthorizationContext<TResource>(
 	public IUserState UserState => this.Operation.UserState;
 
 	// ExecutionContext properties (for policy validators)
-	public ApplicationRuntimeType RuntimeType => this.Operation.Runtime;
+	public DomainRuntimeType RuntimeType => this.Operation.RuntimeType;
 	public DateTimeOffset Timestamp => this.Operation.Timestamp;
 
 	// Helper methods
