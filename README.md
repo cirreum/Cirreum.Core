@@ -1,12 +1,11 @@
 # Cirreum Core
 
-
 [![NuGet Version](https://img.shields.io/nuget/v/Cirreum.svg?style=flat-square)](https://www.nuget.org/packages/Cirreum/)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Cirreum.svg?style=flat-square)](https://www.nuget.org/packages/Cirreum/)
 [![GitHub Release](https://img.shields.io/github/v/release/cirreum/Cirreum?style=flat-square)](https://github.com/cirreum/Cirreum/releases)
 
 [![License](https://img.shields.io/github/license/cirreum/Cirreum?style=flat-square)](https://github.com/cirreum/Cirreum/blob/main/LICENSE)
-[![Build Status](https://github.com/cirreum/Cirreum/workflows/CI/badge.svg)](https://github.com/cirreum/Cirreum/actions)
+[![Publish Status](https://github.com/cirreum/Cirreum/actions/workflows/publish.yml/badge.svg)](https://github.com/cirreum/Cirreum/actions/workflows/publish.yml)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square)](https://dotnet.microsoft.com/)
 
 **Foundational primitives and abstractions for the Cirreum Framework**
@@ -14,15 +13,15 @@
 ## Overview
 **Cirreum.Core** is the foundational library of the Cirreum ecosystem. It provides the core abstractions, primitives, and shared patterns used across all Cirreum libraries and runtime components.
 
-This is *not* the application’s domain core. Instead, it acts as the **framework core**—the layer that defines the structural backbone of the entire stack.
+This is *not* the application's domain core. Instead, it acts as the **framework core**—the layer that defines the structural backbone of the entire stack.
 
-All other Cirreum libraries (Messaging, Authorization, Runtime, Components, and more) build directly on this project.
+All other Cirreum libraries (Conductor, Messaging, Authorization, Runtime, Components, and more) build directly on this project.
 
 ## Purpose
 Cirreum.Core exists to deliver a stable, consistent, and expressive foundation that:
 
 - Defines contracts and interfaces shared across the framework  
-- Supplies lightweight primitives for results, contexts, identifiers, and pipelines  
+- Supplies lightweight primitives for contexts, identifiers, and pipelines  
 - Hosts cross-cutting patterns such as CQRS contracts and authorization resources  
 - Provides utilities supporting consistent behavior across the ecosystem  
 
@@ -33,7 +32,7 @@ Its mission is to centralize building blocks that must be **universally accessib
 ### 1. Cross-Framework Abstractions
 Base interfaces and extensibility points for:
 
-- Messaging and dispatch behaviors  
+- Messaging and dispatch behaviors (implemented by **Cirreum.Conductor**)  
 - Authorization and evaluator pipelines  
 - Environment and identity access  
 - Plugin and integration boundaries  
@@ -41,12 +40,12 @@ Base interfaces and extensibility points for:
 ### 2. Core Primitives
 Foundational building blocks including:
 
-- `Result` and `Result<T>`  
 - Identifiers, markers, and context structures  
 - Base implementations for validators, handlers, and authorizable resources  
+- Request and execution metadata carriers  
 
 ### 3. Shared Patterns
-Definitions that support Cirreum’s architectural patterns:
+Definitions that support Cirreum's architectural patterns:
 
 - CQRS-style request and response contracts  
 - ABAC/RBAC authorization  
@@ -64,6 +63,7 @@ Common functionality implemented using a curated set of stable dependencies:
 ## Dependencies
 Cirreum.Core is intentionally lightweight, but not dependency-free. It includes a **small, stable set of critical foundational libraries**:
 
+- `Cirreum.Result`  
 - `Microsoft.Extensions.Telemetry.Abstractions`  
 - `Microsoft.Extensions.Configuration.Json`  
 - `Microsoft.Extensions.Configuration.Binder`  
@@ -91,7 +91,7 @@ These are *framework-level* dependencies chosen for stability, longevity, and ec
 ## Structure
 
 - **Abstractions** – Messaging, authorization, identity, environment, and integration contracts  
-- **Primitives** – Results, identifiers, contexts, markers  
+- **Primitives** – Identifiers, contexts, markers, metadata carriers  
 - **Patterns** – Validators, interceptors, CQRS contracts, authorizable resource models  
 - **Utilities** – Formatting, CSV helpers, common services  
 
@@ -107,16 +107,16 @@ This library:
 ## Contribution Guidelines
 
 1. **Be conservative with new abstractions**  
-   The API surface must remain stable and meaningful.
+  The API surface must remain stable and meaningful.
 
 2. **Limit dependency expansion**  
-   Only add foundational, version-stable dependencies.
+  Only add foundational, version-stable dependencies.
 
 3. **Favor additive, non-breaking changes**  
-   Breaking changes ripple through the entire ecosystem.
+  Breaking changes ripple through the entire ecosystem.
 
 4. **Include thorough unit tests**  
-   All primitives and patterns should be independently testable.
+  All primitives and patterns should be independently testable.
 
 ---
 
