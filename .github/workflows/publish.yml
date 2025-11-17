@@ -1,14 +1,11 @@
 name: Publish to NuGet
-
 on:
   release:
     types: [published]
   workflow_dispatch:
-
 permissions:
   id-token: write
   contents: read
-
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -36,16 +33,13 @@ jobs:
       run: echo "Building version ${{ steps.get_version.outputs.VERSION }}"
     
     - name: Restore dependencies
-      run: dotnet restore Cirreum.Core.slnx
-      working-directory: ./src
+      run: dotnet restore
     
     - name: Build
-      run: dotnet build Cirreum.Core.slnx --configuration Release --no-restore -p:Version=${{ steps.get_version.outputs.VERSION }}
-      working-directory: ./src
+      run: dotnet build src/**/*.csproj --configuration Release --no-restore -p:Version=${{ steps.get_version.outputs.VERSION }}
     
     - name: Pack
-      run: dotnet pack Cirreum.Core.slnx --configuration Release --no-build -p:Version=${{ steps.get_version.outputs.VERSION }} -p:PackageVersion=${{ steps.get_version.outputs.VERSION }} --output ../artifacts
-      working-directory: ./src
+      run: dotnet pack src/**/*.csproj --configuration Release --no-build -p:Version=${{ steps.get_version.outputs.VERSION }} -p:PackageVersion=${{ steps.get_version.outputs.VERSION }} --output ./artifacts
     
     - name: NuGet login (OIDC -> temp API key)
       uses: NuGet/login@v1
