@@ -4,6 +4,7 @@ using Cirreum.Authorization;
 using Cirreum.Authorization.Visualization;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Conductor.Intercepts;
+using Cirreum.Extensions.Internal;
 using Cirreum.Presence;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
@@ -45,6 +46,15 @@ public static class ServiceCollectionExtensions {
 	}
 
 	/// <summary>
+	/// Registers the default domain context initializer.
+	/// </summary>
+	/// <param name="services">The current <see cref="IServiceCollection"/> to register with.</param>
+	public static void AddDomainContextInitilizer(
+		this IServiceCollection services) {
+		services.TryAddScoped<IDomainContextInitializer, DomainContextInitializer>();
+	}
+
+	/// <summary>
 	/// Registers a custom user presence service implementation with the specified refresh interval.
 	/// </summary>
 	/// <typeparam name="TUserPresenceService">The type of the user presence service implementation that must implement <see cref="IUserPresenceService"/>.</typeparam>
@@ -79,25 +89,43 @@ public static class ServiceCollectionExtensions {
 	}
 
 	/// <summary>
-	/// Registers domain-related services, including validation, authorization and conductor, into the specified dependency
-	/// injection container.
+	/// Registers all domain services including validation, authorization, and request/notification handling.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// This method adds FluentValidation, Cirreum Fluent Authorization, Cirreum Conductor to the service collection.
-	/// The event publishing behavior can be customized via the publisher strategy parameter. All relevant assemblies are
-	/// automatically scanned for service registration.
+	/// This method performs the following registrations:
+	/// <list type="number">
+	/// <item>Domain context initializer for environment awareness</item>
+	/// <item>FluentValidation validators from all scanned assemblies</item>
+	/// <item>Authorization evaluator and resource/policy validators</item>
+	/// <item>Conductor (dispatcher and publisher) with the following intercept pipeline:
+	///   <list type="bullet">
+	///   <item>Validation - Validates requests using FluentValidation</item>
+	///   <item>Authorization - Authorizes requests against resource and policy validators</item>
+	///   <item>Performance Monitoring - Tracks handler execution metrics</item>
+	///   <item>Query Caching - Caches query results based on configuration</item>
+	///   </list>
+	/// </item>
+	/// </list>
 	/// </para>
 	/// <para>
-	/// This should be the last call before the call to Build on the Application Builder.
+	/// Configuration is loaded from the "Conductor" section of appsettings.json.
+	/// </para>
+	/// <para>
+	/// This should be called after all other service registrations but before building the application.
 	/// </para>
 	/// </remarks>
-	/// <param name="services">The service collection to which domain services will be added. Must not be null.</param>
-	/// <param name="configuration">The application configuration used to bind options. Must not be null.</param>
-	/// <returns>The same service collection instance with domain services registered.</returns>
+	/// <param name="services">The service collection to configure.</param>
+	/// <param name="configuration">Application configuration for binding Conductor settings.</param>
+	/// <returns>The service collection for method chaining.</returns>
 	public static IServiceCollection AddDomainServices(
 		this IServiceCollection services,
 		IConfiguration configuration) {
+
+		//
+		// Domain Context Initializer
+		//
+		services.AddDomainContextInitilizer();
 
 		//
 		// Collect Assemblies
@@ -124,10 +152,16 @@ public static class ServiceCollectionExtensions {
 		services.AddConductor(builder => {
 			builder
 				.RegisterFromAssemblies(assemblies)
-				.AddOpenIntercept(typeof(Validation<,>))
-				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
-				.AddOpenIntercept(typeof(HandlerPerformance<,>));
+
+				// Pre-processing intercepts (outer layer)
+				.AddOpenIntercept(typeof(Validation<,>))        // Validate request structure
+				.AddOpenIntercept(typeof(Authorization<,>))     // Authorize user access
+
+				// Handler tier intercepts (inner layer)
+				// Note: HandlerPerformance wraps QueryCaching to measure handler tier (cache + handler) duration
+				.AddOpenIntercept(typeof(HandlerPerformance<,>)) // Measure handler tier performance
+				.AddOpenIntercept(typeof(QueryCaching<,>));      // Cache proxy (returns cache OR calls handler)
+
 		}, conductorSettings);
 
 		return services;
@@ -146,7 +180,8 @@ public static class ServiceCollectionExtensions {
 			.Distinct();
 
 
-		// Validators
+		// Normal Domain Validators
+		// Excludes resource authorizors - they implement IValidator<T> too, but are registered separately
 		var normalValidators = from type in availableTypes
 							   where type.IsConcreteClass() &&
 									 !type.ImplementsGenericInterface(resourceAuthorizorType)
@@ -170,15 +205,14 @@ public static class ServiceCollectionExtensions {
 		}
 
 		// Resource Authorizors
-		var authorizors = from type in availableTypes
-						  where type.IsConcreteClass()
-						  let matchingInterface = type.GetFirstMatchingGenericInterface(resourceAuthorizorType)
-						  where matchingInterface != null
-						  select (matchingInterface, type);
+		var resourceAuthorizors = from type in availableTypes
+								  where type.IsConcreteClass()
+								  let matchingInterface = type.GetFirstMatchingGenericInterface(resourceAuthorizorType)
+								  where matchingInterface != null
+								  select (matchingInterface, type);
 
 		// Register each concrete Authorizor
-		foreach (var (authorizorInterface, authorizorType) in authorizors) {
-
+		foreach (var (authorizorInterface, authorizorType) in resourceAuthorizors) {
 			services.TryAddEnumerable(new ServiceDescriptor(
 				serviceType: authorizorInterface,
 				implementationType: authorizorType,
@@ -191,22 +225,21 @@ public static class ServiceCollectionExtensions {
 		}
 
 		// Policy Authorizors
-		var policyValidators = from type in availableTypes
-							   where type.IsConcreteClass() &&
-									 type.IsAssignableTo(policyAuthorizorType)
-							   select type;
+		var policyAuthValidators = from type in availableTypes
+								   where type.IsConcreteClass() &&
+										 type.IsAssignableTo(policyAuthorizorType)
+								   select type;
 
 		// Register each concrete Authorizor
-		foreach (var policyValidator in policyValidators) {
-
+		foreach (var validator in policyAuthValidators) {
 			services.TryAddEnumerable(new ServiceDescriptor(
 				serviceType: policyAuthorizorType,
-				implementationType: policyValidator,
+				implementationType: validator,
 				lifetime: ServiceLifetime.Transient
 			));
 
 			// Service => Service registration
-			services.AddTransient(policyValidator, policyValidator);
+			services.AddTransient(validator, validator);
 		}
 
 		return services;

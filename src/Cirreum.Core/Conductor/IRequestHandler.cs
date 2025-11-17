@@ -17,10 +17,10 @@ public interface IRequestHandler<in TRequest>
 	/// A token used to propagate notifications that the operation should be canceled.
 	/// </param>
 	/// <returns>
-	/// A <see cref="ValueTask{TResult}"/> containing a <see cref="Result"/> indicating
+	/// A <see cref="Task{TResult}"/> containing a <see cref="Result"/> indicating
 	/// success or failure of the operation.
 	/// </returns>
-	ValueTask<Result> HandleAsync(
+	Task<Result> HandleAsync(
 		TRequest request,
 		CancellationToken cancellationToken = default);
 }
@@ -45,10 +45,10 @@ public interface IRequestHandler<in TRequest, TResponse>
 	/// A token used to propagate notifications that the operation should be canceled.
 	/// </param>
 	/// <returns>
-	/// A <see cref="ValueTask{TResult}"/> containing a <see cref="Result{TResponse}"/>
+	/// A <see cref="Task{TResult}"/> containing a <see cref="Result{TResponse}"/>
 	/// that represents the outcome of the operation and the response value.
 	/// </returns>
-	ValueTask<Result<TResponse>> HandleAsync(
+	Task<Result<TResponse>> HandleAsync(
 		TRequest request,
 		CancellationToken cancellationToken = default);
 }

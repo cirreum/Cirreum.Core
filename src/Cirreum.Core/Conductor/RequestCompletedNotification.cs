@@ -19,7 +19,7 @@ public sealed record RequestCompletedNotification(
 
 	// WHEN
 	DateTimeOffset Timestamp,
-	long DurationMs,
+	double DurationMs,
 
 	// WHO (User Context)
 	string UserId,
@@ -54,7 +54,7 @@ public sealed record RequestCompletedNotification(
 	public static RequestCompletedNotification FromResult<TRequest>(
 		Result result,
 		RequestContext<TRequest> context)
-			where TRequest : IRequest {
+		where TRequest : IRequest {
 
 		var (outcome, errorMessage, errorType) = result.Match(
 			() => ("SUCCESS", (string?)null, (string?)null),
@@ -68,7 +68,7 @@ public sealed record RequestCompletedNotification(
 
 			// WHEN
 			Timestamp: context.Timestamp,
-			DurationMs: context.ElapsedMilliseconds,
+			DurationMs: context.ElapsedDuration.TotalMilliseconds,
 
 			// WHO
 			UserId: context.UserId,
@@ -115,7 +115,7 @@ public sealed record RequestCompletedNotification(
 
 			// WHEN
 			Timestamp: context.Timestamp,
-			DurationMs: context.ElapsedMilliseconds,
+			DurationMs: context.ElapsedDuration.TotalMilliseconds,
 
 			// WHO
 			UserId: context.UserId,

@@ -2,19 +2,16 @@
 
 using Cirreum.Conductor.Internal;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
 
 /// <summary>
 /// Default publisher that sends notifications to all registered handlers.
 /// Supports parallel, sequential and fire-and-forget publishing.
 /// </summary>
-public sealed class Publisher(
+sealed class Publisher(
 	IServiceProvider serviceProvider,
 	PublisherStrategy defaultStrategy,
 	ILogger<Publisher> logger
 ) : IPublisher {
-
-	private static readonly ConcurrentDictionary<Type, NotificationHandlerWrapper> _wrapperCache = new();
 
 	public Task<Result> PublishAsync<TNotification>(
 		TNotification notification,
@@ -24,9 +21,7 @@ public sealed class Publisher(
 
 		ArgumentNullException.ThrowIfNull(notification);
 
-		var notificationType = notification.GetType(); // Runtime type is correct here!
-
-		var wrapper = _wrapperCache.GetOrAdd(notificationType, static nt => {
+		var wrapper = TypeCache.NotificationHandlers.GetOrAdd(notification.GetType(), static nt => {
 			var wrapperType = typeof(NotificationHandlerWrapperImpl<>).MakeGenericType(nt);
 			return (NotificationHandlerWrapper)(Activator.CreateInstance(wrapperType)
 				?? throw new InvalidOperationException($"Could not create wrapper for {nt.Name}"));
@@ -40,7 +35,6 @@ public sealed class Publisher(
 			strategy,
 			defaultStrategy,
 			cancellationToken);
-
 	}
 
 	internal async Task<Result> PublishSequentialAsync<TNotification>(
@@ -50,15 +44,26 @@ public sealed class Publisher(
 		CancellationToken cancellationToken)
 		where TNotification : INotification {
 
-		var failures = new List<(Type HandlerType, Exception Error)>();
+		List<Exception>? failures = null;
 
 		foreach (var handler in handlers) {
+			cancellationToken.ThrowIfCancellationRequested();
+
 			var handlerType = handler.GetType();
 			try {
-				await handler.HandleAsync(notification, cancellationToken);
+				await handler.HandleAsync(notification, cancellationToken).ConfigureAwait(false);
+			} catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+				// Cooperative cancellation - let it bubble
+				throw;
 			} catch (Exception ex) {
 				PublisherLogger.HandlerThrewException(logger, handlerType, ex);
-				failures.Add((handlerType, ex));
+
+				// Wrap exception with handler context
+				var wrappedException = new InvalidOperationException(
+					$"Handler {handlerType.Name} failed", ex);
+
+				failures ??= [];
+				failures.Add(wrappedException);
 
 				if (stopOnFailure) {
 					break;
@@ -66,12 +71,12 @@ public sealed class Publisher(
 			}
 		}
 
-		if (failures.Count == 0) {
+		if (failures is null) {
 			return Result.Success;
 		}
 
-		var message = $"One or more notification handlers failed: {string.Join(", ", failures.Select(f => f.HandlerType.Name))}";
-		return Result.Fail(new AggregateException(message, failures.Select(f => f.Error)));
+		var message = $"{failures.Count} notification handler(s) failed";
+		return Result.Fail(new AggregateException(message, failures));
 	}
 
 	internal async Task<Result> PublishParallelAsync<TNotification>(
@@ -80,16 +85,20 @@ public sealed class Publisher(
 		CancellationToken cancellationToken)
 		where TNotification : INotification {
 
+		if (handlers.Count == 0) {
+			return Result.Success;
+		}
+
+		cancellationToken.ThrowIfCancellationRequested();
+
 		var tasks = handlers
-			.Select(h => this.InvokeHandlerAsync(h, notification, cancellationToken))
+			.Select(handler => InvokeHandlerAsync(handler, notification, logger, cancellationToken))
 			.ToArray();
 
-		var results = await Task
-			.WhenAll(tasks)
-			.ConfigureAwait(false);
+		var results = await Task.WhenAll(tasks).ConfigureAwait(false);
 
 		var failures = results
-			.Where(r => !r.IsSuccess)
+			.Where(r => r.IsFailure)
 			.Select(r => r.Error!)
 			.ToList();
 
@@ -97,8 +106,30 @@ public sealed class Publisher(
 			return Result.Success;
 		}
 
-		var message = $"One or more notification handlers failed: {string.Join(", ", failures.Select(e => e.GetType().Name))}";
+		var message = $"{failures.Count} notification handler(s) failed";
 		return Result.Fail(new AggregateException(message, failures));
+
+		static async Task<Result> InvokeHandlerAsync(
+			INotificationHandler<TNotification> handler,
+			TNotification notification,
+			ILogger handlerLogger,
+			CancellationToken cancellationToken) {
+
+			var handlerType = handler.GetType();
+
+			try {
+				await handler.HandleAsync(notification, cancellationToken).ConfigureAwait(false);
+				return Result.Success;
+			} catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+				// Cooperative cancellation - let it bubble
+				throw;
+			} catch (Exception ex) {
+				PublisherLogger.HandlerThrewException(handlerLogger, handlerType, ex);
+				var wrappedException = new InvalidOperationException(
+					$"Handler {handlerType.Name} failed", ex);
+				return Result.Fail(wrappedException);
+			}
+		}
 	}
 
 	internal Task<Result> PublishFireAndForgetAsync<TNotification>(
@@ -106,35 +137,29 @@ public sealed class Publisher(
 		List<INotificationHandler<TNotification>> handlers)
 		where TNotification : INotification {
 
+		if (handlers.Count == 0) {
+			return Result.SuccessTask;
+		}
+
+		// Fire and forget with parallel execution
 		_ = Task.Run(async () => {
-			foreach (var handler in handlers) {
+			var tasks = handlers.Select(async handler => {
 				try {
 					await handler.HandleAsync(notification, CancellationToken.None);
 				} catch (Exception ex) {
 					var handlerType = handler.GetType();
 					PublisherLogger.HandlerFailedFireAndForget(logger, handlerType, ex);
 				}
+			});
+
+			// Wait for all but don't propagate exceptions (already logged)
+			try {
+				await Task.WhenAll(tasks);
+			} catch {
+				// Swallow - individual exceptions already logged
 			}
 		}, CancellationToken.None);
 
-		return Task.FromResult(Result.Success);
+		return Result.SuccessTask;
 	}
-
-	private async Task<(bool IsSuccess, Exception? Error)> InvokeHandlerAsync<TNotification>(
-		INotificationHandler<TNotification> handler,
-		TNotification notification,
-		CancellationToken cancellationToken)
-		where TNotification : INotification {
-
-		var handlerType = handler.GetType();
-
-		try {
-			await handler.HandleAsync(notification, cancellationToken);
-			return (true, null);
-		} catch (Exception ex) {
-			PublisherLogger.HandlerThrewException(logger, handlerType, ex);
-			return (false, ex);
-		}
-	}
-
 }

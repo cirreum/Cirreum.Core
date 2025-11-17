@@ -12,21 +12,18 @@ public sealed class HandlerPerformance<TRequest, TResponse>(
 
 	private const int LongRunningThresholdMs = 500;
 
-	public async ValueTask<Result<TResponse>> HandleAsync(
+	public async Task<Result<TResponse>> HandleAsync(
 		RequestContext<TRequest> context,
-		RequestHandlerDelegate<TResponse> next,
+		RequestHandlerDelegate<TRequest, TResponse> next,
 		CancellationToken cancellationToken) {
 
-		var sw = Stopwatch.StartNew();
+		var startTime = Stopwatch.GetTimestamp();
 		try {
-			return await next(cancellationToken);
+			return await next(context, cancellationToken).ConfigureAwait(false);
 		} finally {
-			sw.Stop();
-			var elapsedMs = sw.ElapsedMilliseconds;
-
+			var elapsedMs = (long)Stopwatch.GetElapsedTime(startTime).TotalMilliseconds;
 			if (elapsedMs > LongRunningThresholdMs) {
-				var requestName = context.GetType().Name;
-				logger.LogLongRunningRequest(requestName, elapsedMs);
+				logger.LogLongRunningRequest(context.RequestType, elapsedMs);
 			}
 		}
 

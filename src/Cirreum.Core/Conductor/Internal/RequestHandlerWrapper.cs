@@ -1,7 +1,4 @@
 ﻿namespace Cirreum.Conductor.Internal;
-
-using Microsoft.Extensions.Logging;
-
 /// <summary>
 /// Base wrapper class for requests without typed responses.
 /// </summary>
@@ -10,10 +7,8 @@ internal abstract class RequestHandlerWrapper {
 	/// Handles the request by resolving the handler and building the intercept pipeline.
 	/// </summary>
 	public abstract Task<Result> HandleAsync(
-		IDomainEnvironment domainEnvironment,
 		IRequest request,
 		IServiceProvider serviceProvider,
 		IPublisher publisher,
-		ILogger logger,
 		CancellationToken cancellationToken);
 }

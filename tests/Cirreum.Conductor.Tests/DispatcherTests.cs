@@ -12,7 +12,7 @@ public sealed class DispatcherTests {
 	// ===== Fakes =====
 
 	public sealed class CancelAwareEchoHandler : IRequestHandler<Echo, string> {
-		public async ValueTask<Result<string>> HandleAsync(Echo r, CancellationToken ct) {
+		public async Task<Result<string>> HandleAsync(Echo r, CancellationToken ct) {
 			await Task.Delay(200, ct); // should cancel
 			return Result<string>.Success(r.Text);
 		}
@@ -23,50 +23,128 @@ public sealed class DispatcherTests {
 	private sealed class PingHandler : IRequestHandler<Ping> {
 		public bool Called { get; private set; }
 
-		public ValueTask<Result> HandleAsync(Ping request, CancellationToken cancellationToken = default) {
+		public Task<Result> HandleAsync(Ping request, CancellationToken cancellationToken = default) {
 			this.Called = true;
-			return ValueTask.FromResult(Result.Success);
+			return Task.FromResult(Result.Success);
 		}
 	}
 
 	private sealed class ThrowingPingHandler : IRequestHandler<Ping> {
-		public ValueTask<Result> HandleAsync(Ping request, CancellationToken cancellationToken = default)
+		public Task<Result> HandleAsync(Ping request, CancellationToken cancellationToken = default)
 			=> throw new InvalidOperationException("dispatch failure");
 	}
 
 	public sealed record Echo(string Text) : IRequest<string>;
 
 	private sealed class EchoHandler : IRequestHandler<Echo, string> {
-		public ValueTask<Result<string>> HandleAsync(Echo request, CancellationToken cancellationToken = default)
-			=> ValueTask.FromResult(Result<string>.Success(request.Text));
+		public Task<Result<string>> HandleAsync(Echo request, CancellationToken cancellationToken = default)
+			=> Task.FromResult(Result<string>.Success(request.Text));
 	}
 
 	private sealed record Fail() : IRequest;
 
 	private sealed class FailHandler : IRequestHandler<Fail> {
-		public ValueTask<Result> HandleAsync(Fail request, CancellationToken cancellationToken = default)
-			=> ValueTask.FromResult(Result.Fail(new("boom")));
+		public Task<Result> HandleAsync(Fail request, CancellationToken cancellationToken = default)
+			=> Task.FromResult(Result.Fail(new("boom")));
+	}
+
+	public sealed class BoomRequest : IRequest<string> { }
+
+	public sealed class BoomHandler : IRequestHandler<BoomRequest, string> {
+		public Task<Result<string>> HandleAsync(BoomRequest request, CancellationToken cancellationToken) {
+			throw new InvalidOperationException("Boom!");
+		}
+	}
+
+	public sealed class FatalRequest : IRequest<string> { }
+
+	public sealed class FatalHandler : IRequestHandler<FatalRequest, string> {
+		public Task<Result<string>> HandleAsync(FatalRequest request, CancellationToken cancellationToken) {
+			throw new OutOfMemoryException("Simulated OOM");
+		}
 	}
 
 	private sealed record AuthRequest() : IAuthorizableRequest, IAuditableRequest;
 
 	private sealed class AuthRequestHandler : IRequestHandler<AuthRequest> {
 		public bool Called { get; private set; }
-		public ValueTask<Result> HandleAsync(AuthRequest request, CancellationToken cancellationToken = default) {
+		public Task<Result> HandleAsync(AuthRequest request, CancellationToken cancellationToken = default) {
 			this.Called = true;
-			return ValueTask.FromResult(Result.Success);
+			return Task.FromResult(Result.Success);
 		}
 	}
 
-	private sealed class AuthRequestAuthorizor : AuthorizationValidatorBase<AuthRequest> {
-		public AuthRequestAuthorizor() {
+	private sealed class AuthRequestAuthorizer : AuthorizationValidatorBase<AuthRequest> {
+		public AuthRequestAuthorizer() {
 			this.HasRole(ApplicationRoles.AppUserRole);
 		}
 	}
-	private sealed class AuthAdminRequestAuthorizor : AuthorizationValidatorBase<AuthRequest> {
-		public AuthAdminRequestAuthorizor() {
+	private sealed class AuthAdminRequestAuthorizer : AuthorizationValidatorBase<AuthRequest> {
+		public AuthAdminRequestAuthorizer() {
 			this.HasRole(ApplicationRoles.AppAdminRole);
 		}
+	}
+
+
+	[TestMethod]
+	public async Task DispatchAsync_FatalException_IsNotConvertedToResult_BubblesOut() {
+		// Arrange
+		var services = new ServiceCollection();
+		var dispatcher = Shared.ArrangeSimpleDispatcher(services => {
+			services.AddSingleton<IDispatcher, Dispatcher>();
+			services.AddTransient<IRequestHandler<FatalRequest, string>, FatalHandler>();
+		});
+
+		// Act & Assert
+		// We expect the fatal exception to bubble, not to be wrapped in Result<string>.
+		await Assert.ThrowsExactlyAsync<OutOfMemoryException>(async () => {
+			await dispatcher.DispatchAsync(new FatalRequest(), this.TestContext.CancellationToken);
+		});
+	}
+
+	[TestMethod]
+	public async Task DispatchAsync_WhenCancelled_BubblesOperationCanceledException() {
+
+		// Arrange
+		var services = new ServiceCollection();
+		var dispatcher = Shared.ArrangeSimpleDispatcher(services => {
+			services.AddSingleton<IDispatcher, Dispatcher>();
+			services.AddTransient<IRequestHandler<Echo, string>, CancelAwareEchoHandler>();
+		});
+
+		using var cts = new CancellationTokenSource();
+
+		// Act
+		var dispatchTask = dispatcher.DispatchAsync(new Echo("hi"), cts.Token);
+
+		// trigger cancellation while the handler is mid-Delay
+		cts.Cancel();
+
+		// Assert
+		await Assert.ThrowsAsync<OperationCanceledException>(async () => {
+			await dispatchTask;
+		});
+
+	}
+
+
+	[TestMethod]
+	public async Task DispatchAsync_NonFatalException_IsConvertedToResultFailure() {
+
+		// Arrange
+		var dispatcher = Shared.ArrangeSimpleDispatcher(services => {
+			// handler registration
+			services.AddTransient<IRequestHandler<BoomRequest, string>, BoomHandler>();
+		});
+
+		// Act
+		var result = await dispatcher.DispatchAsync(new BoomRequest(), this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsFalse(result.IsSuccess);
+		Assert.IsNotNull(result.Error);
+		Assert.IsInstanceOfType<InvalidOperationException>(result.Error);
+		Assert.AreEqual("Boom!", result.Error.Message);
 	}
 
 	[TestMethod]
@@ -114,16 +192,19 @@ public sealed class DispatcherTests {
 	}
 
 	[TestMethod]
-	public async Task Dispatch_honors_cancellation_token() {
+	public async Task DispatchAsync_PropagatesCancellation_WhenHandlerHonorsToken() {
+
 		var dispatcher = Shared.ArrangeSimpleDispatcher(sp => {
 			sp.AddTransient<IRequestHandler<Echo, string>, CancelAwareEchoHandler>();
 		});
 
 		using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(10));
-		var result = await dispatcher.DispatchAsync(new Echo("hello"), cts.Token);
+		var dispatchTask = dispatcher.DispatchAsync(new Echo("hello"), cts.Token);
 
-		Assert.IsFalse(result.IsSuccess);
-		Assert.IsInstanceOfType<TaskCanceledException>(result.Error);
+		await Assert.ThrowsAsync<OperationCanceledException>(async () => {
+			await dispatchTask;
+		});
+
 	}
 
 	[TestMethod]
@@ -131,9 +212,8 @@ public sealed class DispatcherTests {
 
 		var authHandler = new AuthRequestHandler();
 		var services = Shared.ArrangeServices(sp => {
-			sp.AddTransient<IAuthorizationResourceValidator<AuthRequest>, AuthRequestAuthorizor>();
+			sp.AddTransient<IAuthorizationResourceValidator<AuthRequest>, AuthRequestAuthorizer>();
 			sp.AddTransient<IRequestHandler<AuthRequest>>(sp => authHandler);
-			sp.AddSingleton<IAuthorizationRoleRegistry, TestAuthorizationRoleRegistry>();
 			sp.AddConductor(options => {
 				options.AddOpenIntercept(typeof(Authorization<,>));
 			}, Shared.SequentialSettings);
@@ -158,9 +238,8 @@ public sealed class DispatcherTests {
 
 		var authHandler = new AuthRequestHandler();
 		var services = Shared.ArrangeServices(sp => {
-			sp.AddTransient<IAuthorizationResourceValidator<AuthRequest>, AuthAdminRequestAuthorizor>();
+			sp.AddTransient<IAuthorizationResourceValidator<AuthRequest>, AuthAdminRequestAuthorizer>();
 			sp.AddTransient<IRequestHandler<AuthRequest>>(sp => authHandler);
-			sp.AddSingleton<IAuthorizationRoleRegistry, TestAuthorizationRoleRegistry>();
 			sp.AddConductor(options => {
 				options.AddOpenIntercept(typeof(Authorization<,>));
 			}, Shared.SequentialSettings);

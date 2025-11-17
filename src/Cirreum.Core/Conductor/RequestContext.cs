@@ -1,38 +1,35 @@
 ﻿namespace Cirreum.Conductor;
 
 using Cirreum.Security;
-using System.Diagnostics;
+using System;
 
 /// <summary>
 /// Encapsulates contextual information about a request in the Conductor pipeline,
-/// including the core operation context plus request-specific tracking information.
+/// including the core operation context plus request-specific information.
 /// </summary>
 /// <remarks>
 /// Use this record to capture and propagate request metadata throughout the application, enabling
 /// auditing, diagnostics, and tracing. This context composes <see cref="OperationContext"/> which
-/// contains the canonical WHO/WHEN/WHERE information, and adds request-specific concerns like
-/// timing and request identification.
+/// contains the canonical WHO/WHEN/WHERE/TIMING information.
 /// </remarks>
 /// <typeparam name="TRequest">The type of the request payload associated with this context.</typeparam>
-/// <param name="Operation">The core operational context containing user, environment, and correlation information.</param>
-/// <param name="Stopwatch">A stopwatch instance used to measure the duration of request processing.</param>
+/// <param name="Operation">The core operational context containing user, environment, timing, and correlation information.</param>
 /// <param name="Request">The request payload containing the data or command to be processed.</param>
 /// <param name="RequestType">The type name of the request, useful for logging and diagnostics.</param>
 public sealed record RequestContext<TRequest>(
 	OperationContext Operation,
-	Stopwatch Stopwatch,
 	TRequest Request,
 	string RequestType)
 	where TRequest : notnull {
 
 	// Delegate to Operation for convenience
-	public string Environment => this.Operation.DomainEnvironment.EnvironmentName;
-	public IUserState UserState => this.Operation.UserState;
+	public string Environment => this.Operation.Environment;
 	public DomainRuntimeType RuntimeType => this.Operation.RuntimeType;
+	public IUserState UserState => this.Operation.UserState;
 	public DateTimeOffset Timestamp => this.Operation.Timestamp;
+	public long StartTimestamp => this.Operation.StartTimestamp;
 	public string RequestId => this.Operation.OperationId;
 	public string CorrelationId => this.Operation.CorrelationId;
-
 	public string UserId => this.Operation.UserId;
 	public string UserName => this.Operation.UserName;
 	public string? TenantId => this.Operation.TenantId;
@@ -41,26 +38,25 @@ public sealed record RequestContext<TRequest>(
 	public UserProfile Profile => this.Operation.Profile;
 	public bool HasEnrichedProfile => this.Operation.HasEnrichedProfile;
 
+	// Timing - delegate to Operation
+	public TimeSpan ElapsedDuration => this.Operation.Elapsed;
+
 	public bool HasActiveTenant() => this.Operation.HasActiveTenant();
 	public bool IsFromProvider(IdentityProviderType provider) => this.Operation.IsFromProvider(provider);
 	public bool IsInDepartment(string department) => this.Operation.IsInDepartment(department);
-
-	public long ElapsedMilliseconds => this.Stopwatch.ElapsedMilliseconds;
 
 	/// <summary>
 	/// Creates a RequestContext for the current runtime.
 	/// </summary>
 	public static RequestContext<TRequest> Create(
-		IDomainEnvironment domainEnvironment,
-		Stopwatch stopwatch,
 		IUserState userState,
 		TRequest request,
 		string requestType,
 		string requestId,
-		string correlationId) =>
+		string correlationId,
+		long startTimestamp) =>
 		new(
-			OperationContext.Create(domainEnvironment, userState, requestId, correlationId),
-			stopwatch,
+			OperationContext.Create(userState, requestId, correlationId, startTimestamp),
 			request,
 			requestType);
 }

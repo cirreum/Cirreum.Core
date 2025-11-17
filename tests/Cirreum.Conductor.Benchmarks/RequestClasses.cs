@@ -28,7 +28,7 @@ public sealed class PingHandler :
 	IRequestHandler<ConductorPing, PingResponse>,
 	MediatR.IRequestHandler<MediatRPing, PingResponse> {
 
-	public async ValueTask<Result<PingResponse>> HandleAsync(
+	public async Task<Result<PingResponse>> HandleAsync(
 		ConductorPing request,
 		CancellationToken cancellationToken) {
 
@@ -38,7 +38,7 @@ public sealed class PingHandler :
 		var response = new PingResponse(ping.Message);
 
 		// Simulate async but avoid extra allocations in real bench:
-		await ValueTask.CompletedTask;
+		await Task.CompletedTask;
 
 		return Result<PingResponse>.Success(response);
 

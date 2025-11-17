@@ -3,6 +3,7 @@
 using Cirreum.Conductor;
 using Cirreum.Conductor.Caching;
 using Cirreum.Conductor.Configuration;
+using Cirreum.Extensions.Internal;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
@@ -25,13 +26,21 @@ public static class ConductorServiceCollectionExtensions {
 		Action<ConductorBuilder> configure,
 		ConductorSettings settings) {
 
-		// Register core services
-		services.TryAddSingleton<IDispatcher, Dispatcher>();
-		services.TryAddSingleton<IPublisher>(sp =>
-			new Publisher(
-				sp,
-				settings.PublisherStrategy,
-				sp.GetRequiredService<ILogger<Publisher>>()));
+		// Register concrete Publisher (internal, accessible via InternalsVisibleTo)
+		services.TryAddSingleton(sp => new Publisher(
+			sp,
+			settings.PublisherStrategy,
+			sp.GetRequiredService<ILogger<Publisher>>()));
+
+		// Register concrete Dispatcher (internal, accessible via InternalsVisibleTo)
+		services.TryAddSingleton(sp => new Dispatcher(
+			sp,
+			sp.GetRequiredService<Publisher>()));
+
+		// Register public interface facades - all resolve to same singleton instances
+		services.TryAddSingleton<IPublisher>(sp => sp.GetRequiredService<Publisher>());
+		services.TryAddSingleton<IDispatcher>(sp => sp.GetRequiredService<Dispatcher>());
+		services.TryAddSingleton<IConductor>(sp => sp.GetRequiredService<Dispatcher>());
 
 		// Register cache service based on configuration
 		services.AddCacheableQueryService(settings);

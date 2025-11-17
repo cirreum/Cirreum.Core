@@ -15,6 +15,11 @@ public readonly struct Result : IResult, IEquatable<Result> {
 	public static Result Success { get; } = new(true, null);
 
 	/// <summary>
+	/// Returns a completed task representing a successful result.
+	/// </summary>
+	public static Task<Result> SuccessTask { get; } = Task.FromResult(Success);
+
+	/// <summary>
 	/// Creates a failed result with the specified error.
 	/// </summary>
 	public static Result Fail(Exception error) {
@@ -147,6 +152,48 @@ public readonly struct Result : IResult, IEquatable<Result> {
 			action(this.Error);
 			return this;
 		} catch (Exception ex) {
+			var error = errorSelector?.Invoke(ex) ?? ex;
+			return Fail(error);
+		}
+	}
+
+	/// <summary>
+	/// Executes an action to inspect the current result without modifying it.
+	/// The action is invoked regardless of whether the result represents success or failure.
+	/// </summary>
+	/// <param name="action">The action to execute with the current result.</param>
+	/// <returns>The current <see cref="Result"/> unchanged.</returns>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="action"/> is null.</exception>
+	/// <remarks>
+	/// Use this method for side effects like logging or telemetry that should occur
+	/// regardless of the result state. Any exception thrown by the action is allowed to propagate.
+	/// </remarks>
+	public Result Inspect(Action<Result> action) {
+		ArgumentNullException.ThrowIfNull(action);
+		action(this);
+		return this;
+	}
+
+	/// <summary>
+	/// Executes an action to inspect the current result, catching any exceptions thrown by the action.
+	/// If the action throws and this is a success result, converts to a failure result.
+	/// </summary>
+	public Result InspectTry(
+		Action<Result> action,
+		Func<Exception, Exception>? errorSelector = null) {
+
+		ArgumentNullException.ThrowIfNull(action);
+
+		try {
+			action(this);
+			return this;
+		} catch (Exception ex) {
+			// If already failed, keep original failure
+			if (this.IsFailure) {
+				return this;
+			}
+
+			// Success → Failure if inspection throws
 			var error = errorSelector?.Invoke(ex) ?? ex;
 			return Fail(error);
 		}

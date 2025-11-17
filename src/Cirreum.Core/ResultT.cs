@@ -65,7 +65,7 @@ public readonly struct Result<T> : IResult<T>, IEquatable<Result<T>> {
 	/// Gets a value indicating whether the result represents a failure state.
 	/// </summary>
 	[MemberNotNullWhen(true, nameof(Error))]
-	public bool IsFailure => !_isSuccess;
+	public bool IsFailure => !this._isSuccess;
 
 	/// <summary>
 	/// Gets the value if the operation succeeded.
@@ -88,7 +88,7 @@ public readonly struct Result<T> : IResult<T>, IEquatable<Result<T>> {
 	/// langword="false"/>.</returns>
 	public bool TryGetError([NotNullWhen(true)] out Exception? error) {
 		if (this.IsFailure) {
-			error = _error!;
+			error = this._error!;
 			return true;
 		}
 		error = null;
@@ -221,6 +221,108 @@ public readonly struct Result<T> : IResult<T>, IEquatable<Result<T>> {
 		}
 	}
 
+	/// <summary>
+	/// Executes an action to inspect the current result without modifying it.
+	/// The action is invoked regardless of whether the result represents success or failure.
+	/// </summary>
+	/// <param name="action">The action to execute with the current result.</param>
+	/// <returns>The current <see cref="Result{T}"/> unchanged.</returns>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="action"/> is null.</exception>
+	/// <remarks>
+	/// Use this method for side effects like logging or telemetry that should occur
+	/// regardless of the result state. Any exception thrown by the action is allowed to propagate.
+	/// </remarks>
+	public Result<T> Inspect(Action<Result<T>> action) {
+		ArgumentNullException.ThrowIfNull(action);
+		action(this);
+		return this;
+	}
+	/// <summary>
+	/// Executes an action to inspect the current result, catching any exceptions thrown by the action.
+	/// If the action throws and this is a success result, converts to a failure result.
+	/// </summary>
+	public Result<T> InspectTry(
+		Action<Result<T>> action,
+		Func<Exception, Exception>? errorSelector = null) {
+		ArgumentNullException.ThrowIfNull(action);
+
+		try {
+			action(this);
+			return this;
+		} catch (Exception ex) {
+			// If already failed, keep original failure
+			if (this.IsFailure) {
+				return this;
+			}
+
+			// Success → Failure if inspection throws
+			var error = errorSelector?.Invoke(ex) ?? ex;
+			return Fail(error);
+		}
+	}
+
+	/// <summary>
+	/// Ensures that the result value satisfies a specified condition.
+	/// If the condition is not met, converts the success result to a failure.
+	/// </summary>
+	/// <param name="predicate">A function that tests the value against a condition.</param>
+	/// <param name="errorFactory">A function that creates an exception when the condition is not met.</param>
+	/// <returns>
+	/// The current result if it's already a failure or if the predicate returns true;
+	/// otherwise, a failed result with the error from <paramref name="errorFactory"/>.
+	/// </returns>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown when <paramref name="predicate"/> or <paramref name="errorFactory"/> is null.
+	/// </exception>
+	/// <remarks>
+	/// This method allows you to add validation to a success result without breaking
+	/// the railway-oriented programming flow. Multiple Ensure calls can be chained
+	/// to apply sequential validation rules.
+	/// </remarks>
+	public Result<T> Ensure(
+		Func<T, bool> predicate,
+		Func<T, Exception> errorFactory) {
+
+		ArgumentNullException.ThrowIfNull(predicate);
+		ArgumentNullException.ThrowIfNull(errorFactory);
+
+		if (this.IsSuccess) {
+			try {
+				if (!predicate(this.Value)) {
+					return Fail(errorFactory(this.Value));
+				}
+				return this;
+			} catch (Exception ex) {
+				return Fail(ex);
+			}
+		}
+
+		return this;
+
+	}
+
+	/// <summary>
+	/// Ensures that the result value satisfies a specified condition.
+	/// If the condition is not met, converts the success result to a failure with the specified error message.
+	/// </summary>
+	/// <param name="predicate">A function that tests the value against a condition.</param>
+	/// <param name="errorMessage">The error message to use if the condition is not met.</param>
+	/// <returns>
+	/// The current result if it's already a failure or if the predicate returns true;
+	/// otherwise, a failed result with an <see cref="InvalidOperationException"/> containing the error message.
+	/// </returns>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown when <paramref name="predicate"/> is null.
+	/// </exception>
+	/// <exception cref="ArgumentException">
+	/// Thrown when <paramref name="errorMessage"/> is null or whitespace.
+	/// </exception>
+	public Result<T> Ensure(Func<T, bool> predicate, string errorMessage) {
+		ArgumentNullException.ThrowIfNull(predicate);
+		ArgumentException.ThrowIfNullOrWhiteSpace(errorMessage);
+
+		return this.Ensure(predicate, _ => new InvalidOperationException(errorMessage));
+	}
 
 	/// <summary>
 	/// Transforms the value if the result is successful.

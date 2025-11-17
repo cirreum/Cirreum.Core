@@ -1522,4 +1522,416 @@ public static class ResultAsyncExtensions {
 		return await onFailure(result.Error).ConfigureAwait(false);
 	}
 
+
+	// ============= ENSURE<T> ASYNC ==============
+	// ============================================
+
+	/// <summary>
+	/// Ensures that the result value satisfies a specified asynchronous condition.
+	/// </summary>
+	public static async ValueTask<Result<T>> EnsureAsync<T>(
+		this Result<T> result,
+		Func<T, ValueTask<bool>> predicate,
+		Func<T, Exception> errorFactory) {
+
+		ArgumentNullException.ThrowIfNull(predicate);
+		ArgumentNullException.ThrowIfNull(errorFactory);
+
+		if (result.IsSuccess) {
+			try {
+				if (!await predicate(result.Value).ConfigureAwait(false)) {
+					return Result<T>.Fail(errorFactory(result.Value));
+				}
+				return result;
+			} catch (Exception ex) {
+				return Result<T>.Fail(ex);
+			}
+		}
+
+		return result;
+	}
+
+	/// <summary>
+	/// Ensures that the result value satisfies a specified asynchronous condition.
+	/// </summary>
+	public static async Task<Result<T>> EnsureAsyncTask<T>(
+		this Result<T> result,
+		Func<T, Task<bool>> predicate,
+		Func<T, Exception> errorFactory) {
+
+		ArgumentNullException.ThrowIfNull(predicate);
+		ArgumentNullException.ThrowIfNull(errorFactory);
+
+		if (result.IsSuccess) {
+			try {
+				if (!await predicate(result.Value).ConfigureAwait(false)) {
+					return Result<T>.Fail(errorFactory(result.Value));
+				}
+				return result;
+			} catch (Exception ex) {
+				return Result<T>.Fail(ex);
+			}
+		}
+
+		return result;
+	}
+
+	/// <summary>
+	/// Ensures that the result value satisfies a specified asynchronous condition.
+	/// </summary>
+	public static async ValueTask<Result<T>> EnsureAsync<T>(
+		this Result<T> result,
+		Func<T, ValueTask<bool>> predicate,
+		string errorMessage) {
+
+		ArgumentNullException.ThrowIfNull(predicate);
+		ArgumentException.ThrowIfNullOrWhiteSpace(errorMessage);
+
+		return await result.EnsureAsync(predicate, _ => new InvalidOperationException(errorMessage));
+	}
+
+	/// <summary>
+	/// Ensures that the result value satisfies a specified asynchronous condition.
+	/// </summary>
+	public static async Task<Result<T>> EnsureAsyncTask<T>(
+		this Result<T> result,
+		Func<T, Task<bool>> predicate,
+		string errorMessage) {
+
+		ArgumentNullException.ThrowIfNull(predicate);
+		ArgumentException.ThrowIfNullOrWhiteSpace(errorMessage);
+
+		return await result.EnsureAsyncTask(predicate, _ => new InvalidOperationException(errorMessage));
+	}
+
+	/// <summary>
+	/// Ensures that the task result value satisfies a specified condition.
+	/// </summary>
+	public static async ValueTask<Result<T>> EnsureAsync<T>(
+		this ValueTask<Result<T>> resultTask,
+		Func<T, bool> predicate,
+		Func<T, Exception> errorFactory) {
+
+		var result = await resultTask.ConfigureAwait(false);
+		return result.Ensure(predicate, errorFactory);
+	}
+
+	/// <summary>
+	/// Ensures that the task result value satisfies a specified condition.
+	/// </summary>
+	public static async Task<Result<T>> EnsureAsyncTask<T>(
+		this Task<Result<T>> resultTask,
+		Func<T, bool> predicate,
+		Func<T, Exception> errorFactory) {
+
+		var result = await resultTask.ConfigureAwait(false);
+		return result.Ensure(predicate, errorFactory);
+	}
+
+	/// <summary>
+	/// Ensures that the task result value satisfies a specified condition.
+	/// </summary>
+	public static async ValueTask<Result<T>> EnsureAsync<T>(
+		this ValueTask<Result<T>> resultTask,
+		Func<T, bool> predicate,
+		string errorMessage) {
+
+		var result = await resultTask.ConfigureAwait(false);
+		return result.Ensure(predicate, errorMessage);
+	}
+
+	/// <summary>
+	/// Ensures that the task result value satisfies a specified condition.
+	/// </summary>
+	public static async Task<Result<T>> EnsureAsyncTask<T>(
+		this Task<Result<T>> resultTask,
+		Func<T, bool> predicate,
+		string errorMessage) {
+
+		var result = await resultTask.ConfigureAwait(false);
+		return result.Ensure(predicate, errorMessage);
+	}
+
+	/// <summary>
+	/// Ensures that the task result value satisfies a specified asynchronous condition.
+	/// </summary>
+	public static async ValueTask<Result<T>> EnsureAsync<T>(
+		this ValueTask<Result<T>> resultTask,
+		Func<T, ValueTask<bool>> predicate,
+		Func<T, Exception> errorFactory) {
+
+		var result = await resultTask.ConfigureAwait(false);
+		return await result.EnsureAsync(predicate, errorFactory);
+	}
+
+	/// <summary>
+	/// Ensures that the task result value satisfies a specified asynchronous condition.
+	/// </summary>
+	public static async Task<Result<T>> EnsureAsyncTask<T>(
+		this Task<Result<T>> resultTask,
+		Func<T, Task<bool>> predicate,
+		Func<T, Exception> errorFactory) {
+
+		var result = await resultTask.ConfigureAwait(false);
+		return await result.EnsureAsyncTask(predicate, errorFactory);
+	}
+
+
+	// ============ INSPECT<T> ASYNC ==============
+	// ============================================
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the current result without modifying it.
+	/// </summary>
+	public static async ValueTask<Result<T>> InspectAsync<T>(
+		this Result<T> result,
+		Func<Result<T>, ValueTask> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		await action(result).ConfigureAwait(false);
+		return result;
+	}
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the current result without modifying it.
+	/// </summary>
+	public static async Task<Result<T>> InspectAsyncTask<T>(
+		this Result<T> result,
+		Func<Result<T>, Task> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		await action(result).ConfigureAwait(false);
+		return result;
+	}
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the current result, catching any exceptions.
+	/// </summary>
+	public static async ValueTask<Result<T>> InspectTryAsync<T>(
+		this Result<T> result,
+		Func<Result<T>, ValueTask> action,
+		Func<Exception, Exception>? errorSelector = null) {
+
+		ArgumentNullException.ThrowIfNull(action);
+
+		try {
+			await action(result).ConfigureAwait(false);
+			return result;
+		} catch (Exception ex) {
+			// If already failed, keep original failure
+			if (result.IsFailure) {
+				return result;
+			}
+
+			// Success → Failure if inspection throws
+			var error = errorSelector?.Invoke(ex) ?? ex;
+			return Result<T>.Fail(error);
+		}
+	}
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the current result, catching any exceptions.
+	/// </summary>
+	public static async Task<Result<T>> InspectTryAsyncTask<T>(
+		this Result<T> result,
+		Func<Result<T>, Task> action,
+		Func<Exception, Exception>? errorSelector = null) {
+
+		ArgumentNullException.ThrowIfNull(action);
+
+		try {
+			await action(result).ConfigureAwait(false);
+			return result;
+		} catch (Exception ex) {
+			// If already failed, keep original failure
+			if (result.IsFailure) {
+				return result;
+			}
+
+			// Success → Failure if inspection throws
+			var error = errorSelector?.Invoke(ex) ?? ex;
+			return Result<T>.Fail(error);
+		}
+	}
+
+	/// <summary>
+	/// Executes an action to inspect the task result without modifying it.
+	/// </summary>
+	public static async ValueTask<Result<T>> InspectAsync<T>(
+		this ValueTask<Result<T>> resultTask,
+		Action<Result<T>> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		var result = await resultTask.ConfigureAwait(false);
+		action(result);
+		return result;
+	}
+
+	/// <summary>
+	/// Executes an action to inspect the task result without modifying it.
+	/// </summary>
+	public static async Task<Result<T>> InspectAsyncTask<T>(
+		this Task<Result<T>> resultTask,
+		Action<Result<T>> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		var result = await resultTask.ConfigureAwait(false);
+		action(result);
+		return result;
+	}
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the task result without modifying it.
+	/// </summary>
+	public static async ValueTask<Result<T>> InspectAsync<T>(
+		this ValueTask<Result<T>> resultTask,
+		Func<Result<T>, ValueTask> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		var result = await resultTask.ConfigureAwait(false);
+		await action(result).ConfigureAwait(false);
+		return result;
+	}
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the task result without modifying it.
+	/// </summary>
+	public static async Task<Result<T>> InspectAsyncTask<T>(
+		this Task<Result<T>> resultTask,
+		Func<Result<T>, Task> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		var result = await resultTask.ConfigureAwait(false);
+		await action(result).ConfigureAwait(false);
+		return result;
+	}
+
+	/// <summary>
+	/// Executes an action to inspect the task result, catching any exceptions.
+	/// </summary>
+	public static async ValueTask<Result<T>> InspectTryAsync<T>(
+		this ValueTask<Result<T>> resultTask,
+		Action<Result<T>> action,
+		Func<Exception, Exception>? errorSelector = null) {
+
+		var result = await resultTask.ConfigureAwait(false);
+		return result.InspectTry(action, errorSelector);
+	}
+
+	/// <summary>
+	/// Executes an action to inspect the task result, catching any exceptions.
+	/// </summary>
+	public static async Task<Result<T>> InspectTryAsyncTask<T>(
+		this Task<Result<T>> resultTask,
+		Action<Result<T>> action,
+		Func<Exception, Exception>? errorSelector = null) {
+
+		var result = await resultTask.ConfigureAwait(false);
+		return result.InspectTry(action, errorSelector);
+	}
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the task result, catching any exceptions.
+	/// </summary>
+	public static async ValueTask<Result<T>> InspectTryAsync<T>(
+		this ValueTask<Result<T>> resultTask,
+		Func<Result<T>, ValueTask> action,
+		Func<Exception, Exception>? errorSelector = null) {
+
+		var result = await resultTask.ConfigureAwait(false);
+		return await result.InspectTryAsync(action, errorSelector);
+	}
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the task result, catching any exceptions.
+	/// </summary>
+	public static async Task<Result<T>> InspectTryAsyncTask<T>(
+		this Task<Result<T>> resultTask,
+		Func<Result<T>, Task> action,
+		Func<Exception, Exception>? errorSelector = null) {
+
+		var result = await resultTask.ConfigureAwait(false);
+		return await result.InspectTryAsyncTask(action, errorSelector);
+	}
+
+
+	// =============== INSPECT ASYNC ===============
+	// ============================================
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the current result without modifying it.
+	/// </summary>
+	public static async ValueTask<Result> InspectAsync(
+		this Result result,
+		Func<Result, ValueTask> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		await action(result).ConfigureAwait(false);
+		return result;
+	}
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the current result without modifying it.
+	/// </summary>
+	public static async Task<Result> InspectAsyncTask(
+		this Result result,
+		Func<Result, Task> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		await action(result).ConfigureAwait(false);
+		return result;
+	}
+
+	/// <summary>
+	/// Executes an action to inspect the task result without modifying it.
+	/// </summary>
+	public static async ValueTask<Result> InspectAsync(
+		this ValueTask<Result> resultTask,
+		Action<Result> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		var result = await resultTask.ConfigureAwait(false);
+		action(result);
+		return result;
+	}
+
+	/// <summary>
+	/// Executes an action to inspect the task result without modifying it.
+	/// </summary>
+	public static async Task<Result> InspectAsyncTask(
+		this Task<Result> resultTask,
+		Action<Result> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		var result = await resultTask.ConfigureAwait(false);
+		action(result);
+		return result;
+	}
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the task result without modifying it.
+	/// </summary>
+	public static async ValueTask<Result> InspectAsync(
+		this ValueTask<Result> resultTask,
+		Func<Result, ValueTask> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		var result = await resultTask.ConfigureAwait(false);
+		await action(result).ConfigureAwait(false);
+		return result;
+	}
+
+	/// <summary>
+	/// Executes an asynchronous action to inspect the task result without modifying it.
+	/// </summary>
+	public static async Task<Result> InspectAsyncTask(
+		this Task<Result> resultTask,
+		Func<Result, Task> action) {
+
+		ArgumentNullException.ThrowIfNull(action);
+		var result = await resultTask.ConfigureAwait(false);
+		await action(result).ConfigureAwait(false);
+		return result;
+	}
+
 }

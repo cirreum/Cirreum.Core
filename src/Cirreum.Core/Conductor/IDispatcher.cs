@@ -20,9 +20,10 @@ public interface IDispatcher {
 	/// A <see cref="Task{TResult}"/> representing the asynchronous operation.
 	/// The returned <see cref="Result"/> indicates whether the request was handled successfully.
 	/// </returns>
-	Task<Result> DispatchAsync(
-		IRequest request,
-		CancellationToken cancellationToken = default);
+	Task<Result> DispatchAsync<TRequest>(
+		TRequest request,
+		CancellationToken cancellationToken = default)
+		where TRequest : IRequest;
 
 	/// <summary>
 	/// Dispatches the specified request asynchronously and returns a <see cref="Result{T}"/> containing the response.

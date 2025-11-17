@@ -3,7 +3,6 @@
 using Cirreum.Conductor;
 using Cirreum.Security;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
 
@@ -13,207 +12,187 @@ using System.Diagnostics;
 /// <typeparam name="TRequest">The type of request being handled.</typeparam>
 /// <typeparam name="TResponse">The type of response returned by the request.</typeparam>
 internal sealed class RequestHandlerWrapperImpl<TRequest, TResponse>
-  : RequestHandlerWrapper<TResponse>
+	: RequestHandlerWrapper<TResponse>
 	where TRequest : class, IRequest<TResponse> {
 
+	private static readonly string requestTypeName = typeof(TRequest).Name;
+	private static readonly string responseTypeName = typeof(TResponse).Name;
+
 	public override async Task<Result<TResponse>> HandleAsync(
-		IDomainEnvironment domainEnvironment,
 		IRequest<TResponse> request,
 		IServiceProvider serviceProvider,
 		IPublisher publisher,
-		ILogger logger,
 		CancellationToken cancellationToken) {
 
 		RequestContext<TRequest>? requestContext = null;
-		Result<TResponse> finalResult;
-		var typedRequest = (TRequest)request;
-		var requestTypeName = typeof(TRequest).Name;
-		var responseTypeName = typeof(TResponse).Name;
-		logger.DispatchingRequest(requestTypeName);
+		Result<TResponse> finalResult = default!;
 
-		// ----- 0. START ACTIVITY -----
-		var (activity, stopwatch) =
-			RequestTelemetry.StartActivityAndStopwatch(
-				domainEnvironment,
-				requestTypeName,
-				hasResponse: true,
-				responseTypeName);
+		// ----- 0. START ACTIVITY & TIMING -----
+		var activity = RequestTelemetry.StartActivity(
+			requestTypeName,
+			hasResponse: true,
+			responseTypeName);
+		var startTimestamp = Timing.Start();
 
 		try {
 
 			// ----- 1. RESOLVE HANDLER -----
 			var handler = serviceProvider.GetService<IRequestHandler<TRequest, TResponse>>();
 			if (handler is null) {
-				logger.NoHandlerRegistered(requestTypeName);
-				return Result<TResponse>.Fail(new InvalidOperationException(
+				finalResult = Result<TResponse>.Fail(new InvalidOperationException(
 					$"No handler registered for request type '{requestTypeName}'"));
+				return finalResult;
 			}
 
 			// ----- 2. BUILD PIPELINE -----
-			var intercepts = serviceProvider.GetServices<IIntercept<TRequest, TResponse>>();
+			var interceptArray = serviceProvider
+				.GetServices<IIntercept<TRequest, TResponse>>()
+				.ToArray();
 
-			// ----- 3a. EXECUTE HANDLER OR PIPELINE -----
-			if (!intercepts.Any()) {
-				finalResult = await handler.HandleAsync(typedRequest, cancellationToken);
+			// ----- 3. EXECUTE HANDLER OR PIPELINE -----
+			if (interceptArray.Length == 0) {
+				// HOT PATH: No context needed - direct handler execution
+				finalResult = await handler.HandleAsync((TRequest)request, cancellationToken);
 			} else {
+				// COLD PATH: Create context for pipeline
 				requestContext = await CreateRequestContext(
-					domainEnvironment,
 					serviceProvider,
 					activity,
-					stopwatch,
-					typedRequest,
+					startTimestamp,
+					(TRequest)request,
 					requestTypeName);
-				if (logger.IsEnabled(LogLevel.Debug)) {
-					logger.ExecutingPipeline(intercepts.Count(), requestTypeName);
-				}
+
 				finalResult = await ExecutePipelineAsync(
 					requestContext,
 					handler,
-					[.. intercepts],
+					interceptArray,
 					0,
 					cancellationToken);
 			}
 
-			// ----- 3b. EXECUTION FINISHED -----
-			stopwatch.Stop();
-			if (activity is not null) {
-				if (activity.Duration == TimeSpan.Zero) {
-					activity.SetEndTime(DateTime.UtcNow);
+			// ----- 4. GET ELAPSED TIME -----
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+
+			// ----- 5. POST-PROCESSING (TELEMETRY) -----
+			try {
+				if (finalResult.IsSuccess) {
+					RequestTelemetry.SetActivitySuccess(activity);
+					RequestTelemetry.RecordSuccess(requestTypeName, responseTypeName, elapsed);
+				} else {
+					RequestTelemetry.SetActivityError(activity, finalResult.Error);
+					RequestTelemetry.RecordFailure(requestTypeName, responseTypeName, elapsed, finalResult.Error);
 				}
-				activity.Stop();
-			}
-
-			// ----- 4. POST-PROCESSING (TELEMETRY + AUDIT) -----
-			// At this point, `finalResult` is the truth. 
-			// This block must NOT overwrite it.
-			finalResult.Switch(
-				onSuccess: _ => {
-					RequestTelemetry.HandleSuccess(
-							requestTypeName,
-							responseTypeName,
-							stopwatch.Elapsed.TotalMilliseconds,
-							activity);
-				},
-				onFailure: err => {
-					RequestTelemetry.HandleFailure(
-						 logger,
-						 requestTypeName,
-						 responseTypeName,
-						 stopwatch.Elapsed.TotalMilliseconds,
-						 activity,
-						 err);
-				},
-				onCallbackError: unhandledException => {
-					logger.LogRecordTelemetryFailed(unhandledException);
-				});
-
-			if (request is IAuditableRequestBase) {
-
-				requestContext ??= await CreateRequestContext(
-						domainEnvironment,
-						serviceProvider,
-						activity,
-						stopwatch,
-						typedRequest,
-						requestTypeName);
-
-				var notification = RequestCompletedNotification
-					.FromResult(finalResult, requestContext);
-
-				// Publish notification - fire-and-forget
-				try {
-					await publisher.PublishAsync(
-						notification,
-						PublisherStrategy.FireAndForget,
-						CancellationToken.None);
-				} catch (Exception ex) {
-					logger.LogAuditLoggingFailed(ex);
-				}
+			} catch {
+				// Telemetry failure shouldn't break the request
+			} finally {
+				RequestTelemetry.StopActivity(activity);
 			}
 
 		} catch (OperationCanceledException oce) {
-			stopwatch.Stop();
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
 
-			RequestTelemetry.HandleCanceled(
-				requestTypeName,
-				responseTypeName,
-				stopwatch.Elapsed.TotalMilliseconds,
-				activity,
-				oce);
+			RequestTelemetry.SetActivityCanceled(activity, oce);
+			RequestTelemetry.RecordCanceled(requestTypeName, responseTypeName, elapsed, oce);
+			RequestTelemetry.StopActivity(activity);
 
-			// cancellation -> rethrow to preserve stack trace
+			finalResult = Result<TResponse>.Fail(oce);
+			throw;
+
+		} catch (Exception fex) when (fex is OutOfMemoryException || fex is ThreadAbortException) {
+			// Fatal exceptions: stop activity but let them bubble
+			RequestTelemetry.StopActivity(activity);
+
+			finalResult = Result<TResponse>.Fail(fex);
 			throw;
 
 		} catch (Exception ex) {
-			stopwatch.Stop();
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
 
-			RequestTelemetry.HandleFailure(
-				logger,
-				requestTypeName,
-				responseTypeName,
-				stopwatch.Elapsed.TotalMilliseconds,
-				activity,
-				ex);
+			RequestTelemetry.SetActivityError(activity, ex);
+			RequestTelemetry.RecordFailure(requestTypeName, responseTypeName, elapsed, ex);
+			RequestTelemetry.StopActivity(activity);
 
-			// handler/pipeline failure -> THIS is a real request failure
 			finalResult = Result<TResponse>.Fail(ex);
 
 		} finally {
 
-			if (activity is not null) {
-				if (activity.Duration == TimeSpan.Zero) {
-					activity.SetEndTime(DateTime.UtcNow);
+			// ----- 6. AUDIT NOTIFICATION (IF NEEDED) -----
+			if (request is IAuditableRequestBase) {
+				try {
+					// ONLY create context if auditing is needed
+					requestContext ??= await CreateRequestContext(
+						serviceProvider,
+						activity,
+						startTimestamp,
+						(TRequest)request,
+						requestTypeName);
+
+					var notification = RequestCompletedNotification
+						.FromResult(finalResult, requestContext);
+
+					// Publish notification - fire-and-forget
+					await publisher
+						.PublishAsync(
+							notification,
+							PublisherStrategy.FireAndForget,
+							CancellationToken.None)
+						.ConfigureAwait(false);
+
+				} catch {
+					// Audit failure shouldn't break the request
 				}
-				activity.Stop();
 			}
 
 		}
 
-		// ----- 5. RETURN FINAL RESULT -----
+		// ----- 7. RETURN FINAL RESULT -----
 		return finalResult;
 
 	}
 
 	private static async Task<RequestContext<TRequest>> CreateRequestContext(
-		IDomainEnvironment domainEnvironment,
 		IServiceProvider serviceProvider,
 		Activity? activity,
-		Stopwatch stopwatch,
+		long startTimestamp,
 		TRequest typedRequest,
 		string requestTypeName) {
 
-		var userState = await serviceProvider.GetRequiredService<IUserStateAccessor>().GetUser();
-		var requestId = activity?.SpanId.ToString() ?? Guid.NewGuid().ToString("N")[..16];
-		var correlationId = activity?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
+		var userState = await serviceProvider
+			.GetRequiredService<IUserStateAccessor>()
+			.GetUser();
+
+		var requestId = activity?.SpanId.ToString()
+			?? Guid.NewGuid().ToString("N")[..16];
+		var correlationId = activity?.TraceId.ToString()
+			?? Guid.NewGuid().ToString("N");
+
 		return RequestContext<TRequest>.Create(
-			domainEnvironment,
-			stopwatch,
 			userState,
 			typedRequest,
 			requestTypeName,
 			requestId,
-			correlationId
-		);
+			correlationId,
+			startTimestamp);
 	}
 
-	private static async ValueTask<Result<TResponse>> ExecutePipelineAsync(
+	private static Task<Result<TResponse>> ExecutePipelineAsync(
 		RequestContext<TRequest> context,
 		IRequestHandler<TRequest, TResponse> handler,
-		List<IIntercept<TRequest, TResponse>> intercepts,
+		IIntercept<TRequest, TResponse>[] intercepts,
 		int index,
 		CancellationToken cancellationToken) {
 
-		if (index >= intercepts.Count) {
-			// Base case: execute the actual handler
-			return await handler.HandleAsync(context.Request, cancellationToken);
+		if (index >= intercepts.Length) {
+			return handler.HandleAsync(context.Request, cancellationToken);
 		}
 
-		// Recursive case: execute current intercept with continuation
-		var currentIntercept = intercepts[index];
-		return await currentIntercept.HandleAsync(
+		var current = intercepts[index];
+
+		return current.HandleAsync(
 			context,
-			ct => ExecutePipelineAsync(context, handler, intercepts, index + 1, ct),
+			(ctx, ct) => ExecutePipelineAsync(ctx, handler, intercepts, index + 1, ct),
 			cancellationToken);
+
 	}
 
 }

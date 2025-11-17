@@ -1,5 +1,6 @@
 ﻿namespace Cirreum.Authorization;
 
+using Cirreum.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;

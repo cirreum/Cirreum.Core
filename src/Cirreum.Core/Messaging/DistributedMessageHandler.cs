@@ -2,13 +2,6 @@
 
 using Cirreum.Conductor;
 
-public static class DistributedMessageHandlerCounter {
-	private static long _callCount;
-	public static long CallCount => Interlocked.Read(ref _callCount);
-	public static void ResetCallCount() => Interlocked.Exchange(ref _callCount, 0);
-	public static void IncrementCallCount() => Interlocked.Increment(ref _callCount);
-}
-
 /// <summary>
 /// Handles distributed messages by publishing them to external systems via a transport publisher.
 /// </summary>
@@ -42,7 +35,6 @@ public sealed class DistributedMessageHandler<TMessage>(
 	/// method, which will handle delivery based on the message's configuration and destination type.
 	/// </remarks>
 	public async Task HandleAsync(TMessage message, CancellationToken cancellationToken) {
-		DistributedMessageHandlerCounter.IncrementCallCount();
 		await transportPublisher.PublishMessageAsync(message, cancellationToken);
 	}
 }

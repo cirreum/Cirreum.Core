@@ -1,9 +1,12 @@
 ﻿namespace Cirreum.Conductor.Tests;
 
+using Cirreum.Authorization;
 using Cirreum.Conductor.Configuration;
+using Cirreum.Conductor.Intercepts;
 using Cirreum.Messaging;
 using Cirreum.Security;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -33,6 +36,20 @@ public static class Shared {
 		}
 	};
 
+	public static IServiceCollection ArrangeConductor(
+		ConductorSettings? conductorSettings = default,
+		Action<IServiceCollection>? builder = null) {
+		return ArrangeServices(builder)
+			.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(Shared).Assembly)
+					.AddOpenIntercept(typeof(Validation<,>))
+					.AddOpenIntercept(typeof(Authorization<,>))
+					.AddOpenIntercept(typeof(HandlerPerformance<,>))
+					.AddOpenIntercept(typeof(QueryCaching<,>));
+			}, conductorSettings ?? SequentialSettings);
+	}
+
 	public static IServiceCollection ArrangeServices(
 		Action<IServiceCollection>? builder = null,
 		TestContext? testContext = null) {
@@ -52,6 +69,10 @@ public static class Shared {
 			lb.SetMinimumLevel(LogLevel.Trace);
 		});
 
+		services.AddDomainContextInitilizer();
+
+		services.TryAddSingleton(SequentialSettings);
+
 		services.AddSingleton<IDomainEnvironment>(sp =>
 			new TestApplicationEnvironment());
 
@@ -59,14 +80,16 @@ public static class Shared {
 			return TestUserState.CreateAuthenticated();
 		});
 
+		services.AddSingleton<IAuthorizationEvaluator, DefaultAuthorizationEvaluator>();
+
 		services.AddSingleton<IUserStateAccessor, MockUserStateAccessor>();
 
 		services.AddSingleton<IDistributedTransportPublisher, EmptyTransportPublisher>();
 
 		services.AddSingleton(typeof(INotificationHandler<>), typeof(DistributedMessageHandler<>));
 
-		services.AddSingleton<IPublisher>(sp =>
-			new Publisher(sp, PublisherStrategy.Sequential, sp.GetRequiredService<ILogger<Publisher>>()));
+		services.AddSingleton<IAuthorizationRoleRegistry, TestAuthorizationRoleRegistry>();
+
 
 		if (builder is not null) {
 			builder(services);
@@ -80,7 +103,21 @@ public static class Shared {
 
 		var services = ArrangeServices(builder);
 
-		services.AddSingleton<IDispatcher, Dispatcher>();
+		// Register concrete Publisher (internal, accessible via InternalsVisibleTo)
+		services.TryAddSingleton(sp => new Publisher(
+			sp,
+			SequentialSettings.PublisherStrategy,
+			sp.GetRequiredService<ILogger<Publisher>>()));
+
+		// Register concrete Dispatcher (internal, accessible via InternalsVisibleTo)
+		services.TryAddSingleton(sp => new Dispatcher(
+			sp,
+			sp.GetRequiredService<Publisher>()));
+
+		// Register public interface facades - all resolve to same singleton instances
+		services.TryAddSingleton<IPublisher>(sp => sp.GetRequiredService<Publisher>());
+		services.TryAddSingleton<IDispatcher>(sp => sp.GetRequiredService<Dispatcher>());
+		services.TryAddSingleton<IConductor>(sp => sp.GetRequiredService<Dispatcher>());
 
 		var sp = services.BuildServiceProvider();
 

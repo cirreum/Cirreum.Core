@@ -1,8 +1,13 @@
 # Cirreum Core
 
+
 [![NuGet Version](https://img.shields.io/nuget/v/Cirreum.svg?style=flat-square)](https://www.nuget.org/packages/Cirreum/)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Cirreum.svg?style=flat-square)](https://www.nuget.org/packages/Cirreum/)
 [![GitHub Release](https://img.shields.io/github/v/release/cirreum/Cirreum?style=flat-square)](https://github.com/cirreum/Cirreum/releases)
+
+[![License](https://img.shields.io/github/license/cirreum/Cirreum?style=flat-square)](https://github.com/cirreum/Cirreum/blob/main/LICENSE)
+[![Build Status](https://github.com/cirreum/Cirreum/workflows/CI/badge.svg)](https://github.com/cirreum/Cirreum/actions)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square)](https://dotnet.microsoft.com/)
 
 **Foundational primitives and abstractions for the Cirreum Framework**
 

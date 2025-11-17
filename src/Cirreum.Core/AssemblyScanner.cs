@@ -15,10 +15,16 @@ public static class AssemblyScanner {
 	/// Scans and returns all assemblies in the current application domain, 
 	/// excluding assemblies with predefined prefixes.
 	/// </summary>
-	/// <returns>An enumerable collection of non-excluded assemblies.</returns>
 	/// <remarks>
-	/// Assemblies with certain prefixes (e.g., "System", "Microsoft", "Azure") 
-	/// are ignored to prevent scanning unnecessary dependencies.
+	/// <para><b>Performance:</b></para>
+	/// This method is very fast (microseconds) as it only iterates assemblies already loaded
+	/// in memory. There's typically no need to cache results unless you're calling this
+	/// method thousands of times.
+	/// 
+	/// <para><b>Assembly Loading:</b></para>
+	/// This method only returns assemblies that are already loaded in the AppDomain.
+	/// If assemblies are loaded after this call (plugins, lazy loading), call this method
+	/// again to include them.
 	/// 
 	/// <para><b>Exception Handling:</b></para>
 	/// The following exceptions are caught and ignored to ensure scanning continues smoothly:
@@ -59,6 +65,7 @@ public static class AssemblyScanner {
 	/// </list>
 	/// </remarks>
 	public static IEnumerable<Assembly> ScanAssemblies(HashSet<string>? customExclusions = null, bool ignoreDefaultExclusions = false) {
+
 		var seenNames = new HashSet<string>();
 
 		// Determine which exclusions to use
@@ -211,24 +218,36 @@ public static class AssemblyScanner {
 	}
 
 	private static readonly HashSet<string> ExcludedAssemblyNames = new(StringComparer.OrdinalIgnoreCase) {
+		// .NET Framework
 		"System",
 		"Microsoft",
 		"mscorlib",
 		"netstandard",
+	
+		// Cloud Providers
 		"Azure",
 		"Amazon",
 		"AWS",
-		"Polly",
-		"Humanizer",
-		"SmartFormat",
-		"Swashbuckle",
-		"Scalar",
 		"Google",
-		"Grpc",
-		"Facebook",
-		"CommandLine",
+	
+		// Common Libraries
+		"Polly",          // Resilience library
+		"Humanizer",      // String manipulation
+		"SmartFormat",    // String formatting
+		"Swashbuckle",    // OpenAPI/Swagger
+		"Scalar",         // API documentation
+		"Grpc",           // gRPC
+		"Facebook",       // Facebook SDK
+	
+		// Command Line
+		"CommandLine",    // Command line parsing
+	
+		// Third-party UI/Logging
 		"Vio",
-		"MediatR",
-		"BlazorApplicationInsights"
+		"BlazorApplicationInsights",
+	
+		// Replaced by Conductor
+		"MediatR"         // Cirreum.Conductor replaces MediatR
 	};
+
 }

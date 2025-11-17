@@ -9,38 +9,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Immutable;
-
-public static class DefaultAuthorizationEvaluatorCounter {
-
-	private static readonly Lock @lock = new();
-
-	private static long _callCount;
-
-	public static long CallCount => Interlocked.Read(ref _callCount);
-
-	public static void ResetCallCount() => Interlocked.Exchange(ref _callCount, 0);
-
-	public static void IncrementCallCount() {
-
-		lock (@lock) {
-			_callCount++;
-			//Interlocked.Increment(ref _callCount);
-		}
-	}
-
-}
+using System.Diagnostics;
 
 /// <summary>
 /// The default implementation of the <see cref="IAuthorizationEvaluator"/>.
 /// </summary>
 /// <param name="registry">The authorization role registry for resolving effective roles.</param>
-/// <param name="domainEnvironment">The application environment information.</param>
 /// <param name="userAccessor">The accessor for retrieving current user state.</param>
 /// <param name="services">The service provider for resolving validators.</param>
 /// <param name="logger">The logger for authorization events.</param>
-public sealed class DefaultAuthorizationEvaluator(
+sealed class DefaultAuthorizationEvaluator(
 	IAuthorizationRoleRegistry registry,
-	IDomainEnvironment domainEnvironment,
 	IUserStateAccessor userAccessor,
 	IServiceProvider services,
 	ILogger<DefaultAuthorizationEvaluator> logger
@@ -59,10 +38,10 @@ public sealed class DefaultAuthorizationEvaluator(
 		// Build OperationContext for ad-hoc evaluation
 		var userState = await userAccessor.GetUser().ConfigureAwait(false);
 		var operation = OperationContext.Create(
-			domainEnvironment,
 			userState,
 			operationId: Guid.NewGuid().ToString("N")[..16],
-			correlationId: Guid.NewGuid().ToString("N"));
+			correlationId: Guid.NewGuid().ToString("N"),
+			startTimestamp: Stopwatch.GetTimestamp());
 
 		// Delegate to the context-aware overload
 		return await this.Evaluate(resource, operation, cancellationToken).ConfigureAwait(false);
@@ -79,12 +58,29 @@ public sealed class DefaultAuthorizationEvaluator(
 		CancellationToken cancellationToken = default)
 		where TResource : IAuthorizableResource {
 
-		// Check cancellation early
-		cancellationToken.ThrowIfCancellationRequested();
-
 		var resourceRuntimeType = resource.GetType();
 		var resourceName = resourceRuntimeType.Name;
 		var resourceCompileTimeType = typeof(TResource);
+
+		// Check authentication
+		if (!operation.IsAuthenticated) {
+			//******************************************
+			//
+			// NOT AUTHENTICATED
+			//
+			//******************************************
+			var ex = new UnauthenticatedAccessException("User is not authenticated.");
+
+			logger.LogAuthorizingResourceDenied(
+				operation.UserName,
+				resourceName,
+				ex.Message);
+
+			return Result.Fail(ex);
+		}
+
+		// Check cancellation early
+		cancellationToken.ThrowIfCancellationRequested();
 
 		// Check if the runtime type matches the compile-time type
 		if (resourceRuntimeType != resourceCompileTimeType) {
@@ -113,29 +109,17 @@ public sealed class DefaultAuthorizationEvaluator(
 			// RUNTIME HAS NO POLICY AUTHORIZORS
 			//
 			//******************************************
-			throw new InvalidOperationException(
+			var emptyAuthContainerEx = new InvalidOperationException(
 				$"Resource '{resourceName}' has no authorizors or applicable policies.");
+			logger.LogAuthorizingResourceDenied(
+				operation.UserName,
+				resourceName,
+				emptyAuthContainerEx.Message);
+			return Result.Fail(emptyAuthContainerEx);
 		}
 
 		// Check cancellation before entering validation logic
 		cancellationToken.ThrowIfCancellationRequested();
-
-		// Check authentication
-		if (!operation.IsAuthenticated) {
-			//******************************************
-			//
-			// NOT AUTHENTICATED
-			//
-			//******************************************
-			var ex = new UnauthenticatedAccessException("User is not authenticated.");
-
-			logger.LogAuthorizingResourceDenied(
-				operation.UserName,
-				resourceName,
-				ex.Message);
-
-			return Result.Fail(ex);
-		}
 
 		// Get the user's roles
 		var roles = operation.UserState.Profile.Roles
@@ -149,15 +133,15 @@ public sealed class DefaultAuthorizationEvaluator(
 			// USER HAS NO REGISTERED ROLES
 			//
 			//******************************************
-			var ex = new ForbiddenAccessException(
+			var noRolesEx = new ForbiddenAccessException(
 				$"User '{operation.UserName}' has no assigned roles.");
 
 			logger.LogAuthorizingResourceDenied(
 				operation.UserName,
 				resourceName,
-				ex.Message);
+				noRolesEx.Message);
 
-			return Result.Fail(ex);
+			return Result.Fail(noRolesEx);
 		}
 
 		// Check cancellation before entering validation logic
@@ -184,27 +168,21 @@ public sealed class DefaultAuthorizationEvaluator(
 			var allFailures = new List<ValidationFailure>();
 
 			// Run all Resource Authorizors
-			if (resourceAuthorizors.Count > 0) {
-				var resourceTasks = resourceAuthorizors
-					.Select(v => v.ValidateAsync(validationContext, cancellationToken));
+			var resourceTasks = resourceAuthorizors
+				.Select(v => v.ValidateAsync(validationContext, cancellationToken));
 
-				var resourceResults = await Task.WhenAll(resourceTasks).ConfigureAwait(false);
+			var resourceResults = await Task.WhenAll(resourceTasks).ConfigureAwait(false);
 
-				var failures = resourceResults
-					.SelectMany(result => result.Errors)
-					.Where(f => f != null)
-					.ToList();
-
-				allFailures.AddRange(failures);
-			}
+			allFailures.AddRange(resourceResults
+				.SelectMany(result => result.Errors)
+				.Where(f => f != null));
 
 			// Run applicable Policy Authorizors
-			var applicablePolicyValidators = policyAuthorizors
+			var applicablePolicyValidatorsQuery = policyAuthorizors
 				.Where(pv => pv.AppliesTo(resource, operation.RuntimeType, operation.Timestamp))
-				.OrderBy(pv => pv.Order)
-				.ToList();
+				.OrderBy(pv => pv.Order);
 
-			foreach (var policyValidator in applicablePolicyValidators) {
+			foreach (var policyValidator in applicablePolicyValidatorsQuery) {
 				cancellationToken.ThrowIfCancellationRequested();
 
 				var policyResult = await policyValidator
@@ -222,14 +200,14 @@ public sealed class DefaultAuthorizationEvaluator(
 				// NOT AUTHORIZED
 				//
 				//******************************************
-				var errorMessage = string.Join(',', allFailures.Select(f => f.ErrorMessage));
+				var userExplicitlyDeniedEx = string.Join(',', allFailures.Select(f => f.ErrorMessage));
 
 				logger.LogAuthorizingResourceDenied(
 					operation.UserName,
 					resourceName,
-					errorMessage);
+					userExplicitlyDeniedEx);
 
-				var ex = new ForbiddenAccessException(errorMessage);
+				var ex = new ForbiddenAccessException(userExplicitlyDeniedEx);
 				return Result.Fail(ex);
 			}
 
@@ -242,9 +220,6 @@ public sealed class DefaultAuthorizationEvaluator(
 				operation.UserName,
 				resourceName);
 
-			// TODO: Remove this!
-			DefaultAuthorizationEvaluatorCounter.IncrementCallCount();
-
 			return Result.Success;
 
 		} catch (OperationCanceledException) {
@@ -254,7 +229,11 @@ public sealed class DefaultAuthorizationEvaluator(
 		} catch (Exception ex) {
 			// Unexpected runtime errors during validation
 			// (e.g., database failures, network issues in validators)
-			logger.LogAuthorizingResourceUnknownError(ex, operation.UserName, resourceName, ex.Message);
+			logger.LogAuthorizingResourceUnknownError(
+				ex,
+				operation.UserName,
+				resourceName,
+				ex.Message);
 			return Result.Fail(ex);
 		}
 	}

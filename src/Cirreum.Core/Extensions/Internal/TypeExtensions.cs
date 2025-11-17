@@ -1,5 +1,6 @@
-﻿namespace System;
+﻿namespace Cirreum.Extensions.Internal;
 
+using System;
 using System.Reflection;
 
 internal static class TypeExtensions {

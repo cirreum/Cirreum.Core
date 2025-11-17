@@ -4,8 +4,10 @@ using Cirreum.Authorization;
 using Cirreum.Conductor;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Conductor.Intercepts;
+using Cirreum.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using System.Threading;
+using static Cirreum.Conductor.Tests.DispatcherTests;
 
 /// <summary>
 /// Tests for intercepts including open generic intercepts.
@@ -18,15 +20,25 @@ public class InterceptTests {
 	// Test data
 	public static readonly List<string> ExecutionLog = [];
 
+	public sealed class FatalIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
+		where TRequest : notnull {
+		public Task<Result<TResponse>> HandleAsync(
+			RequestContext<TRequest> context,
+			RequestHandlerDelegate<TRequest, TResponse> next,
+			CancellationToken cancellationToken) {
+			throw new OutOfMemoryException("From intercept");
+		}
+	}
+
 
 	// Simple request/handler for testing
 	public class TestRequest : IRequest<string> {
 		public string Value { get; set; } = "";
 	}
 	public class TestRequestHandler : IRequestHandler<TestRequest, string> {
-		public ValueTask<Result<string>> HandleAsync(TestRequest request, CancellationToken cancellationToken) {
+		public Task<Result<string>> HandleAsync(TestRequest request, CancellationToken cancellationToken) {
 			ExecutionLog.Add("Handler executed");
-			return ValueTask.FromResult(Result<string>.Success($"Handled: {request.Value}"));
+			return Task.FromResult(Result<string>.Success($"Handled: {request.Value}"));
 		}
 	}
 
@@ -36,9 +48,9 @@ public class InterceptTests {
 		public int Value { get; set; }
 	}
 	public class AnotherRequestHandler : IRequestHandler<AnotherRequest, int> {
-		public ValueTask<Result<int>> HandleAsync(AnotherRequest request, CancellationToken cancellationToken) {
+		public Task<Result<int>> HandleAsync(AnotherRequest request, CancellationToken cancellationToken) {
 			ExecutionLog.Add("AnotherHandler executed");
-			return ValueTask.FromResult(Result<int>.Success(request.Value * 2));
+			return Task.FromResult(Result<int>.Success(request.Value * 2));
 		}
 	}
 
@@ -48,9 +60,9 @@ public class InterceptTests {
 		public string Value { get; set; } = "";
 	}
 	public class VoidTestRequestHandler : IRequestHandler<VoidTestRequest> {
-		public ValueTask<Result> HandleAsync(VoidTestRequest request, CancellationToken cancellationToken) {
+		public Task<Result> HandleAsync(VoidTestRequest request, CancellationToken cancellationToken) {
 			ExecutionLog.Add("VoidHandler executed");
-			return ValueTask.FromResult(Result.Success);
+			return Task.FromResult(Result.Success);
 		}
 	}
 
@@ -59,25 +71,32 @@ public class InterceptTests {
 		public string Value { get; init; } = "";
 	}
 	public sealed class DupHandler : IRequestHandler<DupRequest, string> {
-		public ValueTask<Result<string>> HandleAsync(DupRequest r, CancellationToken ct)
-			=> ValueTask.FromResult(Result<string>.Success($"Handled: {r.Value}"));
+		public Task<Result<string>> HandleAsync(DupRequest r, CancellationToken ct)
+			=> Task.FromResult(Result<string>.Success($"Handled: {r.Value}"));
 	}
 
 	// Request/handler that throws to test error handling intercept
 	public sealed class ErrRequest : IRequest<string> { }
 	public sealed class ThrowingErrHandler : IRequestHandler<ErrRequest, string> {
-		public ValueTask<Result<string>> HandleAsync(ErrRequest r, CancellationToken ct)
+		public Task<Result<string>> HandleAsync(ErrRequest r, CancellationToken ct)
 			=> throw new InvalidOperationException("boom");
+	}
+
+	// IAuditableRequest<string>
+	public sealed class AuditableRequest : IAuditableRequest<string> { }
+	public sealed class AuditableRequestHandler : IRequestHandler<AuditableRequest, string> {
+		public Task<Result<string>> HandleAsync(AuditableRequest r, CancellationToken ct)
+			=> Task.FromResult(Result<string>.Success("Audit me!"));
 	}
 
 	// For Authorization tests
 	public record AuthorizableTestRequest(string UserId)
 		: IAuthorizableRequest<string>;
 	public class AuthorizableTestHandler : IRequestHandler<AuthorizableTestRequest, string> {
-		public ValueTask<Result<string>> HandleAsync(
+		public Task<Result<string>> HandleAsync(
 			AuthorizableTestRequest request,
 			CancellationToken cancellationToken) {
-			return ValueTask.FromResult(Result<string>.Success($"Authorized: {request.UserId}"));
+			return Task.FromResult(Result<string>.Success($"Authorized: {request.UserId}"));
 		}
 	}
 
@@ -92,22 +111,51 @@ public class InterceptTests {
 		public string CacheCategory => "TestQueries";
 	}
 	public class CacheableTestHandler : IRequestHandler<CacheableTestQuery, string> {
-		public ValueTask<Result<string>> HandleAsync(
+		public Task<Result<string>> HandleAsync(
 			CacheableTestQuery request,
 			CancellationToken cancellationToken) {
-			return ValueTask.FromResult(Result<string>.Success($"Data for {request.Id}"));
+			return Task.FromResult(Result<string>.Success($"Data for {request.Id}"));
 		}
 	}
 
+	// For IDomainQuery<string> tests which includes:
+	// IAuditableRequest and IAuthorizableRequest
+	public record DomainTestRequest(string UserId)
+		: IDomainQuery<string>;
+	public class DomainTestHandler : IRequestHandler<DomainTestRequest, string> {
+		public Task<Result<string>> HandleAsync(
+			DomainTestRequest request,
+			CancellationToken cancellationToken) {
+			return Task.FromResult(Result<string>.Success($"Authorized: {request.UserId}"));
+		}
+	}
+
+	// For IDomainCacheableQuery<string> tests which includes:
+	// IAuditableRequest and IAuthorizableRequest and ICacheableQuery
+	public record DomainCacheableTestRequest(string UserId)
+		: IDomainCacheableQuery<string> {
+		public string CacheKey => nameof(DomainCacheableTestRequest);
+	}
+
+	public class DomainCacheableTestHandler : IRequestHandler<DomainCacheableTestRequest, string> {
+		public Task<Result<string>> HandleAsync(
+			DomainCacheableTestRequest request,
+			CancellationToken cancellationToken) {
+			return Task.FromResult(Result<string>.Success($"Authorized: {request.UserId}"));
+		}
+	}
 
 
 	// Open generic intercept - logs all requests
 	public class LoggingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
 		where TRequest : notnull {
 
-		public async ValueTask<Result<TResponse>> HandleAsync(RequestContext<TRequest> context, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken) {
+		public async Task<Result<TResponse>> HandleAsync(
+			RequestContext<TRequest> context,
+			RequestHandlerDelegate<TRequest, TResponse> next,
+			CancellationToken cancellationToken) {
 			ExecutionLog.Add($"LoggingIntercept: Before {typeof(TRequest).Name}");
-			var result = await next(cancellationToken);
+			var result = await next(context, cancellationToken);
 			ExecutionLog.Add($"LoggingIntercept: After {typeof(TRequest).Name}");
 			return result;
 		}
@@ -117,9 +165,12 @@ public class InterceptTests {
 	public class TimingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
 		where TRequest : notnull {
 
-		public async ValueTask<Result<TResponse>> HandleAsync(RequestContext<TRequest> context, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken) {
+		public async Task<Result<TResponse>> HandleAsync(
+			RequestContext<TRequest> context,
+			RequestHandlerDelegate<TRequest, TResponse> next,
+			CancellationToken cancellationToken) {
 			ExecutionLog.Add($"TimingIntercept: Start {typeof(TRequest).Name}");
-			var result = await next(cancellationToken);
+			var result = await next(context, cancellationToken);
 			ExecutionLog.Add($"TimingIntercept: End {typeof(TRequest).Name}");
 			return result;
 		}
@@ -127,9 +178,12 @@ public class InterceptTests {
 
 	// Specific intercept for TestRequest only
 	public class SpecificIntercept : IIntercept<TestRequest, string> {
-		public async ValueTask<Result<string>> HandleAsync(RequestContext<TestRequest> context, RequestHandlerDelegate<string> next, CancellationToken cancellationToken) {
+		public async Task<Result<string>> HandleAsync(
+			RequestContext<TestRequest> context,
+			RequestHandlerDelegate<TestRequest, string> next,
+			CancellationToken cancellationToken) {
 			ExecutionLog.Add("SpecificIntercept: Before");
-			var result = await next(cancellationToken);
+			var result = await next(context, cancellationToken);
 			ExecutionLog.Add("SpecificIntercept: After");
 			return result;
 		}
@@ -138,8 +192,8 @@ public class InterceptTests {
 	// Intercept that modifies the result
 	public class ResultModifyingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
 		where TRequest : notnull {
-		public async ValueTask<Result<TResponse>> HandleAsync(RequestContext<TRequest> context, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken) {
-			var result = await next(cancellationToken);
+		public async Task<Result<TResponse>> HandleAsync(RequestContext<TRequest> context, RequestHandlerDelegate<TRequest, TResponse> next, CancellationToken cancellationToken) {
+			var result = await next(context, cancellationToken);
 
 			if (result.IsSuccess && result.Value is string str) {
 				// Modify the result
@@ -155,9 +209,12 @@ public class InterceptTests {
 	public class ErrorHandlingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
 		where TRequest : notnull {
 
-		public async ValueTask<Result<TResponse>> HandleAsync(RequestContext<TRequest> context, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken) {
+		public async Task<Result<TResponse>> HandleAsync(
+			RequestContext<TRequest> context,
+			RequestHandlerDelegate<TRequest, TResponse> next,
+			CancellationToken cancellationToken) {
 			try {
-				return await next(cancellationToken);
+				return await next(context, cancellationToken);
 			} catch (Exception ex) {
 				ExecutionLog.Add($"ErrorHandlingIntercept: Caught {ex.GetType().Name}");
 				return Result<TResponse>.Fail(ex);
@@ -167,23 +224,61 @@ public class InterceptTests {
 	}
 
 	public sealed class ShortCircuitIntercept : IIntercept<TestRequest, string> {
-		public ValueTask<Result<string>> HandleAsync(
+		public Task<Result<string>> HandleAsync(
 			RequestContext<TestRequest> context,
-			RequestHandlerDelegate<string> next,
-			CancellationToken cancellationToken) => ValueTask.FromResult(Result<string>.Fail(new("blocked")));
+			RequestHandlerDelegate<TestRequest, string> next,
+			CancellationToken cancellationToken) => Task.FromResult(Result<string>.Fail(new("blocked")));
 	}
 
 	public sealed class VoidShortCircuit : IIntercept<VoidTestRequest, Unit> {
-		public ValueTask<Result<Unit>> HandleAsync(
+		public Task<Result<Unit>> HandleAsync(
 			RequestContext<VoidTestRequest> context,
-			RequestHandlerDelegate<Unit> next,
-			CancellationToken cancellationToken) => ValueTask.FromResult(Result<Unit>.Fail(new("nope")));
+			RequestHandlerDelegate<VoidTestRequest, Unit> next,
+			CancellationToken cancellationToken) => Task.FromResult(Result<Unit>.Fail(new("nope")));
 	}
+
+
+	public sealed class AuditableEcho(string text) : IAuditableRequest<string> {
+		public string Text { get; } = text;
+	}
+
+	public sealed class AuditableEchoHandler :
+		IRequestHandler<AuditableEcho, string> {
+		public Task<Result<string>> HandleAsync(
+			AuditableEcho request,
+			CancellationToken cancellationToken) {
+			return Task.FromResult(Result<string>.Success(request.Text));
+		}
+	}
+
 
 
 	[TestInitialize]
 	public void Setup() {
 		ExecutionLog.Clear();
+	}
+
+	[TestMethod]
+	public async Task DispatchAsync_FatalExceptionFromIntercept_BubblesOut() {
+
+		// Arrange
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddOpenIntercept(typeof(LoggingIntercept<,>))
+					.AddOpenIntercept(typeof(FatalIntercept<,>));
+			}, Shared.SequentialSettings);
+		});
+
+		var provider = services.BuildServiceProvider();
+		var dispatcher = provider.GetRequiredService<IDispatcher>();
+
+		// Act & Assert
+		await Assert.ThrowsExactlyAsync<OutOfMemoryException>(async () => {
+			await dispatcher.DispatchAsync(new Echo("hi"), this.TestContext.CancellationToken);
+		});
+
 	}
 
 	[TestMethod]
@@ -421,7 +516,6 @@ public class InterceptTests {
 
 	}
 
-
 	[TestMethod]
 	public async Task Void_request_intercept_can_short_circuit_with_failure() {
 		var services = Shared.ArrangeServices(services => {
@@ -474,10 +568,10 @@ public class InterceptTests {
 				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 				.AddOpenIntercept(typeof(Validation<,>))
 				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
 				.AddOpenIntercept(typeof(ErrorHandlingIntercept<,>))
 				.AddIntercept<ShortCircuitIntercept>()
-				.AddOpenIntercept(typeof(HandlerPerformance<,>));
+				.AddOpenIntercept(typeof(HandlerPerformance<,>))
+				.AddOpenIntercept(typeof(QueryCaching<,>));
 		}, Shared.SequentialSettings);
 
 		var sp = services.BuildServiceProvider();
@@ -521,9 +615,9 @@ public class InterceptTests {
 				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 				.AddOpenIntercept(typeof(Validation<,>))
 				.AddOpenIntercept(typeof(Authorization<,>))
-				.AddOpenIntercept(typeof(QueryCaching<,>))
 				.AddOpenIntercept(typeof(ErrorHandlingIntercept<,>))
-				.AddOpenIntercept(typeof(HandlerPerformance<,>));
+				.AddOpenIntercept(typeof(HandlerPerformance<,>))
+				.AddOpenIntercept(typeof(QueryCaching<,>));
 		}, Shared.SequentialSettings);
 
 		var sp = services.BuildServiceProvider();
@@ -572,30 +666,64 @@ public class InterceptTests {
 	}
 
 	[TestMethod]
-	public void AddConductor_registers_intercepts_in_order() {
-		// Arrange
-		var services = new ServiceCollection();
-		services.AddLogging();
-
-		// Act
-		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-				.AddOpenIntercept(typeof(Validation<,>))      // 1st
-				.AddOpenIntercept(typeof(Authorization<,>))   // 2nd
-				.AddOpenIntercept(typeof(QueryCaching<,>))    // 3rd
-				.AddOpenIntercept(typeof(HandlerPerformance<,>));    // 4th
-		}, Shared.SequentialSettings);
-
+	public async Task AddConductor_registers_intercepts_in_order() {
+		// Arrange + Act - Add Default intercepts
+		var services = Shared.ArrangeConductor();
+		/*
+			Normal Intercept registrations:
+			.AddOpenIntercept(typeof(Validation<,>))
+			.AddOpenIntercept(typeof(Authorization<,>))
+			.AddOpenIntercept(typeof(HandlerPerformance<,>))
+			.AddOpenIntercept(typeof(QueryCaching<,>));
+		 */
 		var sp = services.BuildServiceProvider();
+		var authRegistry = sp.GetRequiredService<IAuthorizationRoleRegistry>();
+		await ((TestAuthorizationRoleRegistry)authRegistry).InitializeAsync();
 
-		// Assert - Order matters for intercepts
-		var intercepts = sp.GetServices<IIntercept<ErrRequest, Unit>>().ToList();
+		// Assert - ErrRequest: Validation + HandlerPerformance only
+		var baseIntercepts = sp.GetServices<IIntercept<ErrRequest, Unit>>().ToList();
+		Assert.HasCount(2, baseIntercepts);
+		Assert.IsInstanceOfType<Validation<ErrRequest, Unit>>(baseIntercepts[0], "First should be Validation");
+		Assert.IsInstanceOfType<HandlerPerformance<ErrRequest, Unit>>(baseIntercepts[1], "Second should be HandlerPerformance");
 
-		Assert.HasCount(2, intercepts);
-		Assert.IsInstanceOfType<Validation<ErrRequest, Unit>>(intercepts[0], "First should be Validation");
-		Assert.IsInstanceOfType<HandlerPerformance<ErrRequest, Unit>>(intercepts[1], "Second should be Performance");
+		// Assert - AuditableRequest: Validation + HandlerPerformance only
+		var auditableIntercepts = sp.GetServices<IIntercept<AuditableRequest, string>>().ToList();
+		Assert.HasCount(2, auditableIntercepts);
+		Assert.IsInstanceOfType<Validation<AuditableRequest, string>>(auditableIntercepts[0], "First should be Validation");
+		Assert.IsInstanceOfType<HandlerPerformance<AuditableRequest, string>>(auditableIntercepts[1], "Second should be HandlerPerformance");
 
+		// Assert - CacheableTestQuery: Validation + HandlerPerformance + QueryCaching
+		var cacheableQueryIntercepts = sp.GetServices<IIntercept<CacheableTestQuery, string>>().ToList();
+		Assert.HasCount(3, cacheableQueryIntercepts);
+		Assert.IsInstanceOfType<Validation<CacheableTestQuery, string>>(cacheableQueryIntercepts[0], "First should be Validation");
+		Assert.IsInstanceOfType<HandlerPerformance<CacheableTestQuery, string>>(cacheableQueryIntercepts[1], "Second should be HandlerPerformance");
+		Assert.IsInstanceOfType<QueryCaching<CacheableTestQuery, string>>(cacheableQueryIntercepts[2], "Third should be QueryCaching");
+
+		// Assert - AuthorizableTestRequest: Validation + Authorization + HandlerPerformance
+		var authIntercepts = sp.GetServices<IIntercept<AuthorizableTestRequest, string>>().ToList();
+		Assert.HasCount(3, authIntercepts);
+		Assert.IsInstanceOfType<Validation<AuthorizableTestRequest, string>>(authIntercepts[0], "First should be Validation");
+		Assert.IsInstanceOfType<Authorization<AuthorizableTestRequest, string>>(authIntercepts[1], "Second should be Authorization");
+		Assert.IsInstanceOfType<HandlerPerformance<AuthorizableTestRequest, string>>(authIntercepts[2], "Third should be HandlerPerformance");
+
+		// Assert - DomainTestRequest: Validation + Authorization + HandlerPerformance
+		var domainIntercepts = sp.GetServices<IIntercept<DomainTestRequest, string>>().ToList();
+		Assert.HasCount(3, domainIntercepts);
+		Assert.IsInstanceOfType<Validation<DomainTestRequest, string>>(domainIntercepts[0], "First should be Validation");
+		Assert.IsInstanceOfType<Authorization<DomainTestRequest, string>>(domainIntercepts[1], "Second should be Authorization");
+		Assert.IsInstanceOfType<HandlerPerformance<DomainTestRequest, string>>(domainIntercepts[2], "Third should be HandlerPerformance");
+		// Plus, should implement IAuditableRequest<string>
+		Assert.IsInstanceOfType<IAuditableRequest<string>>(new DomainTestRequest("x"));
+
+		// Assert - DomainCacheableTestRequest: All four intercepts
+		var cacheableDomainIntercepts = sp.GetServices<IIntercept<DomainCacheableTestRequest, string>>().ToList();
+		Assert.HasCount(4, cacheableDomainIntercepts);
+		Assert.IsInstanceOfType<Validation<DomainCacheableTestRequest, string>>(cacheableDomainIntercepts[0], "First should be Validation");
+		Assert.IsInstanceOfType<Authorization<DomainCacheableTestRequest, string>>(cacheableDomainIntercepts[1], "Second should be Authorization");
+		Assert.IsInstanceOfType<HandlerPerformance<DomainCacheableTestRequest, string>>(cacheableDomainIntercepts[2], "Third should be HandlerPerformance");
+		Assert.IsInstanceOfType<QueryCaching<DomainCacheableTestRequest, string>>(cacheableDomainIntercepts[3], "Fourth should be QueryCaching");
+		// Plus, should implement IAuditableRequest<string>
+		Assert.IsInstanceOfType<IAuditableRequest<string>>(new DomainCacheableTestRequest("x"));
 	}
 
 	[TestMethod]
@@ -695,6 +823,76 @@ public class InterceptTests {
 
 	}
 
+	[TestMethod]
+	public async Task AuditableRequest_Success_PublishesAuditNotification() {
+
+		// Arrange
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddOpenIntercept(typeof(LoggingIntercept<,>));
+			}, Shared.SequentialSettings);
+			services.AddTransient<IRequestHandler<AuditableEcho, string>, AuditableEchoHandler>();
+		});
+
+		var provider = services.BuildServiceProvider();
+		var dispatcher = provider.GetRequiredService<IDispatcher>();
+
+		// Act
+		EmptyTransportPublisher.EmptyMessageList.Clear();
+		var result = await dispatcher.DispatchAsync(new AuditableEcho("hi"), this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		await Task.Delay(100, this.TestContext.CancellationToken); // Allow async notification to be published
+		Assert.HasCount(1, EmptyTransportPublisher.EmptyMessageList);
+
+		var notification = EmptyTransportPublisher.EmptyMessageList.Single();
+		Assert.IsInstanceOfType<RequestCompletedNotification>(notification);
+
+		var completed = (RequestCompletedNotification)notification;
+		Assert.AreEqual(typeof(AuditableEcho).Name, completed.RequestType);
+		Assert.AreEqual("SUCCESS", completed.Outcome);
+	}
+
+	[TestMethod]
+	public async Task AuditableRequest_Fatal_Still_PublishesAuditNotification() {
+
+		// Arrange
+		var services = Shared.ArrangeServices(services => {
+			services.AddConductor(builder => {
+				builder
+					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
+					.AddOpenIntercept(typeof(FatalIntercept<,>));
+			}, Shared.SequentialSettings);
+			services.AddTransient<IRequestHandler<AuditableEcho, string>, AuditableEchoHandler>();
+		});
+
+		var provider = services.BuildServiceProvider();
+		var dispatcher = provider.GetRequiredService<IDispatcher>();
+
+		// Act
+		var successfullyThrew = false;
+		try {
+			EmptyTransportPublisher.EmptyMessageList.Clear();
+			var result = await dispatcher.DispatchAsync(new AuditableEcho("hi"), this.TestContext.CancellationToken);
+		} catch (OutOfMemoryException) {
+			successfullyThrew = true;
+		}
+
+		// Assert
+		Assert.IsTrue(successfullyThrew, "Expected OutOfMemoryException to be thrown");
+		await Task.Delay(100, this.TestContext.CancellationToken); // Allow async notification to be published
+		Assert.HasCount(1, EmptyTransportPublisher.EmptyMessageList);
+
+		var notification = EmptyTransportPublisher.EmptyMessageList.Single();
+		Assert.IsInstanceOfType<RequestCompletedNotification>(notification);
+
+		var completed = (RequestCompletedNotification)notification;
+		Assert.AreEqual(typeof(AuditableEcho).Name, completed.RequestType);
+		Assert.AreEqual("FAILURE", completed.Outcome);
+	}
 
 	public TestContext TestContext { get; set; } = null!;
 

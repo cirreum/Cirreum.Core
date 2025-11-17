@@ -83,6 +83,8 @@ public static class Shared {
 		services.AddSingleton<IDomainEnvironment>(sp =>
 			new TestApplicationEnvironment());
 
+		services.AddDomainContextInitilizer();
+
 		services.AddSingleton<IPublisher>(sp =>
 		new Publisher(
 			sp,

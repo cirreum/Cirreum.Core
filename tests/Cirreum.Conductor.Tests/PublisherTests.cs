@@ -118,15 +118,22 @@ public sealed class PublisherTests {
 	[TestMethod]
 	public async Task Publish_FireAndForget_ReturnsOk_AndHandlerRunsSoonAfter() {
 		var seen = 0;
-		var (_, publisher) = MakePublisher<Tick>(
-		[
-			new CountTickHandler(_ => Interlocked.Increment(ref seen))
+		var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+		var (_, publisher) = MakePublisher<Tick>([
+			new CountTickHandler(_ => {
+				Interlocked.Increment(ref seen);
+				tcs.TrySetResult();})
 		], defaultStrategy: PublisherStrategy.FireAndForget);
 
 		var result = await publisher.PublishAsync(new Tick(1), cancellationToken: this.TestContext.CancellationToken);
-
 		Assert.IsTrue(result.IsSuccess);
-		await Task.Delay(50, this.TestContext.CancellationToken); // tiny window for background task
+
+		// Wait for handler to run, but bound by a timeout so the test can't hang forever
+		var timeout = Task.Delay(1000, this.TestContext.CancellationToken); // 1s is still "soon after" for unit test purposes
+		var completed = await Task.WhenAny(tcs.Task, timeout);
+
+		Assert.AreEqual(tcs.Task, completed, "Handler did not run within the expected time window.");
 		Assert.AreEqual(1, Volatile.Read(ref seen));
 	}
 

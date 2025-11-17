@@ -54,6 +54,11 @@ public static class ConductorTelemetry {
 	public const string RequestTypeTag = "request.type";
 
 	/// <summary>
+	/// Tag: Does this request have a response.
+	/// </summary>
+	public const string RequestHasResponseTag = "request.has_response";
+
+	/// <summary>
 	/// Tag: Response type tag.
 	/// </summary>
 	public const string ResponseTypeTag = "response.type";

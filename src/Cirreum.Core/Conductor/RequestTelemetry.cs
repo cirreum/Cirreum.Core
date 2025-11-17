@@ -1,9 +1,11 @@
 ﻿namespace Cirreum.Conductor;
 
-using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
+/// <summary>
+/// Provides telemetry capabilities for request processing including metrics and distributed tracing.
+/// </summary>
 internal static class RequestTelemetry {
 
 	private static readonly ActivitySource _activitySource = new(ConductorTelemetry.ActivitySourceName);
@@ -26,72 +28,81 @@ internal static class RequestTelemetry {
 		unit: "ms",
 		description: "Request processing duration in milliseconds");
 
-	#region Instrumentation Methods
+	#region Activity Management (Distributed Tracing)
 
-	internal static (Activity? activity, Stopwatch stopwatch) StartActivityAndStopwatch(
-		IDomainEnvironment applicationEnvironment,
+	/// <summary>
+	/// Starts an activity for distributed tracing. Returns null if tracing is not enabled.
+	/// </summary>
+	internal static Activity? StartActivity(
 		string requestName,
-		bool hasResponse,
+		bool hasResponse = false,
 		string? responseType = null) {
 
-		var activity = _activitySource.StartActivity("Dispatch Request", ResolveActivityKind(applicationEnvironment.RuntimeType));
+		var activity = _activitySource.StartActivity(
+			"Dispatch Request",
+			DomainContext.CurrentActivityKind);
+
 		activity?.SetTag(ConductorTelemetry.RequestTypeTag, requestName);
-		activity?.SetTag("request.has_response", hasResponse); // optional constant if you want
+		activity?.SetTag(ConductorTelemetry.RequestHasResponseTag, hasResponse);
+
 		if (hasResponse && responseType is not null) {
 			activity?.SetTag(ConductorTelemetry.ResponseTypeTag, responseType);
 		}
 
-		var stopwatch = Stopwatch.StartNew();
-		return (activity, stopwatch);
+		return activity;
 	}
 
 	/// <summary>
-	/// Basic exception tagging (used if you just need to annotate an Activity).
+	/// Stops and disposes an activity if it exists.
 	/// </summary>
-	internal static void HandleException(Activity? activity, Exception ex) {
-		activity?.SetTag(ConductorTelemetry.ErrorTypeTag, ex.GetType().Name);
-		activity?.SetTag(ConductorTelemetry.RequestFailedTag, true);
-		activity?.AddException(ex);
+	internal static void StopActivity(Activity? activity) {
+		if (activity is not null) {
+			activity.Stop();
+			activity.Dispose();
+		}
 	}
 
-	internal static void HandleFailure(
-		ILogger logger,
-		string requestTypeName,
-		string? responseType,
-		double durationMs,
-		Activity? activity,
-		Exception error) {
-
-		var requestId = (activity?.SpanId ?? ActivitySpanId.CreateRandom()).ToString();
-		var correlationId = (activity?.TraceId ?? ActivityTraceId.CreateRandom()).ToString();
-		var errorType = error.GetType().Name;
-
-		activity?.SetStatus(ActivityStatusCode.Error, error.Message);
-		activity?.SetTag(ConductorTelemetry.RequestFailedTag, true);
-
-		RecordMetrics(
-			requestTypeName,
-			responseType,
-			success: false,
-			canceled: false,
-			durationMs,
-			errorType);
-
-		logger.LogResultFailure(
-			requestTypeName,
-			requestId,
-			correlationId,
-			errorType,
-			error.Message);
-	}
-
-	internal static void HandleSuccess(
-		string requestTypeName,
-		string? responseType,
-		double durationMs,
-		Activity? activity) {
-
+	/// <summary>
+	/// Sets success information on an activity.
+	/// </summary>
+	internal static void SetActivitySuccess(Activity? activity) {
 		activity?.SetStatus(ActivityStatusCode.Ok);
+	}
+
+	/// <summary>
+	/// Sets error information on an activity.
+	/// </summary>
+	internal static void SetActivityError(Activity? activity, Exception ex) {
+		if (activity is not null) {
+			activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+			activity.SetTag(ConductorTelemetry.ErrorTypeTag, ex.GetType().Name);
+			activity.SetTag(ConductorTelemetry.RequestFailedTag, true);
+			activity.AddException(ex);
+		}
+	}
+
+	/// <summary>
+	/// Sets cancellation information on an activity.
+	/// </summary>
+	internal static void SetActivityCanceled(Activity? activity, OperationCanceledException oce) {
+		if (activity is not null) {
+			activity.SetStatus(ActivityStatusCode.Error, "Canceled");
+			activity.SetTag(ConductorTelemetry.RequestCanceledTag, true);
+			activity.AddException(oce);
+		}
+	}
+
+	#endregion
+
+	#region Metrics Recording
+
+	/// <summary>
+	/// Records success metrics for a completed request.
+	/// </summary>
+	internal static void RecordSuccess(
+		string requestTypeName,
+		string? responseType,
+		double durationMs) {
 
 		RecordMetrics(
 			requestTypeName,
@@ -101,16 +112,32 @@ internal static class RequestTelemetry {
 			durationMs);
 	}
 
-	internal static void HandleCanceled(
+	/// <summary>
+	/// Records failure metrics for a failed request.
+	/// </summary>
+	internal static void RecordFailure(
 		string requestTypeName,
 		string? responseType,
 		double durationMs,
-		Activity? activity,
-		OperationCanceledException oce) {
+		Exception error) {
 
-		activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
-		activity?.SetTag(ConductorTelemetry.RequestCanceledTag, true);
-		activity?.AddException(oce);
+		RecordMetrics(
+			requestTypeName,
+			responseType,
+			success: false,
+			canceled: false,
+			durationMs,
+			error.GetType().Name);
+	}
+
+	/// <summary>
+	/// Records cancellation metrics for a canceled request.
+	/// </summary>
+	internal static void RecordCanceled(
+		string requestTypeName,
+		string? responseType,
+		double durationMs,
+		OperationCanceledException oce) {
 
 		RecordMetrics(
 			requestTypeName,
@@ -121,7 +148,7 @@ internal static class RequestTelemetry {
 			oce.GetType().Name);
 	}
 
-	internal static void RecordMetrics(
+	private static void RecordMetrics(
 		string requestName,
 		string? responseType,
 		bool success,
@@ -156,19 +183,8 @@ internal static class RequestTelemetry {
 		if (canceled) {
 			_requestCanceledCounter.Add(1, tags);
 		}
-
-	}
-
-	private static ActivityKind ResolveActivityKind(DomainRuntimeType runtimeType) {
-		return runtimeType switch {
-			DomainRuntimeType.BlazorWasm => ActivityKind.Client,
-			DomainRuntimeType.MauiHybrid => ActivityKind.Client,
-			DomainRuntimeType.Function => ActivityKind.Internal,
-			DomainRuntimeType.WebApi => ActivityKind.Server,
-			DomainRuntimeType.WebApp => ActivityKind.Consumer,
-			_ => ActivityKind.Internal
-		};
 	}
 
 	#endregion
+
 }

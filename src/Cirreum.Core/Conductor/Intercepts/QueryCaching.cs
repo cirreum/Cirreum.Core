@@ -16,14 +16,14 @@ public class QueryCaching<TRequest, TResponse>(
 
 	private static readonly Meter _meter = new(ConductorTelemetry.CacheMeterName);
 
-	private static readonly Histogram<double> _cacheDuration = _meter.CreateHistogram<double>(
+	private static readonly Histogram<double> _cacheOperationDuration = _meter.CreateHistogram<double>(
 		ConductorTelemetry.CacheDurationMetric,
 		unit: "ms",
 		description: "Cache operation duration");
 
-	public async ValueTask<Result<TResponse>> HandleAsync(
+	public async Task<Result<TResponse>> HandleAsync(
 		RequestContext<TRequest> context,
-		RequestHandlerDelegate<TResponse> next,
+		RequestHandlerDelegate<TRequest, TResponse> next,
 		CancellationToken cancellationToken) {
 
 		// If HybridCache provider but service is still NoCacheQueryService, log warning
@@ -34,25 +34,25 @@ public class QueryCaching<TRequest, TResponse>(
 				"Did you forget to call AddConductorHybridCache()?");
 		}
 
-		var queryTypeName = typeof(TRequest).Name;
 		var category = context.Request.CacheCategory ?? "uncategorized";
 
 		if (logger.IsEnabled(LogLevel.Debug)) {
 			logger.LogDebug(
 				"Processing cacheable query: {QueryType} (Category: {Category}, CacheKey: {CacheKey})",
-				queryTypeName,
+				context.RequestType,
 				category,
 				context.Request.CacheKey);
 		}
 
-		var effectiveSettings = this.BuildEffectiveSettings(context.Request, queryTypeName);
+		var effectiveSettings = this.BuildEffectiveSettings(context.Request, context.RequestType);
 		var tags = context.Request.CacheTags;
 
 		var startTime = Stopwatch.GetTimestamp();
 
+		// Get from Cache, or Read from real Handler and store in Cache
 		var result = await cache.GetOrCreateAsync(
 			context.Request.CacheKey,
-			async ct => await next(ct),
+			async (ct) => await next(context, ct), // actual handler that reads data
 			effectiveSettings,
 			tags,
 			cancellationToken);
@@ -60,17 +60,17 @@ public class QueryCaching<TRequest, TResponse>(
 		var elapsed = Stopwatch.GetElapsedTime(startTime).TotalMilliseconds;
 
 		var telemetryTags = new TagList {
-			{ ConductorTelemetry.QueryNameTag, queryTypeName },
+			{ ConductorTelemetry.QueryNameTag, context.RequestType },
 			{ ConductorTelemetry.QueryCategoryTag, category },
 			{ ConductorTelemetry.QueryStatusTag, result.IsSuccess ? "success" : "failure" }
 		};
 
-		_cacheDuration.Record(elapsed, telemetryTags);
+		_cacheOperationDuration.Record(elapsed, telemetryTags);
 
 		if (logger.IsEnabled(LogLevel.Debug)) {
 			logger.LogDebug(
 				"Query {QueryType} completed: Status={Status}, Category={Category}, Duration={Duration}ms",
-				queryTypeName,
+				context.RequestType,
 				result.IsSuccess ? "Success" : "Failed",
 				category,
 				elapsed);
