@@ -49,30 +49,6 @@ public interface IThemeState : IScopedNotificationState {
 	/// </param>
 	void SetAppliedMode(string value);
 
-	/// <summary>
-	/// Gets the icon name for the Auto mode option.
-	/// </summary>
-	string AutoModeIcon { get; }
-
-	/// <summary>
-	/// Gets the icon name for the Light mode option.
-	/// </summary>
-	string LightModeIcon { get; }
-
-	/// <summary>
-	/// Gets the icon name for the Dark mode option.
-	/// </summary>
-	string DarkModeIcon { get; }
-
-	/// <summary>
-	/// Gets the icon name representing the currently selected mode.
-	/// </summary>
-	/// <remarks>
-	/// Typically returns one of <see cref="AutoModeIcon"/>, <see cref="LightModeIcon"/>,
-	/// or <see cref="DarkModeIcon"/> depending on <see cref="Mode"/>.
-	/// </remarks>
-	string ModeIcon { get; }
-
 	// ---------------------------------------------------------------------
 	// COLOR SCHEME (palette / brand theme)
 	// ---------------------------------------------------------------------

@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Tell all test projects in /tests to use this runsettings file -->
+    <RunSettingsFilePath>$(MSBuildThisFileDirectory)test.runsettings</RunSettingsFilePath>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!-- Path is relative to the folder that CONTAINS this .runsettings file -->
+    <!-- So this will create /tests/TestResults -->
+    <ResultsDirectory>.\test-results</ResultsDirectory>
+  </RunConfiguration>
+</RunSettings>

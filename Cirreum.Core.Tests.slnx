@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Cirreum.Core/Cirreum.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Cirreum.Conductor.Benchmarks/Cirreum.Conductor.Benchmarks.csproj" />
+    <Project Path="tests/Cirreum.Conductor.Tests/Cirreum.Conductor.Tests.csproj" />
+  </Folder>
+</Solution>
