@@ -1,4 +1,4 @@
-﻿namespace Cirreum.Conductor;
+﻿namespace Cirreum;
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;

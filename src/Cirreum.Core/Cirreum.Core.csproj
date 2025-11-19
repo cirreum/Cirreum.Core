@@ -12,6 +12,7 @@
 		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />
 		<PackageReference Include="Cirreum.Result" Version="1.0.2" />
+		<PackageReference Include="OpenTelemetry.Api" Version="1.14.0" />
 		<PackageReference Include="FluentValidation" Version="12.1.0" />
 		<PackageReference Include="Humanizer.Core" Version="3.0.0-rc.6" />
 		<PackageReference Include="SmartFormat" Version="3.6.1" />

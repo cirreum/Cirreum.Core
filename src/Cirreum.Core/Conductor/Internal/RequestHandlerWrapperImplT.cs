@@ -28,7 +28,7 @@ internal sealed class RequestHandlerWrapperImpl<TRequest, TResponse>
 		Result<TResponse> finalResult = default!;
 
 		// ----- 0. START ACTIVITY & TIMING -----
-		var activity = RequestTelemetry.StartActivity(
+		using var activity = RequestTelemetry.StartActivity(
 			requestTypeName,
 			hasResponse: true,
 			responseTypeName);
@@ -74,18 +74,12 @@ internal sealed class RequestHandlerWrapperImpl<TRequest, TResponse>
 			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
 
 			// ----- 5. POST-PROCESSING (TELEMETRY) -----
-			try {
-				if (finalResult.IsSuccess) {
-					RequestTelemetry.SetActivitySuccess(activity);
-					RequestTelemetry.RecordSuccess(requestTypeName, responseTypeName, elapsed);
-				} else {
-					RequestTelemetry.SetActivityError(activity, finalResult.Error);
-					RequestTelemetry.RecordFailure(requestTypeName, responseTypeName, elapsed, finalResult.Error);
-				}
-			} catch {
-				// Telemetry failure shouldn't break the request
-			} finally {
-				RequestTelemetry.StopActivity(activity);
+			if (finalResult.IsSuccess) {
+				RequestTelemetry.SetActivitySuccess(activity);
+				RequestTelemetry.RecordSuccess(requestTypeName, responseTypeName, elapsed);
+			} else {
+				RequestTelemetry.SetActivityError(activity, finalResult.Error);
+				RequestTelemetry.RecordFailure(requestTypeName, responseTypeName, elapsed, finalResult.Error);
 			}
 
 		} catch (OperationCanceledException oce) {
@@ -93,15 +87,12 @@ internal sealed class RequestHandlerWrapperImpl<TRequest, TResponse>
 
 			RequestTelemetry.SetActivityCanceled(activity, oce);
 			RequestTelemetry.RecordCanceled(requestTypeName, responseTypeName, elapsed, oce);
-			RequestTelemetry.StopActivity(activity);
 
 			finalResult = Result<TResponse>.Fail(oce);
 			throw;
 
-		} catch (Exception fex) when (fex is OutOfMemoryException || fex is ThreadAbortException) {
+		} catch (Exception fex) when (fex.IsFatal()) {
 			// Fatal exceptions: stop activity but let them bubble
-			RequestTelemetry.StopActivity(activity);
-
 			finalResult = Result<TResponse>.Fail(fex);
 			throw;
 
@@ -110,7 +101,6 @@ internal sealed class RequestHandlerWrapperImpl<TRequest, TResponse>
 
 			RequestTelemetry.SetActivityError(activity, ex);
 			RequestTelemetry.RecordFailure(requestTypeName, responseTypeName, elapsed, ex);
-			RequestTelemetry.StopActivity(activity);
 
 			finalResult = Result<TResponse>.Fail(ex);
 

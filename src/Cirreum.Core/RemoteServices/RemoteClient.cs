@@ -2,28 +2,37 @@
 
 using Cirreum.Exceptions;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Diagnostics;
+using System.Net.Http;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
-/// Base class for API clients that provides common functionality for HTTP operations.
+/// Base class for API clients that provides common functionality for HTTP operations and
+/// returns a <see cref="Result"/> or <see cref="Result{T}"/> for full railway programming.
 /// </summary>
-public abstract class BaseApiClient {
+public abstract class RemoteClient {
+
 
 	/// <summary>
 	/// The current <see cref="HttpClient"/> that is configured for this client.
 	/// </summary>
-	protected HttpClient Client { get; init; }
+	protected internal HttpClient Client { get; init; }
 	/// <summary>
 	/// The <see cref="ILogger"/> configured for this client.
 	/// </summary>
-	protected ILogger Logger { get; init; }
+	protected internal ILogger Logger { get; init; }
 	/// <summary>
 	/// Gets the current domain environment service.
 	/// </summary>
-	protected IDomainEnvironment DomainEnvironment { get; init; }
+	protected internal IDomainEnvironment DomainEnvironment { get; init; }
+	/// <summary>
+	/// Gets the optional <see cref="ActivitySource"/> for the application.
+	/// </summary>
+	protected internal ActivitySource? ActivitySource { get; init; }
 	/// <summary>
 	/// The configured or defaulted serialization options.
 	/// </summary>
@@ -35,11 +44,17 @@ public abstract class BaseApiClient {
 	protected string UserAgent { get; private set; } = string.Empty;
 
 	/// <summary>
+	/// The current instance's Type Name
+	/// </summary>
+	private readonly string typeName;
+
+	/// <summary>
 	/// DI Constructor.
 	/// </summary>
 	/// <param name="client">Injected HttpClient.</param>
 	/// <param name="logger">Injected logger.</param>
 	/// <param name="domainEnvironment">Injected <see cref="IDomainEnvironment"/>.</param>
+	/// <param name="activitySource">The optional <see cref="ActivitySource"/></param>
 	/// <param name="jsonOptions">Injected jsonOptions.</param>
 	/// <remarks>
 	/// <para>
@@ -51,14 +66,17 @@ public abstract class BaseApiClient {
 	/// <see cref="JsonIgnoreCondition.WhenWritingNull"/>.
 	/// </para>
 	/// </remarks>
-	protected BaseApiClient(
+	protected RemoteClient(
 		HttpClient client,
 		ILogger logger,
 		IDomainEnvironment domainEnvironment,
+		ActivitySource? activitySource,
 		JsonSerializerOptions? jsonOptions = null) {
+		this.typeName = this.GetType().Name;
 		this.Client = client;
 		this.Logger = logger;
 		this.DomainEnvironment = domainEnvironment;
+		this.ActivitySource = activitySource;
 		this.JsonOptions = jsonOptions ?? new JsonSerializerOptions {
 			PropertyNameCaseInsensitive = true,
 			PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -67,12 +85,14 @@ public abstract class BaseApiClient {
 		this.SetUserAgent();
 	}
 
+	#region Helpers
+
 	/// <summary>
 	/// Set's the user agent header on the <see cref="Client"/>.
 	/// </summary>
 	protected virtual void SetUserAgent() {
 		var clientVersion = this.GetType().GetTypeInfo().Assembly.GetName().Version?.ToString() ?? "v0";
-		this.UserAgent = $"{this.GetType().Name}/{clientVersion}/{this.DomainEnvironment.RuntimeType}";
+		this.UserAgent = $"{this.typeName}/{clientVersion}/{this.DomainEnvironment.RuntimeType}";
 		this.Client.DefaultRequestHeaders.UserAgent.TryParseAdd(this.UserAgent);
 	}
 
@@ -84,8 +104,45 @@ public abstract class BaseApiClient {
 	/// <param name="maxAttempts">Maximum number of retry attempts.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The result of the operation, or throws the last exception if all retries fail.</returns>
-	protected async Task<T?> WithRetryAsync<T>(
-		Func<CancellationToken, Task<T?>> operation,
+	protected async Task<Result<T>> WithRetryAsync<T>(
+		Func<CancellationToken, Task<Result<T>>> operation,
+		int maxAttempts = 3,
+		CancellationToken cancellationToken = default) {
+		Exception? lastException = null;
+
+		for (var attempt = 0; attempt < maxAttempts; attempt++) {
+			try {
+				return await operation(cancellationToken);
+			} catch (Exception ex) when (attempt < maxAttempts - 1 && this.IsTransient(ex)) {
+				lastException = ex;
+				if (this.Logger.IsEnabled(LogLevel.Warning)) {
+					this.Logger.LogWarning(ex,
+					"Attempt {Attempt} of {MaxAttempts} failed, retrying...",
+					attempt + 1,
+					maxAttempts);
+				}
+
+				var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+				await Task.Delay(delay, cancellationToken);
+			}
+		}
+		if (this.Logger.IsEnabled(LogLevel.Error)) {
+			this.Logger.LogError(lastException,
+			"All {MaxAttempts} retry attempts failed",
+			maxAttempts);
+		}
+		throw lastException!;
+	}
+
+	/// <summary>
+	/// Executes an operation with retry logic using exponential backoff.
+	/// </summary>
+	/// <param name="operation">The operation to execute with retry logic.</param>
+	/// <param name="maxAttempts">Maximum number of retry attempts.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>The result of the operation, or throws the last exception if all retries fail.</returns>
+	protected async Task<Result> WithRetryAsync(
+		Func<CancellationToken, Task<Result>> operation,
 		int maxAttempts = 3,
 		CancellationToken cancellationToken = default) {
 		Exception? lastException = null;
@@ -129,6 +186,8 @@ public abstract class BaseApiClient {
 			_ => false
 		};
 
+	#endregion
+
 	#region JSON Operations
 
 	/// <summary>
@@ -138,11 +197,14 @@ public abstract class BaseApiClient {
 	/// <param name="endpoint">The API endpoint to call.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The deserialized response object, or default if the request failed.</returns>
-	protected async Task<T?> GetAsync<T>(string endpoint, CancellationToken cancellationToken = default) {
-		var response = await this.ProcessResponseAsync(this.Client.GetAsync(endpoint, cancellationToken));
-		return response is not null
-			? await response.Content.ReadFromJsonAsync<T>(this.JsonOptions, cancellationToken)
-			: default;
+	protected Task<Result<T>> GetAsync<T>(
+		string endpoint,
+		CancellationToken cancellationToken = default) {
+		return this.ProcessJsonAsResultAsync<T>(
+			HttpMethod.Get.Method,
+			endpoint,
+			this.Client.GetAsync(endpoint, cancellationToken),
+			cancellationToken);
 	}
 
 	/// <summary>
@@ -153,19 +215,22 @@ public abstract class BaseApiClient {
 	/// <param name="content">The object to serialize as JSON content, or null for no body.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The deserialized response object, or default if the request failed.</returns>
-	protected async Task<T?> PostAsync<T>(
+	protected Task<Result<T>> PostAsync<T>(
 		string endpoint,
 		object? content = null,
 		CancellationToken cancellationToken = default) {
+
 		var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
 		if (content is not null) {
 			request.Content = JsonContent.Create(content, options: this.JsonOptions);
 		}
 
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response is not null
-			? await response.Content.ReadFromJsonAsync<T>(this.JsonOptions, cancellationToken)
-			: default;
+		return this.ProcessJsonAsResultAsync<T>(
+			HttpMethod.Post.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
+
 	}
 
 	/// <summary>
@@ -176,7 +241,7 @@ public abstract class BaseApiClient {
 	/// <param name="content">The HTTP content to send, or null for no body.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The deserialized response object, or default if the request failed.</returns>
-	protected async Task<T?> PostAsync<T>(
+	protected Task<Result<T>> PostAsync<T>(
 		string endpoint,
 		HttpContent? content = null,
 		CancellationToken cancellationToken = default) {
@@ -184,10 +249,12 @@ public abstract class BaseApiClient {
 			Content = content
 		};
 
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response is not null
-			? await response.Content.ReadFromJsonAsync<T>(this.JsonOptions, cancellationToken)
-			: default;
+		return this.ProcessJsonAsResultAsync<T>(
+			HttpMethod.Post.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
+
 	}
 
 	/// <summary>
@@ -198,7 +265,7 @@ public abstract class BaseApiClient {
 	/// <param name="content">The object to serialize as JSON content.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The deserialized response object, or default if the request failed.</returns>
-	protected async Task<T?> PutAsync<T>(
+	protected Task<Result<T>> PutAsync<T>(
 		string endpoint,
 		object content,
 		CancellationToken cancellationToken = default) {
@@ -206,26 +273,12 @@ public abstract class BaseApiClient {
 			Content = JsonContent.Create(content, options: this.JsonOptions)
 		};
 
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response is not null
-			? await response.Content.ReadFromJsonAsync<T>(this.JsonOptions, cancellationToken)
-			: default;
-	}
+		return this.ProcessJsonAsResultAsync<T>(
+			HttpMethod.Put.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
 
-	/// <summary>
-	/// Sends a DELETE request and optionally deserializes the JSON response to type <typeparamref name="T"/>.
-	/// </summary>
-	/// <typeparam name="T">The type to deserialize the response to.</typeparam>
-	/// <param name="endpoint">The API endpoint to call.</param>
-	/// <param name="cancellationToken">Cancellation token for the operation.</param>
-	/// <returns>The deserialized response object, or default if the request failed.</returns>
-	protected async Task<T?> DeleteAsync<T>(
-		string endpoint,
-		CancellationToken cancellationToken = default) {
-		var response = await this.ProcessResponseAsync(this.Client.DeleteAsync(endpoint, cancellationToken));
-		return response is not null
-			? await response.Content.ReadFromJsonAsync<T>(this.JsonOptions, cancellationToken)
-			: default;
 	}
 
 	/// <summary>
@@ -236,18 +289,40 @@ public abstract class BaseApiClient {
 	/// <param name="content">The object to serialize as JSON content.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The deserialized response object, or default if the request failed.</returns>
-	protected async Task<T?> PatchAsync<T>(
+	protected Task<Result<T>> PatchAsync<T>(
 		string endpoint,
 		object content,
 		CancellationToken cancellationToken = default) {
+
 		var request = new HttpRequestMessage(HttpMethod.Patch, endpoint) {
 			Content = JsonContent.Create(content, options: this.JsonOptions)
 		};
 
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response is not null
-			? await response.Content.ReadFromJsonAsync<T>(this.JsonOptions, cancellationToken)
-			: default;
+		return this.ProcessJsonAsResultAsync<T>(
+			HttpMethod.Patch.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
+
+	}
+
+	/// <summary>
+	/// Sends a DELETE request and optionally deserializes the JSON response to type <typeparamref name="T"/>.
+	/// </summary>
+	/// <typeparam name="T">The type to deserialize the response to.</typeparam>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>The deserialized response object, or default if the request failed.</returns>
+	protected Task<Result<T>> DeleteAsync<T>(
+		string endpoint,
+		CancellationToken cancellationToken = default) {
+
+		return this.ProcessJsonAsResultAsync<T>(
+			HttpMethod.Delete.Method,
+			endpoint,
+			this.Client.DeleteAsync(endpoint, cancellationToken),
+			cancellationToken);
+
 	}
 
 	#endregion
@@ -260,13 +335,16 @@ public abstract class BaseApiClient {
 	/// <param name="endpoint">The API endpoint to call.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a string, or null if the request failed.</returns>
-	protected async Task<string?> GetAndReadStringAsync(
+	protected Task<Result<string>> GetAndReadStringAsync(
 		string endpoint,
 		CancellationToken cancellationToken = default) {
-		var response = await this.ProcessResponseAsync(this.Client.GetAsync(endpoint, cancellationToken));
-		return response is not null
-			? await response.Content.ReadAsStringAsync(cancellationToken)
-			: default;
+
+		return this.ProcessStringAsResultAsync(
+			HttpMethod.Get.Method,
+			endpoint,
+			this.Client.GetAsync(endpoint, cancellationToken),
+			cancellationToken);
+
 	}
 
 	/// <summary>
@@ -275,14 +353,17 @@ public abstract class BaseApiClient {
 	/// <param name="endpoint">The API endpoint to call.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a string, or null if the request failed.</returns>
-	protected async Task<string?> PostAndReadStringAsync(
+	protected Task<Result<string>> PostAndReadStringAsync(
 		string endpoint,
 		CancellationToken cancellationToken = default) {
 		var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response is not null
-			? await response.Content.ReadAsStringAsync(cancellationToken)
-			: default;
+
+		return this.ProcessStringAsResultAsync(
+			HttpMethod.Post.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
+
 	}
 
 	/// <summary>
@@ -292,17 +373,21 @@ public abstract class BaseApiClient {
 	/// <param name="content">The HTTP content to send.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a string, or null if the request failed.</returns>
-	protected async Task<string?> PostAndReadStringAsync(
+	protected Task<Result<string>> PostAndReadStringAsync(
 		string endpoint,
 		HttpContent content,
 		CancellationToken cancellationToken = default) {
+
 		var request = new HttpRequestMessage(HttpMethod.Post, endpoint) {
 			Content = content
 		};
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response is not null
-			? await response.Content.ReadAsStringAsync(cancellationToken)
-			: default;
+
+		return this.ProcessStringAsResultAsync(
+			HttpMethod.Post.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
+
 	}
 
 	/// <summary>
@@ -312,7 +397,7 @@ public abstract class BaseApiClient {
 	/// <param name="content">The object to serialize as JSON content.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a string, or null if the request failed.</returns>
-	protected async Task<string?> PostAndReadStringAsync(
+	protected Task<Result<string>> PostAndReadStringAsync(
 		string endpoint,
 		object content,
 		CancellationToken cancellationToken = default) {
@@ -321,10 +406,11 @@ public abstract class BaseApiClient {
 			Content = JsonContent.Create(content, options: this.JsonOptions)
 		};
 
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response is not null
-			? await response.Content.ReadAsStringAsync(cancellationToken)
-			: default;
+		return this.ProcessStringAsResultAsync(
+			HttpMethod.Post.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
 
 	}
 
@@ -335,7 +421,7 @@ public abstract class BaseApiClient {
 	/// <param name="content">The object to serialize as JSON content.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a string, or null if the request failed.</returns>
-	protected async Task<string?> PatchAndReadStringAsync(
+	protected Task<Result<string>> PatchAndReadStringAsync(
 		string endpoint,
 		object content,
 		CancellationToken cancellationToken = default) {
@@ -344,10 +430,12 @@ public abstract class BaseApiClient {
 			Content = JsonContent.Create(content, options: this.JsonOptions)
 		};
 
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response is not null
-			? await response.Content.ReadAsStringAsync(cancellationToken)
-			: default;
+		return this.ProcessStringAsResultAsync(
+			HttpMethod.Patch.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
+
 	}
 
 	/// <summary>
@@ -357,18 +445,21 @@ public abstract class BaseApiClient {
 	/// <param name="content">The HTTP content to send.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a string, or null if the request failed.</returns>
-	protected async Task<string?> PatchAndReadStringAsync(
+	protected Task<Result<string>> PatchAndReadStringAsync(
 		string endpoint,
 		HttpContent content,
 		CancellationToken cancellationToken = default) {
+
 		var request = new HttpRequestMessage(HttpMethod.Patch, endpoint) {
 			Content = content
 		};
 
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response is not null
-			? await response.Content.ReadAsStringAsync(cancellationToken)
-			: default;
+		return this.ProcessStringAsResultAsync(
+			HttpMethod.Patch.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
+
 	}
 
 	#endregion
@@ -381,11 +472,14 @@ public abstract class BaseApiClient {
 	/// <param name="endpoint">The API endpoint to call.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a stream, or null if the request failed.</returns>
-	protected async Task<Stream?> GetAndReadStreamAsync(
+	protected Task<Result<Stream>> GetAndReadStreamAsync(
 		string endpoint,
 		CancellationToken cancellationToken = default) {
-		var response = await this.ProcessResponseAsync(this.Client.GetAsync(endpoint, cancellationToken));
-		return response?.Content.ReadAsStream(cancellationToken);
+		return this.ProcessStreamAsResultAsync(
+			HttpMethod.Get.Method,
+			endpoint,
+			this.Client.GetAsync(endpoint, cancellationToken),
+			cancellationToken);
 	}
 
 	/// <summary>
@@ -395,7 +489,7 @@ public abstract class BaseApiClient {
 	/// <param name="content">The object to serialize as JSON content, or null for no body.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a stream, or null if the request failed.</returns>
-	protected async Task<Stream?> PostAndReadStreamAsync(
+	protected Task<Result<Stream>> PostAndReadStreamAsync(
 		string endpoint,
 		object? content = null,
 		CancellationToken cancellationToken = default) {
@@ -403,9 +497,11 @@ public abstract class BaseApiClient {
 		if (content is not null) {
 			request.Content = JsonContent.Create(content, options: this.JsonOptions);
 		}
-
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response?.Content.ReadAsStream(cancellationToken);
+		return this.ProcessStreamAsResultAsync(
+			HttpMethod.Post.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
 	}
 
 	/// <summary>
@@ -415,16 +511,18 @@ public abstract class BaseApiClient {
 	/// <param name="content">The HTTP content to send, or null for no body.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a stream, or null if the request failed.</returns>
-	protected async Task<Stream?> PostAndReadStreamAsync(
+	protected Task<Result<Stream>> PostAndReadStreamAsync(
 		string endpoint,
 		HttpContent? content = null,
 		CancellationToken cancellationToken = default) {
 		var request = new HttpRequestMessage(HttpMethod.Post, endpoint) {
 			Content = content
 		};
-
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response?.Content.ReadAsStream(cancellationToken);
+		return this.ProcessStreamAsResultAsync(
+			HttpMethod.Post.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
 	}
 
 	/// <summary>
@@ -434,15 +532,18 @@ public abstract class BaseApiClient {
 	/// <param name="content">The object to serialize as JSON content.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a stream, or null if the request failed.</returns>
-	protected async Task<Stream?> PatchAndReadStreamAsync(
+	protected Task<Result<Stream>> PatchAndReadStreamAsync(
 		string endpoint,
 		object content,
 		CancellationToken cancellationToken = default) {
 		var request = new HttpRequestMessage(HttpMethod.Patch, endpoint) {
 			Content = JsonContent.Create(content, options: this.JsonOptions)
 		};
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response?.Content.ReadAsStream(cancellationToken);
+		return this.ProcessStreamAsResultAsync(
+			HttpMethod.Patch.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
 	}
 
 	/// <summary>
@@ -452,15 +553,18 @@ public abstract class BaseApiClient {
 	/// <param name="content">The HTTP content to send.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a stream, or null if the request failed.</returns>
-	protected async Task<Stream?> PatchAndReadStreamAsync(
+	protected Task<Result<Stream>> PatchAndReadStreamAsync(
 		string endpoint,
 		HttpContent content,
 		CancellationToken cancellationToken = default) {
 		var request = new HttpRequestMessage(HttpMethod.Patch, endpoint) {
 			Content = content
 		};
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response?.Content.ReadAsStream(cancellationToken);
+		return this.ProcessStreamAsResultAsync(
+			HttpMethod.Patch.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
 	}
 
 	#endregion
@@ -473,13 +577,14 @@ public abstract class BaseApiClient {
 	/// <param name="endpoint">The API endpoint to call.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a byte array, or null if the request failed.</returns>
-	protected async Task<byte[]?> GetAndReadByteArrayAsync(
+	protected Task<Result<byte[]>> GetAndReadByteArrayAsync(
 		string endpoint,
 		CancellationToken cancellationToken = default) {
-		var response = await this.ProcessResponseAsync(this.Client.GetAsync(endpoint, cancellationToken));
-		return response is not null
-			? await response.Content.ReadAsByteArrayAsync(cancellationToken)
-			: default;
+		return this.ProcessBytesAsResultAsync(
+			HttpMethod.Get.Method,
+			endpoint,
+			this.Client.GetAsync(endpoint, cancellationToken),
+			cancellationToken);
 	}
 
 	/// <summary>
@@ -489,7 +594,7 @@ public abstract class BaseApiClient {
 	/// <param name="content">The object to serialize as JSON content, or null for no body.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a byte array, or null if the request failed.</returns>
-	protected async Task<byte[]?> PostAndReadByteArrayAsync(
+	protected Task<Result<byte[]>> PostAndReadByteArrayAsync(
 		string endpoint,
 		object? content = null,
 		CancellationToken cancellationToken = default) {
@@ -497,10 +602,11 @@ public abstract class BaseApiClient {
 		if (content is not null) {
 			request.Content = JsonContent.Create(content, options: this.JsonOptions);
 		}
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response is not null
-			? await response.Content.ReadAsByteArrayAsync(cancellationToken)
-			: default;
+		return this.ProcessBytesAsResultAsync(
+			HttpMethod.Post.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
 	}
 
 	/// <summary>
@@ -510,18 +616,18 @@ public abstract class BaseApiClient {
 	/// <param name="content">The HTTP content to send, or null for no body.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The response content as a byte array, or null if the request failed.</returns>
-	protected async Task<byte[]?> PostAndReadByteArrayAsync(
+	protected Task<Result<byte[]>> PostAndReadByteArrayAsync(
 		string endpoint,
 		HttpContent? content = null,
 		CancellationToken cancellationToken = default) {
 		var request = new HttpRequestMessage(HttpMethod.Post, endpoint) {
 			Content = content
 		};
-
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return response is not null
-			? await response.Content.ReadAsByteArrayAsync(cancellationToken)
-			: default;
+		return this.ProcessBytesAsResultAsync(
+			HttpMethod.Post.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
 	}
 
 	#endregion
@@ -535,11 +641,14 @@ public abstract class BaseApiClient {
 	/// <param name="endpoint">The API endpoint to call.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>A tuple containing the file content as a byte array and the filename, or (null, null) if the request failed.</returns>
-	protected async Task<(byte[]? Content, string? FileName)> DownloadFileContentAsync(
+	protected Task<Result<(byte[] Content, string FileName)>> DownloadFileContentAsync(
 		string endpoint,
 		CancellationToken cancellationToken = default) {
-		var response = await this.ProcessResponseAsync(this.Client.GetAsync(endpoint, cancellationToken));
-		return await ExtractFileContentAsync(response, cancellationToken);
+		return this.ProcessFileAsResultAsync(
+			HttpMethod.Get.Method,
+			endpoint,
+			this.Client.GetAsync(endpoint, cancellationToken),
+			cancellationToken);
 	}
 
 	/// <summary>
@@ -550,7 +659,7 @@ public abstract class BaseApiClient {
 	/// <param name="content">The object to serialize as JSON content, or null for no body.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>A tuple containing the file content as a byte array and the filename, or (null, null) if the request failed.</returns>
-	protected async Task<(byte[]? Content, string? FileName)> DownloadFileContentAsync(
+	protected Task<Result<(byte[] Content, string FileName)>> DownloadFileContentAsync(
 		string endpoint,
 		object? content,
 		CancellationToken cancellationToken = default) {
@@ -558,9 +667,11 @@ public abstract class BaseApiClient {
 		if (content is not null) {
 			request.Content = JsonContent.Create(content, options: this.JsonOptions);
 		}
-
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return await ExtractFileContentAsync(response, cancellationToken);
+		return this.ProcessFileAsResultAsync(
+			HttpMethod.Post.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
 	}
 
 	/// <summary>
@@ -571,43 +682,95 @@ public abstract class BaseApiClient {
 	/// <param name="content">The HTTP content to send.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>A tuple containing the file content as a byte array and the filename, or (null, null) if the request failed.</returns>
-	protected async Task<(byte[]? Content, string? FileName)> DownloadFileContentAsync(
+	protected Task<Result<(byte[] Content, string FileName)>> DownloadFileContentAsync(
 		string endpoint,
 		HttpContent content,
 		CancellationToken cancellationToken = default) {
 		var request = new HttpRequestMessage(HttpMethod.Post, endpoint) {
 			Content = content
 		};
+		return this.ProcessFileAsResultAsync(
+			HttpMethod.Post.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
+	}
 
-		var response = await this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
-		return await ExtractFileContentAsync(response, cancellationToken);
+	#endregion
+
+	#region No Response Operations
+
+	/// <summary>
+	/// Sends a GET request with no response content processing.
+	/// </summary>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>A task that represents the asynchronous operation.</returns>
+	protected Task<Result> GetAsync(string endpoint, CancellationToken cancellationToken = default) =>
+		this.ProcessWithTelemetryAsync(HttpMethod.Get.Method, endpoint, this.Client.GetAsync(endpoint, cancellationToken));
+
+	/// <summary>
+	/// Sends a POST request with JSON content and no response content processing.
+	/// </summary>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="content">The object to serialize as JSON content, or null for no body.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>A task that represents the asynchronous operation.</returns>
+	protected Task<Result> PostAsync(
+		string endpoint,
+		object? content = null,
+		CancellationToken cancellationToken = default) {
+		var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+		if (content is not null) {
+			request.Content = JsonContent.Create(content, options: this.JsonOptions);
+		}
+		return this.ProcessWithTelemetryAsync(HttpMethod.Post.Method, endpoint, this.Client.SendAsync(request, cancellationToken));
 	}
 
 	/// <summary>
-	/// Common logic for extracting file content and filename from response.
+	/// Sends a PUT request with JSON content and no response content processing.
 	/// </summary>
-	/// <param name="response">The HTTP response message.</param>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="content">The object to serialize as JSON content.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
-	/// <returns>A tuple containing the file content as a byte array and the filename, or (null, null) if the response is null.</returns>
-	private static async Task<(byte[]? Content, string? FileName)> ExtractFileContentAsync(
-		HttpResponseMessage? response,
-		CancellationToken cancellationToken) {
-
-		if (response is null) {
-			return (null, null);
-		}
-
-		var content = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-		var fileName = response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ??
-					   response.Content.Headers.ContentDisposition?.Name?.Trim('"');
-
-		if (!string.IsNullOrEmpty(fileName)) {
-			fileName = Uri.UnescapeDataString(fileName);
-		}
-
-		return (content, fileName);
-
+	/// <returns>A task that represents the asynchronous operation.</returns>
+	protected Task<Result> PutAsync(
+		string endpoint,
+		object content,
+		CancellationToken cancellationToken = default) {
+		var request = new HttpRequestMessage(HttpMethod.Put, endpoint) {
+			Content = JsonContent.Create(content, options: this.JsonOptions)
+		};
+		return this.ProcessWithTelemetryAsync(HttpMethod.Put.Method, endpoint, this.Client.SendAsync(request, cancellationToken));
 	}
+
+	/// <summary>
+	/// Sends a PATCH request with JSON content and no response content processing.
+	/// </summary>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="content">The object to serialize as JSON content.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>A task that represents the asynchronous operation.</returns>
+	protected Task<Result> PatchAsync(
+		string endpoint,
+		object content,
+		CancellationToken cancellationToken = default) {
+		var request = new HttpRequestMessage(HttpMethod.Patch, endpoint) {
+			Content = JsonContent.Create(content, options: this.JsonOptions)
+		};
+		return this.ProcessWithTelemetryAsync(HttpMethod.Patch.Method, endpoint, this.Client.SendAsync(request, cancellationToken));
+	}
+
+	/// <summary>
+	/// Sends a DELETE request with no response content processing.
+	/// </summary>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>A task that represents the asynchronous operation.</returns>
+	protected Task<Result> DeleteAsync(
+		string endpoint,
+		CancellationToken cancellationToken = default) =>
+		this.ProcessWithTelemetryAsync(HttpMethod.Delete.Method, endpoint, this.Client.DeleteAsync(endpoint, cancellationToken));
 
 	#endregion
 
@@ -714,81 +877,280 @@ public abstract class BaseApiClient {
 
 	#endregion
 
-	#region No Response Operations
+	#region Processors
 
 	/// <summary>
-	/// Sends a GET request with no response content processing.
+	/// Core processor that wraps any operation with telemetry and exception handling.
 	/// </summary>
-	/// <param name="endpoint">The API endpoint to call.</param>
-	/// <param name="cancellationToken">Cancellation token for the operation.</param>
-	/// <returns>A task that represents the asynchronous operation.</returns>
-	protected Task GetAsync(string endpoint, CancellationToken cancellationToken = default) =>
-		this.ProcessResponseAsync(this.Client.GetAsync(endpoint, cancellationToken));
-
-	/// <summary>
-	/// Sends a POST request with JSON content and no response content processing.
-	/// </summary>
-	/// <param name="endpoint">The API endpoint to call.</param>
-	/// <param name="content">The object to serialize as JSON content, or null for no body.</param>
-	/// <param name="cancellationToken">Cancellation token for the operation.</param>
-	/// <returns>A task that represents the asynchronous operation.</returns>
-	protected Task PostAsync(
+	private async Task<Result<T>> ProcessWithTelemetryAsync<T>(
+		string method,
 		string endpoint,
-		object? content = null,
-		CancellationToken cancellationToken = default) {
-		var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
-		if (content is not null) {
-			request.Content = JsonContent.Create(content, options: this.JsonOptions);
+		Func<HttpResponseMessage, CancellationToken, Task<T?>> contentProcessor,
+		Task<HttpResponseMessage> action,
+		CancellationToken cancellationToken) {
+		using var activity = RemoteClientTelemetry.StartActivity(method, endpoint, this.typeName);
+		var startTimestamp = Timing.Start();
+
+		try {
+
+			var response = await this.ProcessResponseAsync(action);
+
+			// ERROR
+			if (response is null) {
+				var nullElapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+				var error = new InvalidOperationException("Response was null");
+				RemoteClientTelemetry.SetActivityError(activity, error);
+				RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, null, nullElapsed, error, this.Logger);
+				return Result<T>.Fail(error);
+			}
+
+			var data = await contentProcessor(response, cancellationToken);
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+
+			// ERROR
+			if (data is null) {
+				var error = new InvalidOperationException("Content processing returned null");
+				RemoteClientTelemetry.SetActivityError(activity, error, (int)response.StatusCode);
+				RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, (int)response.StatusCode, elapsed, error, this.Logger);
+				return Result<T>.Fail(error);
+			}
+
+			// SUCCESS
+			RemoteClientTelemetry.SetActivitySuccess(activity, (int)response.StatusCode);
+			RemoteClientTelemetry.RecordSuccess(method, endpoint, this.typeName, (int)response.StatusCode, elapsed, this.Logger);
+			return Result<T>.Success(data);
+
+		} catch (UnauthenticatedAccessException uae) {
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+			RemoteClientTelemetry.SetActivityError(activity, uae, 401);
+			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, 401, elapsed, uae, this.Logger);
+			throw;
+		} catch (ForbiddenAccessException fae) {
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+			RemoteClientTelemetry.SetActivityError(activity, fae, 403);
+			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, 403, elapsed, fae, this.Logger);
+			throw;
+		} catch (OperationCanceledException oce) {
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+			RemoteClientTelemetry.SetActivityCanceled(activity, oce);
+			RemoteClientTelemetry.RecordCanceled(method, endpoint, this.typeName, elapsed, oce, this.Logger);
+			throw;
+		} catch (HttpRequestException hre) {
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+			RemoteClientTelemetry.SetActivityError(activity, hre, (int?)hre.StatusCode);
+			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, (int?)hre.StatusCode, elapsed, hre, this.Logger);
+			return Result<T>.Fail(hre);
+		} catch (Exception fex) when (fex.IsFatal()) {
+			throw;
+		} catch (Exception ex) {
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+			RemoteClientTelemetry.SetActivityError(activity, ex);
+			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, null, elapsed, ex, this.Logger);
+			return Result<T>.Fail(ex);
 		}
-		return this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
 	}
 
 	/// <summary>
-	/// Sends a PUT request with JSON content and no response content processing.
+	/// Core processor for operations with no response body, wraps with telemetry and exception handling.
+	/// Returns Result (not Result&lt;T&gt;) for operations that don't need response content.
 	/// </summary>
-	/// <param name="endpoint">The API endpoint to call.</param>
-	/// <param name="content">The object to serialize as JSON content.</param>
-	/// <param name="cancellationToken">Cancellation token for the operation.</param>
-	/// <returns>A task that represents the asynchronous operation.</returns>
-	protected Task PutAsync(
+	private async Task<Result> ProcessWithTelemetryAsync(
+		string method,
 		string endpoint,
-		object content,
-		CancellationToken cancellationToken = default) {
-		var request = new HttpRequestMessage(HttpMethod.Put, endpoint) {
-			Content = JsonContent.Create(content, options: this.JsonOptions)
-		};
-		return this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
+		Task<HttpResponseMessage> action) {
+		using var activity = RemoteClientTelemetry.StartActivity(method, endpoint, this.typeName);
+		var startTimestamp = Timing.Start();
+
+		try {
+			var response = await this.ProcessResponseAsync(action);
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+
+			if (response is null) {
+				var error = new InvalidOperationException("Response was null");
+				RemoteClientTelemetry.SetActivityError(activity, error);
+				RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, null, elapsed, error, this.Logger);
+				return Result.Fail(error);
+			}
+
+			// SUCCESS - no content to process
+			RemoteClientTelemetry.SetActivitySuccess(activity, (int)response.StatusCode);
+			RemoteClientTelemetry.RecordSuccess(method, endpoint, this.typeName, (int)response.StatusCode, elapsed, this.Logger);
+			return Result.Success;
+		} catch (UnauthenticatedAccessException uae) {
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+			RemoteClientTelemetry.SetActivityError(activity, uae, 401);
+			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, 401, elapsed, uae, this.Logger);
+			throw;
+		} catch (ForbiddenAccessException fae) {
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+			RemoteClientTelemetry.SetActivityError(activity, fae, 403);
+			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, 403, elapsed, fae, this.Logger);
+			throw;
+		} catch (OperationCanceledException oce) {
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+			RemoteClientTelemetry.SetActivityCanceled(activity, oce);
+			RemoteClientTelemetry.RecordCanceled(method, endpoint, this.typeName, elapsed, oce, this.Logger);
+			throw;
+		} catch (HttpRequestException hre) {
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+			RemoteClientTelemetry.SetActivityError(activity, hre, (int?)hre.StatusCode);
+			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, (int?)hre.StatusCode, elapsed, hre, this.Logger);
+			return Result.Fail(hre);
+		} catch (Exception fex) when (fex.IsFatal()) {
+			throw;
+		} catch (Exception ex) {
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+			RemoteClientTelemetry.SetActivityError(activity, ex);
+			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, null, elapsed, ex, this.Logger);
+			return Result.Fail(ex);
+		}
 	}
 
 	/// <summary>
-	/// Sends a PATCH request with JSON content and no response content processing.
+	/// Processes HTTP response into Result&lt;T&gt;.
+	/// Handles success and API exceptions consistently
+	/// and throws for authN/authZ.
 	/// </summary>
-	/// <param name="endpoint">The API endpoint to call.</param>
-	/// <param name="content">The object to serialize as JSON content.</param>
-	/// <param name="cancellationToken">Cancellation token for the operation.</param>
-	/// <returns>A task that represents the asynchronous operation.</returns>
-	protected Task PatchAsync(
+	private Task<Result<T>> ProcessJsonAsResultAsync<T>(
+		string method,
 		string endpoint,
-		object content,
-		CancellationToken cancellationToken = default) {
-		var request = new HttpRequestMessage(HttpMethod.Patch, endpoint) {
-			Content = JsonContent.Create(content, options: this.JsonOptions)
-		};
-		return this.ProcessResponseAsync(this.Client.SendAsync(request, cancellationToken));
+		Task<HttpResponseMessage> action,
+		CancellationToken cancellationToken) {
+		return this.ProcessWithTelemetryAsync<T>(
+			method,
+			endpoint,
+			async (response, ct) => await response.Content.ReadFromJsonAsync<T>(this.JsonOptions, ct),
+			action,
+			cancellationToken);
 	}
 
 	/// <summary>
-	/// Sends a DELETE request with no response content processing.
+	/// Processes HTTP response into Result&lt;string&gt;.
+	/// Handles success and API exceptions consistently
+	/// and throws for authN/authZ.
 	/// </summary>
-	/// <param name="endpoint">The API endpoint to call.</param>
-	/// <param name="cancellationToken">Cancellation token for the operation.</param>
-	/// <returns>A task that represents the asynchronous operation.</returns>
-	protected Task DeleteAsync(
+	private Task<Result<string>> ProcessStringAsResultAsync(
+		string method,
 		string endpoint,
-		CancellationToken cancellationToken = default) =>
-		this.ProcessResponseAsync(this.Client.DeleteAsync(endpoint, cancellationToken));
+		Task<HttpResponseMessage> action,
+		CancellationToken cancellationToken) {
+		return this.ProcessWithTelemetryAsync(
+			method,
+			endpoint,
+			async (response, ct) => await response.Content.ReadAsStringAsync(ct),
+			action,
+			cancellationToken);
+	}
 
-	#endregion
+	/// <summary>
+	/// Processes HTTP response into Result&lt;string&gt;.
+	/// Handles success and API exceptions consistently
+	/// and throws for authN/authZ.
+	/// </summary>
+	private Task<Result<Stream>> ProcessStreamAsResultAsync(
+		string method,
+		string endpoint,
+		Task<HttpResponseMessage> action,
+		CancellationToken cancellationToken) {
+		return this.ProcessWithTelemetryAsync(
+			method,
+			endpoint,
+			async (response, ct) => await response.Content.ReadAsStreamAsync(ct),
+			action,
+			cancellationToken);
+	}
+
+	/// <summary>
+	/// Processes HTTP response into Result&lt;string&gt;.
+	/// Handles success and API exceptions consistently
+	/// and throws for authN/authZ.
+	/// </summary>
+	private Task<Result<byte[]>> ProcessBytesAsResultAsync(
+	string method,
+	string endpoint,
+	Task<HttpResponseMessage> action,
+	CancellationToken cancellationToken) {
+		return this.ProcessWithTelemetryAsync(
+			method,
+			endpoint,
+			async (response, ct) => await response.Content.ReadAsByteArrayAsync(ct),
+			action,
+			cancellationToken);
+	}
+
+	/// <summary>
+	/// Processes HTTP response into Result&lt;string&gt;.
+	/// Handles success and API exceptions consistently
+	/// and throws for authN/authZ.
+	/// </summary>
+	private Task<Result<(byte[] Content, string FileName)>> ProcessFileAsResultAsync(
+		string method,
+		string endpoint,
+		Task<HttpResponseMessage> action,
+		CancellationToken cancellationToken) {
+		return this.ProcessWithTelemetryAsync<(byte[] Content, string FileName)>(
+			method,
+			endpoint,
+			async (response, ct) => {
+				var data = await response.Content.ReadAsByteArrayAsync(ct);
+				var fileName =
+					response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ??
+					response.Content.Headers.ContentDisposition?.Name?.Trim('"');
+
+				if (!string.IsNullOrEmpty(fileName)) {
+					fileName = Uri.UnescapeDataString(fileName);
+				}
+				fileName ??= "unknown";
+
+				return (data, fileName);
+			},
+			action,
+			cancellationToken);
+	}
+
+	/// <summary>
+	/// Processes HTTP response into Result&lt;T&gt;.
+	/// Handles success and API exceptions consistently
+	/// and throw for authN/authZ.
+	/// </summary>
+	private async Task<Result> ProcessResultResponseAsync(
+		Task<HttpResponseMessage> action) {
+		try {
+
+			var response = await action;
+			if (response.IsSuccessStatusCode) {
+				return Result.Success;
+			}
+
+			if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) {
+				var err = await response.Content.ReadAsStringAsync();
+				throw new UnauthenticatedAccessException(err);
+			}
+
+			if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) {
+				var err = await response.Content.ReadAsStringAsync();
+				throw new ForbiddenAccessException(err);
+			}
+
+			var exceptionModel = await this.ParseErrorResponse(response);
+			if (this.Logger.IsEnabled(LogLevel.Error)) {
+				this.Logger.LogError("API error: {Title}. Details: {Detail}",
+					exceptionModel.Title,
+					exceptionModel.Detail);
+			}
+			return Result.Fail(new ApiException(exceptionModel));
+
+		} catch (Exception ex) when (ex switch {
+			OperationCanceledException => false,
+			UnauthenticatedAccessException => false,
+			ForbiddenAccessException => false,
+			_ => true
+		}) {
+			// ApiException or Unknown Exceptions
+			return Result.Fail(ex);
+		}
+	}
+
 
 	/// <summary>
 	/// Processes the HTTP response and handles common error scenarios.
@@ -818,8 +1180,8 @@ public abstract class BaseApiClient {
 					exceptionModel.Title,
 					exceptionModel.Detail);
 			}
-
 			throw new ApiException(exceptionModel);
+
 		} catch (Exception ex) when (ex is not ApiException) {
 			this.Logger.LogError(ex, "Unexpected error during API call");
 			throw;
@@ -857,5 +1219,8 @@ public abstract class BaseApiClient {
 		Title = "Unknown Error",
 		Failures = []
 	};
+
+
+	#endregion
 
 }

@@ -28,7 +28,7 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 		var notificationType = typeof(TNotification);
 
 		// ----- 0. START TIMING & ACTIVITY -----
-		var activity = NotificationTelemetry.StartActivity(notificationTypeName);
+		using var activity = NotificationTelemetry.StartActivity(notificationTypeName);
 		var startTimestamp = Timing.Start();
 
 		try {
@@ -78,7 +78,6 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 
 			// ----- 6. RECORD TELEMETRY -----
 			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-
 			if (result.IsSuccess) {
 				NotificationTelemetry.SetActivitySuccess(activity);
 				NotificationTelemetry.RecordSuccess(
@@ -106,6 +105,9 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 
 			throw;
 
+		} catch (Exception fex) when (fex.IsFatal()) {
+			throw;
+
 		} catch (Exception ex) {
 			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
 
@@ -119,8 +121,6 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 
 			return Result.Fail(ex);
 
-		} finally {
-			NotificationTelemetry.StopActivity(activity);
 		}
 	}
 }

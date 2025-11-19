@@ -53,16 +53,6 @@ internal static class RequestTelemetry {
 	}
 
 	/// <summary>
-	/// Stops and disposes an activity if it exists.
-	/// </summary>
-	internal static void StopActivity(Activity? activity) {
-		if (activity is not null) {
-			activity.Stop();
-			activity.Dispose();
-		}
-	}
-
-	/// <summary>
 	/// Sets success information on an activity.
 	/// </summary>
 	internal static void SetActivitySuccess(Activity? activity) {
