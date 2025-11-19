@@ -1,13 +1,10 @@
 # Cirreum Core
 
-[![NuGet Version](https://img.shields.io/nuget/v/Cirreum.Core.svg?style=flat-square&color=1E8CFF)](https://www.nuget.org/packages/Cirreum.Core/)
-[![NuGet Downloads](https://img.shields.io/nuget/dt/Cirreum.Core.svg?style=flat-square&color=1E8CFF)](https://www.nuget.org/packages/Cirreum.Core/)
-[![GitHub Release](https://img.shields.io/github/v/release/cirreum/Cirreum.Core?style=flat-square&color=4C8EDA)](https://github.com/cirreum/Cirreum.Core/releases)
-
-[![License](https://img.shields.io/github/license/cirreum/Cirreum.Core?style=flat-square&color=6E6E6E)](https://github.com/cirreum/Cirreum.Core/blob/main/LICENSE)
-[![Publish Status](https://github.com/cirreum/Cirreum.Core/actions/workflows/publish.yml/badge.svg?style=flat-square&color=2E8B57)](https://github.com/cirreum/Cirreum.Core/actions/workflows/publish.yml)
-[![.NET](https://img.shields.io/badge/.NET-10.0-7A4CFF?style=flat-square)](https://dotnet.microsoft.com/)
-
+[![NuGet Version](https://img.shields.io/nuget/v/Cirreum.Core.svg?style=flat-square&labelColor=1F1F1F&color=003D8F)](https://www.nuget.org/packages/Cirreum.Core/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Cirreum.Core.svg?style=flat-square&labelColor=1F1F1F&color=003D8F)](https://www.nuget.org/packages/Cirreum.Core/)
+[![GitHub Release](https://img.shields.io/github/v/release/cirreum/Cirreum.Core?style=flat-square&labelColor=1F1F1F&color=FF3B2E)](https://github.com/cirreum/Cirreum.Core/releases)
+[![License](https://img.shields.io/github/license/cirreum/Cirreum.Core?style=flat-square&labelColor=1F1F1F&color=F2F2F2)](https://github.com/cirreum/Cirreum.Core/blob/main/LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-10.0-003D8F?style=flat-square&labelColor=1F1F1F)](https://dotnet.microsoft.com/)
 
 **Foundational primitives and abstractions for the Cirreum Framework**
 
