@@ -1,19 +1,20 @@
 # Cirreum Core
 
-[![NuGet Version](https://img.shields.io/nuget/v/Cirreum.Core.svg?style=flat-square)](https://www.nuget.org/packages/Cirreum.Core/)
-[![NuGet Downloads](https://img.shields.io/nuget/dt/Cirreum.Core.svg?style=flat-square)](https://www.nuget.org/packages/Cirreum.Core/)
-[![GitHub Release](https://img.shields.io/github/v/release/cirreum/Cirreum.Core?style=flat-square)](https://github.com/cirreum/Cirreum.Core/releases)
+[![NuGet Version](https://img.shields.io/nuget/v/Cirreum.Core.svg?style=flat-square&color=1E8CFF)](https://www.nuget.org/packages/Cirreum.Core/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Cirreum.Core.svg?style=flat-square&color=1E8CFF)](https://www.nuget.org/packages/Cirreum.Core/)
+[![GitHub Release](https://img.shields.io/github/v/release/cirreum/Cirreum.Core?style=flat-square&color=4C8EDA)](https://github.com/cirreum/Cirreum.Core/releases)
 
-[![License](https://img.shields.io/github/license/cirreum/Cirreum.Core?style=flat-square)](https://github.com/cirreum/Cirreum.Core/blob/main/LICENSE)
-[![Publish Status](https://github.com/cirreum/Cirreum.Core/actions/workflows/publish.yml/badge.svg)](https://github.com/cirreum/Cirreum.Core/actions/workflows/publish.yml)
-[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square)](https://dotnet.microsoft.com/)
+[![License](https://img.shields.io/github/license/cirreum/Cirreum.Core?style=flat-square&color=6E6E6E)](https://github.com/cirreum/Cirreum.Core/blob/main/LICENSE)
+[![Publish Status](https://github.com/cirreum/Cirreum.Core/actions/workflows/publish.yml/badge.svg?style=flat-square&color=2E8B57)](https://github.com/cirreum/Cirreum.Core/actions/workflows/publish.yml)
+[![.NET](https://img.shields.io/badge/.NET-10.0-7A4CFF?style=flat-square)](https://dotnet.microsoft.com/)
+
 
 **Foundational primitives and abstractions for the Cirreum Framework**
 
 ## Overview
 **Cirreum.Core** is the foundational library of the Cirreum ecosystem. It provides the core abstractions, primitives, and shared patterns used across all Cirreum libraries and runtime components.
 
-This is *not* the application's domain core. Instead, it acts as the **framework core**—the layer that defines the structural backbone of the entire stack.
+This is *not* the application's domain core. Instead, it acts as the **framework core**â€”the layer that defines the structural backbone of the entire stack.
 
 All other Cirreum libraries (Conductor, Messaging, Authorization, Runtime, Components, and more) build directly on this project.
 
@@ -77,7 +78,7 @@ These are *framework-level* dependencies chosen for stability, longevity, and ec
 ## Design Principles
 
 - **Lightweight, Not Minimalist**  
-  Dependencies are curated—not avoided for their own sake.
+  Dependencies are curatedâ€”not avoided for their own sake.
 
 - **Stable and Forward-Compatible**  
   The API surface here is foundational and should evolve slowly.
@@ -90,10 +91,10 @@ These are *framework-level* dependencies chosen for stability, longevity, and ec
 
 ## Structure
 
-- **Abstractions** – Messaging, authorization, identity, environment, and integration contracts  
-- **Primitives** – Identifiers, contexts, markers, metadata carriers  
-- **Patterns** – Validators, interceptors, CQRS contracts, authorizable resource models  
-- **Utilities** – Formatting, CSV helpers, common services  
+- **Abstractions** â€“ Messaging, authorization, identity, environment, and integration contracts  
+- **Primitives** â€“ Identifiers, contexts, markers, metadata carriers  
+- **Patterns** â€“ Validators, interceptors, CQRS contracts, authorizable resource models  
+- **Utilities** â€“ Formatting, CSV helpers, common services  
 
 ## Usage
 Every other Cirreum library depends on **Cirreum.Core**.
