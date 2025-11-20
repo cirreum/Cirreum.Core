@@ -9,7 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Immutable;
-using System.Diagnostics;
 
 /// <summary>
 /// The default implementation of the <see cref="IAuthorizationEvaluator"/>.
@@ -41,7 +40,7 @@ sealed class DefaultAuthorizationEvaluator(
 			userState,
 			operationId: Guid.NewGuid().ToString("N")[..16],
 			correlationId: Guid.NewGuid().ToString("N"),
-			startTimestamp: Stopwatch.GetTimestamp());
+			startTimestamp: Timing.Start());
 
 		// Delegate to the context-aware overload
 		return await this.Evaluate(resource, operation, cancellationToken).ConfigureAwait(false);

@@ -1,5 +1,6 @@
 ﻿namespace Cirreum.Conductor;
 
+using Cirreum.Diagnostics;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
@@ -8,8 +9,11 @@ using System.Diagnostics.Metrics;
 /// </summary>
 internal static class RequestTelemetry {
 
-	private static readonly ActivitySource _activitySource = new(ConductorTelemetry.ActivitySourceName);
-	private static readonly Meter _meter = new(ConductorTelemetry.MeterName);
+	private static readonly ActivitySource _activitySource =
+		new(CirreumTelemetry.ActivitySources.ConductorDispatcher, CirreumTelemetry.Version);
+
+	private static readonly Meter _meter =
+		new(CirreumTelemetry.Meters.ConductorDispatcher, CirreumTelemetry.Version);
 
 	private static readonly Counter<long> _requestCounter = _meter.CreateCounter<long>(
 		ConductorTelemetry.RequestsTotalTag,

@@ -1,5 +1,6 @@
 ﻿namespace Cirreum.Conductor;
 
+using Cirreum.Diagnostics;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
@@ -8,8 +9,11 @@ using System.Diagnostics.Metrics;
 /// </summary>
 internal static class NotificationTelemetry {
 
-	private static readonly ActivitySource _activitySource = new(ConductorTelemetry.ActivitySourceName);
-	private static readonly Meter _meter = new(ConductorTelemetry.MeterName);
+	private static readonly ActivitySource _activitySource =
+		new(CirreumTelemetry.ActivitySources.ConductorPublisher, CirreumTelemetry.Version);
+
+	private static readonly Meter _meter =
+		new(CirreumTelemetry.Meters.ConductorPublisher, CirreumTelemetry.Version);
 
 	private static readonly Counter<long> _notificationCounter = _meter.CreateCounter<long>(
 		"conductor.notifications.total",
@@ -132,4 +136,5 @@ internal static class NotificationTelemetry {
 	}
 
 	#endregion
+
 }

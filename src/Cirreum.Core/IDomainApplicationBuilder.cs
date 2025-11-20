@@ -1,5 +1,6 @@
 ﻿namespace Cirreum;
 
+using Cirreum.Conductor.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -15,4 +16,10 @@ public interface IDomainApplicationBuilder {
 	/// </summary>
 	IServiceCollection Services { get; }
 
+	/// <summary>
+	/// Configures Conductor settings and custom intercepts for the domain services.
+	/// </summary>
+	/// <param name="configure">Action to configure Conductor options.</param>
+	/// <returns>The builder for method chaining.</returns>
+	IDomainApplicationBuilder ConfigureConductor(Action<ConductorOptionsBuilder> configure);
 }

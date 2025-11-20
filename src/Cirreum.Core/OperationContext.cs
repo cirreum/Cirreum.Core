@@ -1,7 +1,6 @@
 ﻿namespace Cirreum;
 
 using Cirreum.Security;
-using System.Diagnostics;
 
 /// <summary>
 /// Represents the canonical context for an operation, containing the fundamental
@@ -37,13 +36,15 @@ public sealed record OperationContext(
 	public bool HasEnrichedProfile => this.UserState.Profile.IsEnriched;
 
 	// Timing property - computed on demand
-	public TimeSpan Elapsed => Stopwatch.GetElapsedTime(this.StartTimestamp);
+	public TimeSpan Elapsed => Timing.GetElapsedTime(this.StartTimestamp);
+	public double ElapsedMilliseconds => Timing.GetElapsedMilliseconds(this.StartTimestamp);
 
 	// Helper methods
 	public bool HasActiveTenant() => !string.IsNullOrWhiteSpace(this.TenantId);
 	public bool IsFromProvider(IdentityProviderType provider) => this.Provider == provider;
 	public bool IsInDepartment(string department) =>
-		string.Equals(this.Profile.Department, department, StringComparison.OrdinalIgnoreCase);
+	   !string.IsNullOrWhiteSpace(this.Profile.Department) &&
+	   string.Equals(this.Profile.Department, department, StringComparison.OrdinalIgnoreCase);
 
 	/// <summary>
 	/// Creates an OperationContext for the current runtime.

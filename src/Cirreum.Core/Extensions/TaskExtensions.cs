@@ -1,7 +1,7 @@
 ﻿namespace System.Threading.Tasks;
 
+using Cirreum;
 using System;
-using System.Diagnostics;
 using System.Threading;
 
 public static class TaskExtensions {
@@ -155,10 +155,10 @@ public static class TaskExtensions {
 		CancellationToken cancellationToken) {
 		var delay = TimeSpan.FromMilliseconds(delayMilliseconds);
 		var conditionResult = !targetValue;
-		var sw = Stopwatch.StartNew();
+		var sw = Timing.Start();
 
 		while (conditionResult != targetValue) {
-			if (sw.Elapsed >= timeout || cancellationToken.IsCancellationRequested) {
+			if (Timing.GetElapsedTime(sw) >= timeout || cancellationToken.IsCancellationRequested) {
 				break;
 			}
 
@@ -168,7 +168,7 @@ public static class TaskExtensions {
 					break;
 				}
 
-				if (sw.Elapsed < timeout && !cancellationToken.IsCancellationRequested) {
+				if (Timing.GetElapsedTime(sw) < timeout && !cancellationToken.IsCancellationRequested) {
 					await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
 				}
 			} catch (OperationCanceledException) {
@@ -267,10 +267,10 @@ public static class TaskExtensions {
 		CancellationToken cancellationToken) {
 		var delay = TimeSpan.FromMilliseconds(delayMilliseconds);
 		var conditionResult = !targetValue;
-		var sw = Stopwatch.StartNew();
+		var sw = Timing.Start();
 
 		while (conditionResult != targetValue) {
-			if (sw.Elapsed >= timeout || cancellationToken.IsCancellationRequested) {
+			if (Timing.GetElapsedTime(sw) >= timeout || cancellationToken.IsCancellationRequested) {
 				break;
 			}
 
@@ -280,7 +280,7 @@ public static class TaskExtensions {
 					break;
 				}
 
-				if (sw.Elapsed < timeout && !cancellationToken.IsCancellationRequested) {
+				if (Timing.GetElapsedTime(sw) < timeout && !cancellationToken.IsCancellationRequested) {
 					await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
 				}
 			} catch (OperationCanceledException) {

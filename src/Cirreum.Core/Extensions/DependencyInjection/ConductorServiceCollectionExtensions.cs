@@ -13,6 +13,8 @@ using System.Reflection;
 /// </summary>
 public static class ConductorServiceCollectionExtensions {
 
+	private const string ConductorRegisteredKey = "__ConductorRegistered";
+
 	/// <summary>
 	/// Adds Cirreum.Conductor services including the dispatcher, publisher, and allows
 	/// manual configuration of request handlers, intercepts, and notification handlers.
@@ -21,10 +23,29 @@ public static class ConductorServiceCollectionExtensions {
 	/// <param name="configure">Action to configure the conductor builder.</param>
 	/// <param name="settings">The conductor settings.</param>
 	/// <returns>The <see cref="IServiceCollection"/> for chaining.</returns>
+	/// <remarks>
+	/// <para>
+	/// This is a low-level API. Most applications should use <c>AddDomainServices</c> instead,
+	/// which provides an opinionated setup including validation, authorization, and a standard intercept pipeline.
+	/// </para>
+	/// <para>
+	/// Use this method directly only when you need complete control over the Conductor configuration
+	/// and don't want the domain services framework.
+	/// </para>
+	/// </remarks>
 	public static IServiceCollection AddConductor(
 		this IServiceCollection services,
 		Action<ConductorBuilder> configure,
 		ConductorSettings settings) {
+
+		// Idempotency check
+		if (services.Any(sd => sd.ServiceKey?.ToString() == ConductorRegisteredKey)) {
+			throw new InvalidOperationException(
+				"Conductor services have already been registered. " +
+				"AddConductor should only be called once per service collection. " +
+				"If using AddDomainServices, do not call AddConductor directly.");
+		}
+		services.AddKeyedSingleton<object>(ConductorRegisteredKey, new object());
 
 		// Register concrete Publisher (internal, accessible via InternalsVisibleTo)
 		services.TryAddSingleton(sp => new Publisher(

@@ -1,5 +1,6 @@
 ﻿namespace Cirreum.RemoteServices;
 
+using Cirreum.Diagnostics;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
@@ -10,11 +11,11 @@ using System.Diagnostics.Metrics;
 /// </summary>
 internal static partial class RemoteClientTelemetry {
 
-	private const string ActivitySourceName = "Cirreum.RemoteClient";
-	private const string MeterName = "Cirreum.RemoteClient";
+	private static readonly ActivitySource _activitySource =
+		new(CirreumTelemetry.ActivitySources.RemoteServicesClient, CirreumTelemetry.Version);
 
-	private static readonly ActivitySource _activitySource = new(ActivitySourceName, "1.0.0");
-	private static readonly Meter _meter = new(MeterName, "1.0.0");
+	private static readonly Meter _meter =
+		new(CirreumTelemetry.Meters.RemoteServicesClient, CirreumTelemetry.Version);
 
 	// Counters
 	private static readonly Counter<long> _requestCounter = _meter.CreateCounter<long>(

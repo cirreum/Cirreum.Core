@@ -13,7 +13,8 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 	where TNotification : INotification {
 
 	private static readonly ConcurrentDictionary<Type, PublisherStrategy?> _strategyCache = new();
-	private static readonly string notificationTypeName = typeof(TNotification).Name;
+	private static readonly Type notificationType = typeof(TNotification);
+	private static readonly string notificationTypeName = notificationType.Name;
 
 	public override async Task<Result> Handle(
 		Publisher publisher,
@@ -23,9 +24,6 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 		PublisherStrategy? strategy,
 		PublisherStrategy defaultStrategy,
 		CancellationToken cancellationToken) {
-
-		var typedNotification = (TNotification)notification;
-		var notificationType = typeof(TNotification);
 
 		// ----- 0. START TIMING & ACTIVITY -----
 		using var activity = NotificationTelemetry.StartActivity(notificationTypeName);
@@ -65,13 +63,13 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 			// ----- 5. PUBLISH -----
 			var result = effectiveStrategy switch {
 				PublisherStrategy.Sequential =>
-					await publisher.PublishSequentialAsync(typedNotification, handlers, false, cancellationToken),
+					await publisher.PublishSequentialAsync((TNotification)notification, handlers, false, cancellationToken),
 				PublisherStrategy.FailFast =>
-					await publisher.PublishSequentialAsync(typedNotification, handlers, true, cancellationToken),
+					await publisher.PublishSequentialAsync((TNotification)notification, handlers, true, cancellationToken),
 				PublisherStrategy.Parallel =>
-					await publisher.PublishParallelAsync(typedNotification, handlers, cancellationToken),
+					await publisher.PublishParallelAsync((TNotification)notification, handlers, cancellationToken),
 				PublisherStrategy.FireAndForget =>
-					await publisher.PublishFireAndForgetAsync(typedNotification, handlers),
+					await publisher.PublishFireAndForgetAsync((TNotification)notification, handlers),
 				_ => Result.Fail(
 					new InvalidOperationException($"Unknown publisher strategy: {effectiveStrategy}"))
 			};

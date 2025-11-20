@@ -1,7 +1,6 @@
 ﻿namespace Cirreum.Conductor.Intercepts;
 
 using Microsoft.Extensions.Logging;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,11 +16,11 @@ public sealed class HandlerPerformance<TRequest, TResponse>(
 		RequestHandlerDelegate<TRequest, TResponse> next,
 		CancellationToken cancellationToken) {
 
-		var startTime = Stopwatch.GetTimestamp();
+		var startTime = Timing.Start();
 		try {
 			return await next(context, cancellationToken).ConfigureAwait(false);
 		} finally {
-			var elapsedMs = (long)Stopwatch.GetElapsedTime(startTime).TotalMilliseconds;
+			var elapsedMs = (long)Math.Round(Timing.GetElapsedMilliseconds(startTime));
 			if (elapsedMs > LongRunningThresholdMs) {
 				logger.LogLongRunningRequest(context.RequestType, elapsedMs);
 			}

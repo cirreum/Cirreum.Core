@@ -3,41 +3,51 @@
 using Cirreum.Conductor;
 using Cirreum.Conductor.Caching;
 using Cirreum.Conductor.Configuration;
+using Cirreum.Diagnostics;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
-public class QueryCaching<TRequest, TResponse>(
-	ICacheableQueryService cache,
-	ConductorSettings conductorSettings,
-	ILogger<QueryCaching<TRequest, TResponse>> logger
-) : IIntercept<TRequest, TResponse>
+public sealed class QueryCaching<TRequest, TResponse>
+  : IIntercept<TRequest, TResponse>
 	where TRequest : ICacheableQuery<TResponse> {
 
-	private static readonly Meter _meter = new(ConductorTelemetry.CacheMeterName);
-
+	private static readonly Meter _meter = new(CirreumTelemetry.Meters.ConductorCache, CirreumTelemetry.Version);
 	private static readonly Histogram<double> _cacheOperationDuration = _meter.CreateHistogram<double>(
 		ConductorTelemetry.CacheDurationMetric,
 		unit: "ms",
 		description: "Cache operation duration");
 
-	public async Task<Result<TResponse>> HandleAsync(
-		RequestContext<TRequest> context,
-		RequestHandlerDelegate<TRequest, TResponse> next,
-		CancellationToken cancellationToken) {
+	private readonly ICacheableQueryService _cache;
+	private readonly ConductorSettings _conductorSettings;
+	private readonly ILogger<QueryCaching<TRequest, TResponse>> _logger;
 
-		// If HybridCache provider but service is still NoCacheQueryService, log warning
+	public QueryCaching(
+		ICacheableQueryService cache,
+		ConductorSettings conductorSettings,
+		ILogger<QueryCaching<TRequest, TResponse>> logger) {
+		_cache = cache;
+		_conductorSettings = conductorSettings;
+		_logger = logger;
+
+		// Check once at construction time instead of every request
 		if (conductorSettings.Cache.Provider == CacheProvider.HybridCache &&
 			cache is NoCacheQueryService) {
 			logger.LogWarning(
 				"CacheProvider is set to 'HybridCache' yet the service is not registered. " +
 				"Did you forget to call AddConductorHybridCache()?");
 		}
+	}
+
+	public async Task<Result<TResponse>> HandleAsync(
+		RequestContext<TRequest> context,
+		RequestHandlerDelegate<TRequest, TResponse> next,
+		CancellationToken cancellationToken) {
 
 		var category = context.Request.CacheCategory ?? "uncategorized";
 
-		if (logger.IsEnabled(LogLevel.Debug)) {
-			logger.LogDebug(
+		if (_logger.IsEnabled(LogLevel.Debug)) {
+			_logger.LogDebug(
 				"Processing cacheable query: {QueryType} (Category: {Category}, CacheKey: {CacheKey})",
 				context.RequestType,
 				category,
@@ -47,17 +57,17 @@ public class QueryCaching<TRequest, TResponse>(
 		var effectiveSettings = this.BuildEffectiveSettings(context.Request, context.RequestType);
 		var tags = context.Request.CacheTags;
 
-		var startTime = Stopwatch.GetTimestamp();
+		var startTime = Timing.Start();
 
 		// Get from Cache, or Read from real Handler and store in Cache
-		var result = await cache.GetOrCreateAsync(
+		var result = await _cache.GetOrCreateAsync(
 			context.Request.CacheKey,
 			async (ct) => await next(context, ct), // actual handler that reads data
 			effectiveSettings,
 			tags,
 			cancellationToken);
 
-		var elapsed = Stopwatch.GetElapsedTime(startTime).TotalMilliseconds;
+		var elapsed = Timing.GetElapsedMilliseconds(startTime);
 
 		var telemetryTags = new TagList {
 			{ ConductorTelemetry.QueryNameTag, context.RequestType },
@@ -67,13 +77,13 @@ public class QueryCaching<TRequest, TResponse>(
 
 		_cacheOperationDuration.Record(elapsed, telemetryTags);
 
-		if (logger.IsEnabled(LogLevel.Debug)) {
-			logger.LogDebug(
+		if (_logger.IsEnabled(LogLevel.Debug)) {
+			_logger.LogDebug(
 				"Query {QueryType} completed: Status={Status}, Category={Category}, Duration={Duration}ms",
 				context.RequestType,
 				result.IsSuccess ? "Success" : "Failed",
 				category,
-				elapsed);
+				Math.Round(elapsed, 2));
 		}
 
 		return result;
@@ -81,7 +91,7 @@ public class QueryCaching<TRequest, TResponse>(
 
 	private QueryCacheSettings BuildEffectiveSettings(TRequest request, string queryTypeName) {
 		var querySettings = request.Cache;
-		var cacheOptions = conductorSettings.Cache;
+		var cacheOptions = _conductorSettings.Cache;
 
 		var expiration = querySettings.Expiration;
 		var localExpiration = querySettings.LocalExpiration;
@@ -94,8 +104,8 @@ public class QueryCaching<TRequest, TResponse>(
 			localExpiration = categoryOverrides.LocalExpiration ?? localExpiration;
 			failureExpiration = categoryOverrides.FailureExpiration ?? failureExpiration;
 
-			if (logger.IsEnabled(LogLevel.Debug)) {
-				logger.LogDebug("Applied category override '{Category}' for {QueryType}",
+			if (_logger.IsEnabled(LogLevel.Debug)) {
+				_logger.LogDebug("Applied category override '{Category}' for {QueryType}",
 					request.CacheCategory, queryTypeName);
 			}
 		}
@@ -106,8 +116,8 @@ public class QueryCaching<TRequest, TResponse>(
 			localExpiration = queryOverrides.LocalExpiration ?? localExpiration;
 			failureExpiration = queryOverrides.FailureExpiration ?? failureExpiration;
 
-			if (logger.IsEnabled(LogLevel.Debug)) {
-				logger.LogDebug("Applied exact override for {QueryType}", queryTypeName);
+			if (_logger.IsEnabled(LogLevel.Debug)) {
+				_logger.LogDebug("Applied exact override for {QueryType}", queryTypeName);
 			}
 		}
 

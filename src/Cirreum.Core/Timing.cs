@@ -9,6 +9,10 @@ internal static class Timing {
 	internal static long Start() => Stopwatch.GetTimestamp();
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal static TimeSpan GetElapsedTime(long startTimestamp)
+		=> Stopwatch.GetElapsedTime(startTimestamp);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal static double GetElapsedMilliseconds(long startTimestamp)
 		=> Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;
 

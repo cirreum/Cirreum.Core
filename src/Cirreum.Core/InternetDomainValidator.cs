@@ -5,9 +5,13 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
 /// <summary>
-/// Validates internet domain names according to standard formatting rules.
+/// Validates internet domain names for user input scenarios.
 /// </summary>
 /// <remarks>
+/// <para>
+/// This validator is designed for form input validation to catch common user errors.
+/// It is NOT a security-grade validator and should not be used for security decisions.
+/// </para>
 /// <para>
 /// Domains must meet the following criteria:
 /// </para>

@@ -3,11 +3,9 @@
 using Cirreum.Authorization;
 using Cirreum.Authorization.Visualization;
 using Cirreum.Conductor.Configuration;
-using Cirreum.Conductor.Intercepts;
 using Cirreum.Extensions.Internal;
 using Cirreum.Presence;
 using FluentValidation;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System;
@@ -18,6 +16,9 @@ using System.Reflection;
 /// Extension methods to register the core services of the application.
 /// </summary>
 public static class ServiceCollectionExtensions {
+
+	private const string DomainServicesRegisteredKey = "__DomainServicesRegistered";
+
 
 	/// <summary>
 	/// Tries to add the default built-in implementation of the 
@@ -88,6 +89,88 @@ public static class ServiceCollectionExtensions {
 
 	}
 
+	///// <summary>
+	///// Registers all domain services including validation, authorization, and request/notification handling.
+	///// </summary>
+	///// <remarks>
+	///// <para>
+	///// This method performs the following registrations:
+	///// <list type="number">
+	///// <item>Domain context initializer for environment awareness</item>
+	///// <item>FluentValidation validators from all scanned assemblies</item>
+	///// <item>Authorization evaluator and resource/policy validators</item>
+	///// <item>Conductor (dispatcher and publisher) with the following intercept pipeline:
+	/////   <list type="bullet">
+	/////   <item>Validation - Validates requests using FluentValidation</item>
+	/////   <item>Authorization - Authorizes requests against resource and policy validators</item>
+	/////   <item>Performance Monitoring - Tracks handler execution metrics</item>
+	/////   <item>Query Caching - Caches query results based on configuration</item>
+	/////   </list>
+	///// </item>
+	///// </list>
+	///// </para>
+	///// <para>
+	///// Configuration is loaded from the "Conductor" section of appsettings.json.
+	///// </para>
+	///// <para>
+	///// This should be called after all other service registrations but before building the application.
+	///// </para>
+	///// </remarks>
+	///// <param name="services">The service collection to configure.</param>
+	///// <param name="configuration">Application configuration for binding Conductor settings.</param>
+	///// <returns>The service collection for method chaining.</returns>
+	//public static IServiceCollection AddDomainServices(
+	//	this IServiceCollection services,
+	//	IConfiguration configuration) {
+
+	//	//
+	//	// Domain Context Initializer
+	//	//
+	//	services.AddDomainContextInitilizer();
+
+	//	//
+	//	// Collect Assemblies
+	//	//
+	//	var assemblies = AssemblyScanner
+	//		.ScanAssemblies()
+	//		.ToArray();
+
+	//	//
+	//	// FluentValidation
+	//	//
+	//	services.AddFluentValidationAndAuthorization(assemblies);
+
+	//	//
+	//	// Conductor Configuration
+	//	//
+	//	var conductorSettings = new ConductorSettings();
+	//	configuration.GetSection(ConductorSettings.SectionName).Bind(conductorSettings);
+	//	services.TryAddSingleton(conductorSettings);
+
+	//	//
+	//	// Conductor
+	//	//
+	//	services.AddConductor(builder => {
+	//		builder
+	//			.RegisterFromAssemblies(assemblies)
+
+	//			// Pre-processing intercepts
+	//			.AddOpenIntercept(typeof(Validation<,>))        // Validate request structure
+	//			.AddOpenIntercept(typeof(Authorization<,>))     // Authorize user access
+
+	//			// Wrapping intercepts
+	//			// Note: HandlerPerformance wraps QueryCaching to measure handler tier (cache + handler) duration
+	//			.AddOpenIntercept(typeof(HandlerPerformance<,>)) // Measures handler tier performance
+
+	//			// Pre-emptive Intercept
+	//			.AddOpenIntercept(typeof(QueryCaching<,>));      // Cache proxy (returns cache OR calls handler)
+
+	//	}, conductorSettings);
+
+	//	return services;
+
+	//}
+
 	/// <summary>
 	/// Registers all domain services including validation, authorization, and request/notification handling.
 	/// </summary>
@@ -98,41 +181,39 @@ public static class ServiceCollectionExtensions {
 	/// <item>Domain context initializer for environment awareness</item>
 	/// <item>FluentValidation validators from all scanned assemblies</item>
 	/// <item>Authorization evaluator and resource/policy validators</item>
-	/// <item>Conductor (dispatcher and publisher) with the following intercept pipeline:
+	/// <item>Conductor (dispatcher and publisher) with configurable intercept pipeline:
 	///   <list type="bullet">
 	///   <item>Validation - Validates requests using FluentValidation</item>
 	///   <item>Authorization - Authorizes requests against resource and policy validators</item>
+	///   <item>[Custom Intercepts] - Extensibility point for consumer-specific concerns</item>
 	///   <item>Performance Monitoring - Tracks handler execution metrics</item>
 	///   <item>Query Caching - Caches query results based on configuration</item>
 	///   </list>
 	/// </item>
 	/// </list>
 	/// </para>
-	/// <para>
-	/// Configuration is loaded from the "Conductor" section of appsettings.json.
-	/// </para>
-	/// <para>
-	/// This should be called after all other service registrations but before building the application.
-	/// </para>
 	/// </remarks>
 	/// <param name="services">The service collection to configure.</param>
-	/// <param name="configuration">Application configuration for binding Conductor settings.</param>
+	/// <param name="assemblies">The assemblies to scan for handlers, validators, and authorizers.</param>
+	/// <param name="configure">Optional configuration for Conductor settings and custom intercepts.</param>
 	/// <returns>The service collection for method chaining.</returns>
-	public static IServiceCollection AddDomainServices(
+	internal static IServiceCollection AddDomainServices(
 		this IServiceCollection services,
-		IConfiguration configuration) {
+		Assembly[] assemblies,
+		Action<ConductorOptionsBuilder>? configure = null) {
+
+		// Idempotency check
+		if (services.Any(sd => sd.ServiceKey?.ToString() == DomainServicesRegisteredKey)) {
+			throw new InvalidOperationException(
+				"Domain services have already been registered. " +
+				"Call AddDomainServices only once per service collection.");
+		}
+		services.AddKeyedSingleton<object>(DomainServicesRegisteredKey, new object());
 
 		//
 		// Domain Context Initializer
 		//
 		services.AddDomainContextInitilizer();
-
-		//
-		// Collect Assemblies
-		//
-		var assemblies = AssemblyScanner
-			.ScanAssemblies()
-			.ToArray();
 
 		//
 		// FluentValidation
@@ -142,30 +223,58 @@ public static class ServiceCollectionExtensions {
 		//
 		// Conductor Configuration
 		//
-		var conductorSettings = new ConductorSettings();
-		configuration.GetSection(ConductorSettings.SectionName).Bind(conductorSettings);
+		var optionsBuilder = new ConductorOptionsBuilder();
+		configure?.Invoke(optionsBuilder);
+
+		var conductorSettings = optionsBuilder.GetSettings();
 		services.TryAddSingleton(conductorSettings);
 
 		//
 		// Conductor
 		//
 		services.AddConductor(builder => {
-			builder
-				.RegisterFromAssemblies(assemblies)
-
-				// Pre-processing intercepts (outer layer)
-				.AddOpenIntercept(typeof(Validation<,>))        // Validate request structure
-				.AddOpenIntercept(typeof(Authorization<,>))     // Authorize user access
-
-				// Handler tier intercepts (inner layer)
-				// Note: HandlerPerformance wraps QueryCaching to measure handler tier (cache + handler) duration
-				.AddOpenIntercept(typeof(HandlerPerformance<,>)) // Measure handler tier performance
-				.AddOpenIntercept(typeof(QueryCaching<,>));      // Cache proxy (returns cache OR calls handler)
-
+			builder.RegisterFromAssemblies(assemblies);
+			optionsBuilder.ConfigureIntercepts(builder);
 		}, conductorSettings);
 
 		return services;
+	}
 
+	/// <summary>
+	/// Registers all domain services using the provided <see cref="DomainServicesBuilder"/> 
+	/// to determine which assemblies to scan.
+	/// </summary>
+	/// <param name="services">The service collection to configure.</param>
+	/// <param name="domainBuilder">The domain services builder containing registered assemblies.</param>
+	/// <param name="configure">Optional configuration for Conductor settings and custom intercepts.</param>
+	/// <returns>The service collection for method chaining.</returns>
+	internal static IServiceCollection AddDomainServices(
+		this IServiceCollection services,
+		DomainServicesBuilder domainBuilder,
+		Action<ConductorOptionsBuilder>? configure = null) {
+
+		ArgumentNullException.ThrowIfNull(domainBuilder);
+
+		var assemblies = domainBuilder.GetAssemblies().ToArray();
+		if (assemblies.Length == 0) {
+			assemblies = [.. AssemblyScanner.ScanAssemblies()];
+		}
+
+		return services.AddDomainServices(assemblies, configure);
+	}
+
+	/// <summary>
+	/// Registers all domain services using automatic assembly scanning.
+	/// </summary>
+	/// <param name="services">The service collection to configure.</param>
+	/// <param name="configure">Optional configuration for Conductor settings and custom intercepts.</param>
+	/// <returns>The service collection for method chaining.</returns>
+	public static IServiceCollection AddDomainServices(
+		this IServiceCollection services,
+		Action<ConductorOptionsBuilder>? configure = null) {
+
+		var assemblies = AssemblyScanner.ScanAssemblies().ToArray();
+		return services.AddDomainServices(assemblies, configure);
 	}
 
 	static IServiceCollection AddFluentValidationAndAuthorization(this IServiceCollection services, params Assembly?[] assemblies) {

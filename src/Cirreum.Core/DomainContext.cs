@@ -23,11 +23,20 @@ internal static class DomainContext {
 
 	private static ActivityKind ResolveActivityKind(DomainRuntimeType runtimeType) {
 		return runtimeType switch {
+
+			// Client applications - user-facing interfaces
 			DomainRuntimeType.BlazorWasm => ActivityKind.Client,
 			DomainRuntimeType.MauiHybrid => ActivityKind.Client,
-			DomainRuntimeType.Function => ActivityKind.Internal,
+			DomainRuntimeType.Console => ActivityKind.Client,
+
+			// Server applications - handle incoming requests
 			DomainRuntimeType.WebApi => ActivityKind.Server,
-			DomainRuntimeType.WebApp => ActivityKind.Consumer,
+			DomainRuntimeType.WebApp => ActivityKind.Server,
+
+			// Internal/background processing
+			DomainRuntimeType.Function => ActivityKind.Internal,
+			DomainRuntimeType.UnitTest => ActivityKind.Internal,
+
 			_ => ActivityKind.Internal
 		};
 	}

@@ -5,23 +5,6 @@
 /// </summary>
 public static class ConductorTelemetry {
 
-	/// <summary>
-	/// The meter name for Conductor dispatcher metrics.
-	/// Use this when configuring OpenTelemetry: <c>metrics.AddMeter(ConductorTelemetry.MeterName)</c>
-	/// </summary>
-	public const string MeterName = "cirreum.conductor.dispatcher";
-
-	/// <summary>
-	/// The activity source name for Conductor tracing.
-	/// Use this when configuring OpenTelemetry: <c>tracing.AddSource(ConductorTelemetry.ActivitySourceName)</c>
-	/// </summary>
-	public const string ActivitySourceName = "cirreum.conductor.dispatcher";
-
-	/// <summary>
-	/// The meter name for Conductor cache metrics.
-	/// Use this when configuring OpenTelemetry: <c>metrics.AddMeter(ConductorTelemetry.CacheMeterName)</c>
-	/// </summary>
-	public const string CacheMeterName = "cirreum.conductor.cache";
 
 	/// <summary>
 	/// Metric: Cache operation duration in milliseconds.
