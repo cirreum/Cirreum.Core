@@ -2,7 +2,6 @@
 
 using System.Collections.Concurrent;
 
-
 /// <summary>
 /// Manages wrapper instance caches for Conductor.
 /// </summary>

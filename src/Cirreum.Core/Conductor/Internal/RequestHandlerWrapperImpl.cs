@@ -16,8 +16,120 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 
 	private static readonly string requestTypeName = typeof(TRequest).Name;
 
-	public override async Task<Result> HandleAsync(
+	// Cache the auditable check at type level - happens once per request type
+	private static readonly bool _isAuditable = typeof(IAuditableRequestBase).IsAssignableFrom(typeof(TRequest));
+
+	public override Task<Result> HandleAsync(
 		IRequest request,
+		IServiceProvider serviceProvider,
+		IPublisher publisher,
+		CancellationToken cancellationToken) {
+
+		// Fast branch - determined at compile time per request type
+		if (!_isAuditable) {
+			return RequestHandlerWrapperImpl<TRequest>.HandleNonAuditableAsync(
+				(TRequest)request,
+				serviceProvider,
+				cancellationToken);
+		}
+
+		return RequestHandlerWrapperImpl<TRequest>.HandleAuditableAsync(
+			(TRequest)request,
+			serviceProvider,
+			publisher,
+			cancellationToken);
+	}
+
+	private static async Task<Result> HandleNonAuditableAsync(
+		TRequest request,
+		IServiceProvider serviceProvider,
+		CancellationToken cancellationToken) {
+
+		// ----- 0. START ACTIVITY & TIMING -----
+		using var activity = RequestTelemetry.StartActivity(
+			requestTypeName,
+			hasResponse: false);
+
+		var startTimestamp = activity is not null ? Timing.Start() : 0L;
+
+		// Local function for recording telemetry
+		void RecordTelemetry(bool success, Exception? error = null, bool canceled = false) {
+
+			if (activity is null) {
+				return;
+			}
+
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+
+			if (canceled) {
+				RequestTelemetry.SetActivityCanceled(activity, (OperationCanceledException)error!);
+				RequestTelemetry.RecordCanceled(requestTypeName, null, elapsed, (OperationCanceledException)error!);
+			} else if (success) {
+				RequestTelemetry.SetActivitySuccess(activity);
+				RequestTelemetry.RecordSuccess(requestTypeName, null, elapsed);
+			} else {
+				RequestTelemetry.SetActivityError(activity, error!);
+				RequestTelemetry.RecordFailure(requestTypeName, null, elapsed, error!);
+			}
+		}
+
+		try {
+
+			// ----- 1. RESOLVE HANDLER -----
+			var handler = serviceProvider.GetService<IRequestHandler<TRequest>>();
+			if (handler is null) {
+				return Result.Fail(new InvalidOperationException(
+					$"No handler registered for request type '{requestTypeName}'"));
+			}
+
+			// ----- 2. BUILD PIPELINE -----
+			var interceptArray = serviceProvider
+				.GetServices<IIntercept<TRequest, Unit>>()
+				.ToArray();
+
+			// ----- 3. EXECUTE HANDLER OR PIPELINE -----
+			Result finalResult;
+			if (interceptArray.Length == 0) {
+				// HOT PATH: No context needed - direct handler execution
+				finalResult = await handler.HandleAsync(request, cancellationToken);
+			} else {
+				// COLD PATH: Create context for pipeline
+				var requestContext = await CreateRequestContext(
+					serviceProvider,
+					activity,
+					startTimestamp,
+					request,
+					requestTypeName);
+
+				finalResult = await ExecutePipelineAsync(
+					requestContext,
+					handler,
+					interceptArray,
+					0,
+					cancellationToken);
+			}
+
+			// ----- 4. POST-PROCESSING (TELEMETRY) -----
+			RecordTelemetry(finalResult.IsSuccess, finalResult.Error);
+			return finalResult;
+
+		} catch (OperationCanceledException oce) {
+			RecordTelemetry(success: false, error: oce, canceled: true);
+			throw;
+
+		} catch (Exception fex) when (fex.IsFatal()) {
+			throw;
+
+		} catch (Exception ex) {
+			var finalResult = Result.Fail(ex);
+			RecordTelemetry(finalResult.IsSuccess, finalResult.Error);
+			return finalResult;
+		}
+
+	}
+
+	private static async Task<Result> HandleAuditableAsync(
+		TRequest request,
 		IServiceProvider serviceProvider,
 		IPublisher publisher,
 		CancellationToken cancellationToken) {
@@ -27,8 +139,31 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 
 		// ----- 0. START ACTIVITY & TIMING -----
 		using var activity = RequestTelemetry.StartActivity(
-			requestTypeName, hasResponse: false);
-		var startTimestamp = Timing.Start();
+			requestTypeName,
+			hasResponse: false);
+
+		var startTimestamp = activity is not null ? Timing.Start() : 0L;
+
+		// Local function for recording telemetry
+		void RecordTelemetry(bool success, Exception? error = null, bool canceled = false) {
+
+			if (activity is null) {
+				return;
+			}
+
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+
+			if (canceled) {
+				RequestTelemetry.SetActivityCanceled(activity, (OperationCanceledException)error!);
+				RequestTelemetry.RecordCanceled(requestTypeName, null, elapsed, (OperationCanceledException)error!);
+			} else if (success) {
+				RequestTelemetry.SetActivitySuccess(activity);
+				RequestTelemetry.RecordSuccess(requestTypeName, null, elapsed);
+			} else {
+				RequestTelemetry.SetActivityError(activity, error!);
+				RequestTelemetry.RecordFailure(requestTypeName, null, elapsed, error!);
+			}
+		}
 
 		try {
 
@@ -48,14 +183,14 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 			// ----- 3. EXECUTE HANDLER OR PIPELINE -----
 			if (interceptArray.Length == 0) {
 				// HOT PATH: No context needed - direct handler execution
-				finalResult = await handler.HandleAsync((TRequest)request, cancellationToken);
+				finalResult = await handler.HandleAsync(request, cancellationToken);
 			} else {
 				// COLD PATH: Create context for pipeline
 				requestContext = await CreateRequestContext(
 					serviceProvider,
 					activity,
 					startTimestamp,
-					(TRequest)request,
+					request,
 					requestTypeName);
 
 				finalResult = await ExecutePipelineAsync(
@@ -66,25 +201,12 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 					cancellationToken);
 			}
 
-			// ----- 4. GET ELAPSED TIME -----
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-
-			// ----- 5. POST-PROCESSING (TELEMETRY) -----
-			if (finalResult.IsSuccess) {
-				RequestTelemetry.SetActivitySuccess(activity);
-				RequestTelemetry.RecordSuccess(requestTypeName, null, elapsed);
-			} else {
-				RequestTelemetry.SetActivityError(activity, finalResult.Error);
-				RequestTelemetry.RecordFailure(requestTypeName, null, elapsed, finalResult.Error);
-			}
+			// ----- 4. POST-PROCESSING (TELEMETRY) -----
+			RecordTelemetry(finalResult.IsSuccess, finalResult.Error);
 
 		} catch (OperationCanceledException oce) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-
-			RequestTelemetry.SetActivityCanceled(activity, oce);
-			RequestTelemetry.RecordCanceled(requestTypeName, null, elapsed, oce);
-
 			finalResult = Result.Fail(oce);
+			RecordTelemetry(success: false, error: oce, canceled: true);
 			throw;
 
 		} catch (Exception fex) when (fex.IsFatal()) {
@@ -93,40 +215,33 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 			throw;
 
 		} catch (Exception ex) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-
-			RequestTelemetry.SetActivityError(activity, ex);
-			RequestTelemetry.RecordFailure(requestTypeName, null, elapsed, ex);
-
 			finalResult = Result.Fail(ex);
-
+			RecordTelemetry(finalResult.IsSuccess, finalResult.Error);
 		} finally {
 
 			// ----- 6. AUDIT NOTIFICATION (IF NEEDED) -----
-			if (request is IAuditableRequestBase) {
-				try {
-					// ONLY create context if auditing is needed
-					requestContext ??= await CreateRequestContext(
-						serviceProvider,
-						activity,
-						startTimestamp,
-						(TRequest)request,
-						requestTypeName);
+			try {
+				// ONLY create context if auditing is needed
+				requestContext ??= await CreateRequestContext(
+					serviceProvider,
+					activity,
+					startTimestamp,
+					request,
+					requestTypeName);
 
-					var notification = RequestCompletedNotification
-						.FromResult(finalResult, requestContext);
+				var notification = RequestCompletedNotification
+					.FromResult(finalResult, requestContext);
 
-					// Publish notification - fire-and-forget
-					await publisher
-						.PublishAsync(
-							notification,
-							PublisherStrategy.FireAndForget,
-							CancellationToken.None)
-						.ConfigureAwait(false);
+				// Publish notification - fire-and-forget
+				await publisher
+					.PublishAsync(
+						notification,
+						PublisherStrategy.FireAndForget,
+						CancellationToken.None)
+					.ConfigureAwait(false);
 
-				} catch {
-					// Audit failure shouldn't break the request
-				}
+			} catch {
+				// Audit failure shouldn't break the request
 			}
 
 		}
@@ -135,6 +250,7 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 		return finalResult;
 
 	}
+
 
 	private static async Task<RequestContext<TRequest>> CreateRequestContext(
 		IServiceProvider serviceProvider,

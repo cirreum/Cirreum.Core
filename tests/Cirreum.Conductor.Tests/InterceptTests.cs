@@ -840,15 +840,15 @@ public class InterceptTests {
 		var dispatcher = provider.GetRequiredService<IDispatcher>();
 
 		// Act
-		EmptyTransportPublisher.EmptyMessageList.Clear();
+		EmptyTransportPublisher.Messages.Clear();
 		var result = await dispatcher.DispatchAsync(new AuditableEcho("hi"), this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
 		await Task.Delay(100, this.TestContext.CancellationToken); // Allow async notification to be published
-		Assert.HasCount(1, EmptyTransportPublisher.EmptyMessageList);
+		Assert.HasCount(1, EmptyTransportPublisher.Messages);
 
-		var notification = EmptyTransportPublisher.EmptyMessageList.Single();
+		var notification = EmptyTransportPublisher.Messages.Single();
 		Assert.IsInstanceOfType<RequestCompletedNotification>(notification);
 
 		var completed = (RequestCompletedNotification)notification;
@@ -875,7 +875,7 @@ public class InterceptTests {
 		// Act
 		var successfullyThrew = false;
 		try {
-			EmptyTransportPublisher.EmptyMessageList.Clear();
+			EmptyTransportPublisher.Messages.Clear();
 			var result = await dispatcher.DispatchAsync(new AuditableEcho("hi"), this.TestContext.CancellationToken);
 		} catch (OutOfMemoryException) {
 			successfullyThrew = true;
@@ -884,9 +884,9 @@ public class InterceptTests {
 		// Assert
 		Assert.IsTrue(successfullyThrew, "Expected OutOfMemoryException to be thrown");
 		await Task.Delay(100, this.TestContext.CancellationToken); // Allow async notification to be published
-		Assert.HasCount(1, EmptyTransportPublisher.EmptyMessageList);
+		Assert.HasCount(1, EmptyTransportPublisher.Messages);
 
-		var notification = EmptyTransportPublisher.EmptyMessageList.Single();
+		var notification = EmptyTransportPublisher.Messages.Single();
 		Assert.IsInstanceOfType<RequestCompletedNotification>(notification);
 
 		var completed = (RequestCompletedNotification)notification;

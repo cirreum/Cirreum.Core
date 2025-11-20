@@ -3,6 +3,7 @@
 using Cirreum.Diagnostics;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Runtime.CompilerServices;
 
 /// <summary>
 /// Provides telemetry capabilities for request processing including metrics and distributed tracing.
@@ -31,6 +32,15 @@ internal static class RequestTelemetry {
 		ConductorTelemetry.RequestsDurationTag,
 		unit: "ms",
 		description: "Request processing duration in milliseconds");
+
+
+	// Helper to check if metrics should be recorded
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static bool HasListeners() {
+		// Don't even create the meter if there are no listeners on the activity source
+		// This is a good proxy for "is telemetry enabled?"
+		return _activitySource.HasListeners();
+	}
 
 	#region Activity Management (Distributed Tracing)
 

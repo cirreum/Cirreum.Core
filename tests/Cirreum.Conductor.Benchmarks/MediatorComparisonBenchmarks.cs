@@ -73,11 +73,11 @@ public class MediatorComparisonBenchmarks {
 	}
 
 	[Benchmark(Description = "MediatR.Send")]
-	public async Task<PingResponse> Mediatr_Send() {
+	public Task<PingResponse> Mediatr_Send() {
 		//for (var i = 0; i < Ops; i++) {
 		//	await _mediatr.Send(_mediatrRequest);
 		//}
-		return await _mediatr.Send(_mediatrRequest);
+		return _mediatr.Send(_mediatrRequest);
 	}
 
 }

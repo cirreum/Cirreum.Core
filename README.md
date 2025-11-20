@@ -61,15 +61,36 @@ Flexible, policy-based authorization with support for both RBAC and ABAC pattern
 - `IAuthorizableResource` - Resources that can be authorized
 - `IAuthorizationValidator` - Custom authorization logic
 - Role resolution with inheritance support
+- Built-in Authorization visualizers and documenters
+- Flexible AuthN/AuthZ with support for OIDC/MSAL
 
-### 🚀 Messaging & CQRS
+### 🚀 Messaging & CQRS (Cirreum Conductor)
 
-Foundation for command/query separation and request handling:
+A high-performance mediator implementation with comprehensive pipeline support for command/query separation:
 
-- Request/response contracts
-- Handler abstractions
-- Pipeline behavior interfaces
-- Interceptor patterns
+**Core Features**
+- Type-safe request/response contracts with `Result<T>` pattern
+- Automatic handler discovery and registration
+- Configurable intercept pipeline (validation, authorization, caching, telemetry)
+- Pub/sub notification system with multiple publishing strategies
+- OpenTelemetry integration with zero overhead when disabled
+
+**Request Abstractions**
+- `IRequest` / `IRequest<TResponse>` - Base request contracts
+- `IDomainCommand` / `IDomainCommand<TResponse>` - Commands with auditing and authorization
+- `IDomainQuery<TResponse>` - Queries with auditing and authorization
+- `IDomainCacheableQuery<TResponse>` - Cacheable queries with automatic cache management
+
+**Built-in Intercepts**
+- **Validation** - FluentValidation integration
+- **Authorization** - Resource and policy-based authorization
+- **Performance Monitoring** - Request timing and metrics
+- **Query Caching** - Automatic result caching with configurable providers
+
+**Extension Interfaces**
+- `IAuditableRequest` / `IAuditableRequest<T>` - Automatic audit trail generation
+- `IAuthorizableRequest` / `IAuthorizableRequest<T>` - Authorization evaluation
+- `ICacheableQuery<T>` - Query result caching with sliding/absolute expiration
 
 ### 🏗️ Primitives & Utilities
 
@@ -123,10 +144,12 @@ Common functionality implemented using a curated set of stable dependencies:
 Cirreum.Core is intentionally lightweight, but not dependency-free. It includes a **small, stable set of critical foundational libraries**:
 
 - `Cirreum.Result` - Railway-oriented programming with Result<T>
+- 'OpenTelemetry.Api' - OpenTelemetry support
+- 'OpenTelemetry.Extensions.Hosting' - OpenTelemetry support
 - `Microsoft.Extensions.Telemetry.Abstractions` - OpenTelemetry support
 - `Microsoft.Extensions.Configuration.Json` - Configuration management
 - `Microsoft.Extensions.Configuration.Binder` - Configuration binding
-- `FluentValidation` - Validation rules
+- `FluentValidation` - Validation and Authorization rules
 - `Humanizer.Core` - Human-readable transformations
 - `SmartFormat` - String formatting
 - `CsvHelper` - CSV processing
@@ -216,7 +239,7 @@ public class MyValidator : IAuthorizationValidator<MyResource>
 }
 ```
 
-## Structure
+## Logical Structure
 
 ```
 Cirreum.Core/
@@ -344,9 +367,9 @@ This library:
 
 ## Documentation
 
-- [Context Architecture](docs/OPERATION-CONTEXT.md) - Detailed context composition guide
-- [Authorization Patterns](docs/AUTHORIZATION.md) - Authorization best practices
-- [Timing Infrastructure](docs/TIMING.md) - High-precision timing guide
+- [Context Architecture](OPERATION-CONTEXT.md) - Detailed context composition guide
+- [Authorization Flow](authorization/FLOW.md) - Authorization best practices
+- [Authorization Sequence](authorization/SEQUENCE.md) - Authorization best practices
 
 ## Contribution Guidelines
 

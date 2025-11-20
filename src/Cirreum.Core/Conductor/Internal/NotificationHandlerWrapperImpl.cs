@@ -16,7 +16,28 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 	private static readonly Type notificationType = typeof(TNotification);
 	private static readonly string notificationTypeName = notificationType.Name;
 
-	public override async Task<Result> Handle(
+	public override Task<Result> Handle(
+		Publisher publisher,
+		ILogger logger,
+		INotification notification,
+		IServiceProvider serviceProvider,
+		PublisherStrategy? strategy,
+		PublisherStrategy defaultStrategy,
+		CancellationToken cancellationToken) {
+
+		// Direct task return - no await, no extra state machine
+		return HandleCoreAsync(
+			publisher,
+			logger,
+			(TNotification)notification,
+			serviceProvider,
+			strategy,
+			defaultStrategy,
+			cancellationToken);
+
+	}
+
+	private static async Task<Result> HandleCoreAsync(
 		Publisher publisher,
 		ILogger logger,
 		INotification notification,
@@ -27,25 +48,55 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 
 		// ----- 0. START TIMING & ACTIVITY -----
 		using var activity = NotificationTelemetry.StartActivity(notificationTypeName);
-		var startTimestamp = Timing.Start();
+		var startTimestamp = activity is not null ? Timing.Start() : 0L;
+		var effectiveStrategy = PublisherStrategy.Sequential;
+		var handlerCount = 0;
+
+		// Local function for recording telemetry
+		void RecordTelemetry(bool success, int count = 0, PublisherStrategy strategy = PublisherStrategy.Sequential, Exception? error = null, bool canceled = false) {
+
+			if (activity is null) {
+				return;
+			}
+
+			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+
+			if (canceled) {
+				NotificationTelemetry.SetActivityCanceled(activity, (OperationCanceledException)error!);
+				NotificationTelemetry.RecordCanceled(notificationTypeName, elapsed, (OperationCanceledException)error!);
+			} else if (success) {
+				NotificationTelemetry.SetActivitySuccess(activity);
+				NotificationTelemetry.RecordSuccess(
+					notificationTypeName,
+					strategy,
+					count,
+					elapsed);
+			} else {
+				NotificationTelemetry.SetActivityError(activity, error!);
+				NotificationTelemetry.RecordFailure(
+					notificationTypeName,
+					strategy,
+					count,
+					elapsed,
+					error!);
+			}
+		}
 
 		try {
-			// ----- 1. CHECK CANCELLATION -----
-			cancellationToken.ThrowIfCancellationRequested();
 
-			// ----- 2. RESOLVE HANDLERS -----
+			// ----- 1. RESOLVE HANDLERS -----
 			var handlers = serviceProvider
 				.GetServices<INotificationHandler<TNotification>>()
-				.ToList();
+				.ToArray();
 
-			if (handlers.Count == 0) {
+			handlerCount = handlers.Length;
+			if (handlerCount == 0) {
 				PublisherLogger.NoHandlersRegistered(logger, notificationTypeName);
 				NotificationTelemetry.RecordNoHandlers(notificationTypeName);
 				return Result.Success;
 			}
 
-			// ----- 3. DETERMINE STRATEGY -----
-			PublisherStrategy effectiveStrategy;
+			// ----- 2. DETERMINE STRATEGY -----
 			if (strategy.HasValue) {
 				effectiveStrategy = strategy.Value;
 			} else {
@@ -55,12 +106,8 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 				effectiveStrategy = attributeStrategy ?? defaultStrategy;
 			}
 
-			PublisherLogger.Publishing(logger, notificationTypeName, handlers.Count, effectiveStrategy);
-
-			// ----- 4. CHECK CANCELLATION AGAIN -----
-			cancellationToken.ThrowIfCancellationRequested();
-
-			// ----- 5. PUBLISH -----
+			// ----- 3. PUBLISH -----
+			PublisherLogger.Publishing(logger, notificationTypeName, handlerCount, effectiveStrategy);
 			var result = effectiveStrategy switch {
 				PublisherStrategy.Sequential =>
 					await publisher.PublishSequentialAsync((TNotification)notification, handlers, false, cancellationToken),
@@ -74,51 +121,21 @@ internal sealed class NotificationHandlerWrapperImpl<TNotification>
 					new InvalidOperationException($"Unknown publisher strategy: {effectiveStrategy}"))
 			};
 
-			// ----- 6. RECORD TELEMETRY -----
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-			if (result.IsSuccess) {
-				NotificationTelemetry.SetActivitySuccess(activity);
-				NotificationTelemetry.RecordSuccess(
-					notificationTypeName,
-					effectiveStrategy,
-					handlers.Count,
-					elapsed);
-			} else {
-				NotificationTelemetry.SetActivityError(activity, result.Error);
-				NotificationTelemetry.RecordFailure(
-					notificationTypeName,
-					effectiveStrategy,
-					handlers.Count,
-					elapsed,
-					result.Error);
-			}
+			// ----- 4. RECORD TELEMETRY -----
+			RecordTelemetry(result.IsSuccess, handlerCount, effectiveStrategy, result.Error);
 
 			return result;
 
 		} catch (OperationCanceledException oce) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-
-			NotificationTelemetry.SetActivityCanceled(activity, oce);
-			NotificationTelemetry.RecordCanceled(notificationTypeName, elapsed, oce);
-
+			RecordTelemetry(false, handlerCount, effectiveStrategy, oce, true);
 			throw;
-
 		} catch (Exception fex) when (fex.IsFatal()) {
 			throw;
-
 		} catch (Exception ex) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-
-			NotificationTelemetry.SetActivityError(activity, ex);
-			NotificationTelemetry.RecordFailure(
-				notificationTypeName,
-				strategy ?? defaultStrategy,
-				0,
-				elapsed,
-				ex);
-
+			RecordTelemetry(false, handlerCount, effectiveStrategy, ex);
 			return Result.Fail(ex);
-
 		}
+
 	}
+
 }

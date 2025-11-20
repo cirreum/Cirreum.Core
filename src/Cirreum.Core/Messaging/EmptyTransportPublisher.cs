@@ -14,7 +14,7 @@ public sealed class EmptyTransportPublisher(
 	ILogger<EmptyTransportPublisher> logger)
 	: IDistributedTransportPublisher {
 
-	public static readonly List<DistributedMessage> EmptyMessageList = [];
+	public static readonly List<DistributedMessage> Messages = [];
 
 	/// <summary>
 	/// Logs the receipt of a message and returns a completed task without sending the message.
@@ -28,7 +28,7 @@ public sealed class EmptyTransportPublisher(
 	/// that the message was received but not actually published to any external system.
 	/// </remarks>
 	public Task PublishMessageAsync<T>(T message, CancellationToken ct) where T : DistributedMessage {
-		EmptyMessageList.Add(message);
+		Messages.Add(message);
 		if (logger.IsEnabled(LogLevel.Warning)) {
 			logger.LogWarning("{Publisher} received Message {MessageType} - not published",
 				nameof(EmptyTransportPublisher), message.GetType().Name);

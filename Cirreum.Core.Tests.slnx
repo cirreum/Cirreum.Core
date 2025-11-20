@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/setup/">
+    <File Path="global.json" />
+    <File Path="tests/Directory.Build.props" />
+    <File Path="tests/test.runsettings" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Cirreum.Core/Cirreum.Core.csproj" />
   </Folder>

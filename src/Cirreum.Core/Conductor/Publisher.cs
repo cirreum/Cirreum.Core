@@ -39,7 +39,7 @@ sealed class Publisher(
 
 	internal async Task<Result> PublishSequentialAsync<TNotification>(
 		TNotification notification,
-		List<INotificationHandler<TNotification>> handlers,
+		INotificationHandler<TNotification>[] handlers,
 		bool stopOnFailure,
 		CancellationToken cancellationToken)
 		where TNotification : INotification {
@@ -51,7 +51,7 @@ sealed class Publisher(
 
 			var handlerType = handler.GetType();
 			try {
-				await handler.HandleAsync(notification, cancellationToken).ConfigureAwait(false);
+				await handler.HandleAsync(notification, cancellationToken);
 			} catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
 				// Cooperative cancellation - let it bubble
 				throw;
@@ -81,13 +81,9 @@ sealed class Publisher(
 
 	internal async Task<Result> PublishParallelAsync<TNotification>(
 		TNotification notification,
-		List<INotificationHandler<TNotification>> handlers,
+		INotificationHandler<TNotification>[] handlers,
 		CancellationToken cancellationToken)
 		where TNotification : INotification {
-
-		if (handlers.Count == 0) {
-			return Result.Success;
-		}
 
 		cancellationToken.ThrowIfCancellationRequested();
 
@@ -95,7 +91,7 @@ sealed class Publisher(
 			.Select(handler => InvokeHandlerAsync(handler, notification, logger, cancellationToken))
 			.ToArray();
 
-		var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+		var results = await Task.WhenAll(tasks);
 
 		var failures = results
 			.Where(r => r.IsFailure)
@@ -113,20 +109,23 @@ sealed class Publisher(
 			INotificationHandler<TNotification> handler,
 			TNotification notification,
 			ILogger handlerLogger,
-			CancellationToken cancellationToken) {
+			CancellationToken token) {
 
-			var handlerType = handler.GetType();
+			// call in a loop, via Select project
+			// so we throw here if canceled
+			token.ThrowIfCancellationRequested();
 
 			try {
-				await handler.HandleAsync(notification, cancellationToken).ConfigureAwait(false);
+				await handler.HandleAsync(notification, token);
 				return Result.Success;
-			} catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+			} catch (OperationCanceledException) when (token.IsCancellationRequested) {
 				// Cooperative cancellation - let it bubble
 				throw;
 			} catch (Exception ex) {
-				PublisherLogger.HandlerThrewException(handlerLogger, handlerType, ex);
+				var ht = handler.GetType();
+				PublisherLogger.HandlerThrewException(handlerLogger, ht, ex);
 				var wrappedException = new InvalidOperationException(
-					$"Handler {handlerType.Name} failed", ex);
+					$"Handler {handler.GetType().Name} failed", ex);
 				return Result.Fail(wrappedException);
 			}
 		}
@@ -134,12 +133,8 @@ sealed class Publisher(
 
 	internal Task<Result> PublishFireAndForgetAsync<TNotification>(
 		TNotification notification,
-		List<INotificationHandler<TNotification>> handlers)
+		INotificationHandler<TNotification>[] handlers)
 		where TNotification : INotification {
-
-		if (handlers.Count == 0) {
-			return Result.SuccessTask;
-		}
 
 		// Fire and forget with parallel execution
 		_ = Task.Run(async () => {

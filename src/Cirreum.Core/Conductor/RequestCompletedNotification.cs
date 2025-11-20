@@ -39,6 +39,9 @@ public sealed record RequestCompletedNotification(
 	string? ErrorType
 
 ) : DistributedMessage {
+
+	private static readonly (string, string?, string?) SUCCESS = ("SUCCESS", null!, null!);
+
 	/// <summary>
 	/// Set to true to enable background delivery for request completion notifications.
 	/// </summary>
@@ -57,7 +60,7 @@ public sealed record RequestCompletedNotification(
 		where TRequest : IRequest {
 
 		var (outcome, errorMessage, errorType) = result.Match(
-			() => ("SUCCESS", (string?)null, (string?)null),
+			() => SUCCESS,
 			ex => ("FAILURE", ex.Message, ex.GetType().Name));
 
 		return new RequestCompletedNotification(
@@ -104,7 +107,7 @@ public sealed record RequestCompletedNotification(
 		where TRequest : IRequest<TResponse> {
 
 		var (outcome, errorMessage, errorType) = result.Match(
-			_ => ("SUCCESS", null!, null!),
+			_ => SUCCESS,
 			ex => ("FAILURE", ex.Message, ex.GetType().Name));
 
 		return new RequestCompletedNotification(
