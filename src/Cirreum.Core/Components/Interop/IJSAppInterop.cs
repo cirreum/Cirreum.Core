@@ -36,12 +36,6 @@ public interface IJSAppInterop {
 	string IsDaylightSavingTime();
 
 	/// <summary>
-	/// Gets samples of different date/time formats.
-	/// </summary>
-	/// <returns>An object containing various formatted date/time strings.</returns>
-	FormattedSamples GetFormattedSamples();
-
-	/// <summary>
 	/// Checks if the browser supports the Intl.DateTimeFormat timeZone feature.
 	/// </summary>
 	/// <returns>True if timeZone is supported, false otherwise.</returns>
