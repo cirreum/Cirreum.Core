@@ -66,10 +66,10 @@ public interface IFileSystem {
 	/// This parameter can contain a combination of valid literal path and
 	/// wildcard (* and ?) characters, but it doesn't support regular expressions.
 	/// </param>
-	/// <param name="take">The optional, number of files to return. Zero (0) indicates no limits and is the default.</param>
 	/// <param name="predicate">The optional, predicate, to filter the results.</param>
+	/// <param name="take">The optional, number of files to return. Zero (0) indicates no limits and is the default.</param>
 	/// <returns>An enumerable collection of file paths.</returns>
-	IEnumerable<string> QueryFiles(string[] paths, bool includeChildDirectories, string searchPattern, int take = 0, Func<string, bool>? predicate = null);
+	IEnumerable<string> QueryFiles(string[] paths, bool includeChildDirectories, string searchPattern, Func<string, bool>? predicate = null, int take = 0);
 
 	/// <summary>
 	/// Queries the specified path for any files.
@@ -81,10 +81,10 @@ public interface IFileSystem {
 	/// This parameter can contain a combination of valid literal path and
 	/// wildcard (* and ?) characters, but it doesn't support regular expressions.
 	/// </param>
-	/// <param name="take">The optional, number of files to return. Zero (0) indicates no limits and is the default.</param>
 	/// <param name="predicate">The optional, predicate, to filter the results.</param>
+	/// <param name="take">The optional, number of files to return. Zero (0) indicates no limits and is the default.</param>
 	/// <returns>An enumerable collection of file paths.</returns>
-	IEnumerable<string> QueryFiles(string path, bool includeChildDirectories, string searchPattern, int take = 0, Func<string, bool>? predicate = null);
+	IEnumerable<string> QueryFiles(string path, bool includeChildDirectories, string searchPattern, Func<string, bool>? predicate = null, int take = 0);
 
 	/// <summary>
 	/// Queries the specified path for any files.
@@ -96,10 +96,14 @@ public interface IFileSystem {
 	/// The search patterns can contain a combination of valid literal path and
 	/// wildcard (* and ?) characters, but it doesn't support regular expressions.
 	/// </param>
-	/// <param name="take">The optional, limit on the number of files to return.</param>
 	/// <param name="predicate">The optional predicate, to filter the results.</param>
+	/// <param name="take">The optional, limit on the number of files to return.</param>
 	/// <returns>An enumerable collection of file paths.</returns>
-	IEnumerable<string> QueryFiles(string path, bool includeChildDirectories, IEnumerable<string> searchPatterns, int take = 0, Func<string, bool>? predicate = null);
+	/// <remarks>
+	/// When multiple search patterns are provided with a take limit, the specific files 
+	/// returned may vary between executions depending on the implementation.
+	/// </remarks>
+	IEnumerable<string> QueryFiles(string path, bool includeChildDirectories, IEnumerable<string> searchPatterns, Func<string, bool>? predicate = null, int take = 0);
 
 	/// <summary>
 	/// Queries the specified path for any directories.
@@ -111,10 +115,10 @@ public interface IFileSystem {
 	/// This parameter can contain a combination of valid literal path and
 	/// wildcard (* and ?) characters, but it doesn't support regular expressions.
 	/// </param>
-	/// <param name="take">The optional, number of directories to return. Zero (0) indicates no limits and is the default.</param>
 	/// <param name="predicate">The optional, predicate, to filter the results.</param>
+	/// <param name="take">The optional, number of directories to return. Zero (0) indicates no limits and is the default.</param>
 	/// <returns>An enumerable collection of directory paths.</returns>
-	IEnumerable<string> QueryDirectories(string[] paths, bool includeChildDirectories, string searchPattern, int take = 0, Func<string, bool>? predicate = null);
+	IEnumerable<string> QueryDirectories(string[] paths, bool includeChildDirectories, string searchPattern, Func<string, bool>? predicate = null, int take = 0);
 
 	/// <summary>
 	/// Queries the specified path for any directories.
@@ -126,10 +130,10 @@ public interface IFileSystem {
 	/// This parameter can contain a combination of valid literal path and
 	/// wildcard (* and ?) characters, but it doesn't support regular expressions.
 	/// </param>
-	/// <param name="take">The optional, number of directories to return. Zero (0) indicates no limits and is the default.</param>
 	/// <param name="predicate">The optional, predicate, to filter the results.</param>
+	/// <param name="take">The optional, number of directories to return. Zero (0) indicates no limits and is the default.</param>
 	/// <returns>An enumerable of directory paths.</returns>
-	IEnumerable<string> QueryDirectories(string path, bool includeChildDirectories, string searchPattern, int take = 0, Func<string, bool>? predicate = null);
+	IEnumerable<string> QueryDirectories(string path, bool includeChildDirectories, string searchPattern, Func<string, bool>? predicate = null, int take = 0);
 
 	/// <summary>
 	/// Queries the specified path for any directories.
@@ -141,10 +145,14 @@ public interface IFileSystem {
 	/// The search patterns can contain a combination of valid literal path and
 	/// wildcard (* and ?) characters, but it doesn't support regular expressions.
 	/// </param>
-	/// <param name="take">The optional, number of directories to return. Zero (0) indicates no limits and is the default.</param>
 	/// <param name="predicate">The optional, predicate, to filter the results.</param>
+	/// <param name="take">The optional, number of directories to return. Zero (0) indicates no limits and is the default.</param>
 	/// <returns>An enumerable collection of directory paths.</returns>
-	IEnumerable<string> QueryDirectories(string path, bool includeChildDirectories, IEnumerable<string> searchPatterns, int take = 0, Func<string, bool>? predicate = null);
+	/// <remarks>
+	/// When multiple search patterns are provided with a take limit, the specific directories 
+	/// returned may vary between executions depending on the implementation.
+	/// </remarks>
+	IEnumerable<string> QueryDirectories(string path, bool includeChildDirectories, IEnumerable<string> searchPatterns, Func<string, bool>? predicate = null, int take = 0);
 
 	/// <summary>
 	/// Extracts a .Zip file to the specified location.
