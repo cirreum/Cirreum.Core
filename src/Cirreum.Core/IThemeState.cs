@@ -4,12 +4,11 @@
 /// Represents theme-related state for the current scope, including:
 /// <list type="bullet">
 /// <item><description><see cref="Mode"/> / <see cref="AppliedMode"/> for light/dark/auto selection.</description></item>
-/// <item><description><see cref="Scheme"/> for the active color palette (e.g. "default", "aspire").</description></item>
+/// <item><description><see cref="Theme"/> for the active color palette (e.g. "default", "aspire").</description></item>
 /// </list>
 /// </summary>
 public interface IThemeState : IScopedNotificationState {
 
-	// ---------------------------------------------------------------------
 	// THEME MODE (light / dark / auto)
 	// ---------------------------------------------------------------------
 
@@ -22,15 +21,13 @@ public interface IThemeState : IScopedNotificationState {
 	/// prepared to handle at least these three.
 	/// </remarks>
 	string Mode { get; }
-
 	/// <summary>
-	/// Sets the selected theme mode and notifies subscribers.
+	/// Sets the selected theme mode.
 	/// </summary>
 	/// <param name="value">
 	/// The theme mode to select (for example <c>"light"</c>, <c>"dark"</c>, or <c>"auto"</c>).
 	/// </param>
 	void SetMode(string value);
-
 	/// <summary>
 	/// Gets the currently applied theme mode.
 	/// </summary>
@@ -40,7 +37,6 @@ public interface IThemeState : IScopedNotificationState {
 	/// based on system or browser preferences and exposes the resolved value here.
 	/// </remarks>
 	string AppliedMode { get; }
-
 	/// <summary>
 	/// Sets the currently applied theme mode.
 	/// </summary>
@@ -49,27 +45,25 @@ public interface IThemeState : IScopedNotificationState {
 	/// </param>
 	void SetAppliedMode(string value);
 
-	// ---------------------------------------------------------------------
-	// COLOR SCHEME (palette / brand theme)
+
+	// THEME PALETTE
 	// ---------------------------------------------------------------------
 
 	/// <summary>
-	/// Gets the current theme color scheme identifier.
+	/// Gets the current theme palette identifier.
 	/// </summary>
 	/// <remarks>
 	/// Examples include <c>"default"</c>, <c>"aspire"</c>, <c>"excel"</c>,
 	/// <c>"office"</c>, <c>"outlook"</c>, or <c>"windows"</c>. Applications may
-	/// define additional custom schemes as needed.
+	/// define additional custom themes as needed.
 	/// </remarks>
-	string Scheme { get; }
-
+	string Theme { get; }
 	/// <summary>
-	/// Sets the current theme color scheme and notifies subscribers.
+	/// Sets the current theme palette.
 	/// </summary>
 	/// <param name="value">
-	/// The scheme identifier to set. This should match a known scheme in the
+	/// The theme identifier to set. This should match a known theme in the
 	/// consuming UI layer or fall back to a sensible default.
 	/// </param>
-	void SetScheme(string value);
-
+	void SetTheme(string value);
 }
