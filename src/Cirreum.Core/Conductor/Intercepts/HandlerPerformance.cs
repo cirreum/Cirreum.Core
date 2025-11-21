@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using System.Threading;
 using System.Threading.Tasks;
 
-public sealed class HandlerPerformance<TRequest, TResponse>(
+sealed class HandlerPerformance<TRequest, TResponse>(
 	ILogger<HandlerPerformance<TRequest, TResponse>> logger
 ) : IIntercept<TRequest, TResponse>
 	where TRequest : notnull {

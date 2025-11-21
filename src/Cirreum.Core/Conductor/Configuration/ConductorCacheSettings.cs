@@ -54,26 +54,33 @@ public class ConductorCacheSettings {
 	public const string SectionName = "Cirreum:Conductor:Cache";
 
 	/// <summary>
-	/// The cache provider to use. Defaults to HybridCache.
-	/// Use 'None' to disable caching, 'InMemory' for development, or 'HybridCache' for production.
+	/// The cache provider to use. Defaults to None.
+	/// - None: Disable caching entirely (safe default)
+	/// - InMemory: Single-instance in-memory cache (Blazor WASM, development)
+	/// - Distributed: Distributed cache only (Azure Functions, serverless)
+	/// - Hybrid: L1 (memory) + L2 (distributed) for multi-instance apps
 	/// </summary>
-	public CacheProvider Provider { get; set; } = CacheProvider.HybridCache;
+	public CacheProvider Provider { get; set; } = CacheProvider.None;
 
 	/// <summary>
-	/// Default expiration time for successful query results in distributed (L2) cache.
-	/// If not specified, HybridCache's default is used.
+	/// Default expiration time for cached query results.
+	/// - InMemory: Controls memory cache expiration
+	/// - Distributed: Controls distributed cache (L2) expiration
+	/// - Hybrid: Controls distributed cache (L2) expiration
+	/// If not specified, provider defaults are used.
 	/// </summary>
 	public TimeSpan? DefaultExpiration { get; set; }
 
 	/// <summary>
-	/// Default expiration time for successful query results in local (L1) in-memory cache.
+	/// Default expiration time for local in-memory cache (L1) when using Hybrid provider.
+	/// Ignored for InMemory and Distributed providers.
 	/// If not specified, uses <see cref="DefaultExpiration"/>.
 	/// </summary>
 	public TimeSpan? DefaultLocalExpiration { get; set; }
 
 	/// <summary>
 	/// Default expiration time for failed query results.
-	/// Should be shorter than <see cref="DefaultExpiration"/>.
+	/// Should be shorter than <see cref="DefaultExpiration"/> to allow faster retry.
 	/// </summary>
 	public TimeSpan? DefaultFailureExpiration { get; set; }
 
@@ -95,24 +102,4 @@ public class ConductorCacheSettings {
 	/// "GetCriticalUserQuery": { "Expiration": "00:01:00" }
 	/// </example>
 	public Dictionary<string, QueryCacheOverride> QueryOverrides { get; set; } = [];
-}
-
-/// <summary>
-/// Cache setting overrides for a specific query type or category.
-/// </summary>
-public class QueryCacheOverride {
-	/// <summary>
-	/// Override for distributed (L2) cache expiration.
-	/// </summary>
-	public TimeSpan? Expiration { get; set; }
-
-	/// <summary>
-	/// Override for local (L1) in-memory cache expiration.
-	/// </summary>
-	public TimeSpan? LocalExpiration { get; set; }
-
-	/// <summary>
-	/// Override for failure expiration.
-	/// </summary>
-	public TimeSpan? FailureExpiration { get; set; }
 }

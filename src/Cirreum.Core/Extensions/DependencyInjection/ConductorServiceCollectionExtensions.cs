@@ -88,7 +88,7 @@ public static class ConductorServiceCollectionExtensions {
 
 		// Register cache service based on configuration
 		// Use Replace for None/InMemory to enforce config over code registration
-		// Use TryAdd for HybridCache to allow infrastructure layer to provide implementation
+		// Use TryAdd for Distributed/Hybrid to allow infrastructure layer to provide implementation
 		switch (settings.Cache.Provider) {
 			case CacheProvider.None:
 				services.Replace(ServiceDescriptor.Singleton<ICacheableQueryService, NoCacheQueryService>());
@@ -98,8 +98,9 @@ public static class ConductorServiceCollectionExtensions {
 				services.Replace(ServiceDescriptor.Singleton<ICacheableQueryService, InMemoryCacheableQueryService>());
 				break;
 
-			case CacheProvider.HybridCache:
-				// Infrastructure layer should register HybridCacheableQueryService
+			case CacheProvider.Distributed:
+			case CacheProvider.Hybrid:
+				// Runtime extensions or Application should register
 				// If not registered, fall back to None
 				services.TryAddSingleton<ICacheableQueryService, NoCacheQueryService>();
 				break;

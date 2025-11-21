@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
-public sealed class QueryCaching<TRequest, TResponse>
+sealed class QueryCaching<TRequest, TResponse>
   : IIntercept<TRequest, TResponse>
 	where TRequest : ICacheableQuery<TResponse> {
 
@@ -31,11 +31,17 @@ public sealed class QueryCaching<TRequest, TResponse>
 		_logger = logger;
 
 		// Check once at construction time instead of every request
-		if (conductorSettings.Cache.Provider == CacheProvider.HybridCache &&
+		if (conductorSettings.Cache.Provider == CacheProvider.Hybrid &&
 			cache is NoCacheQueryService) {
 			logger.LogWarning(
-				"CacheProvider is set to 'HybridCache' yet the service is not registered. " +
-				"Did you forget to call AddConductorHybridCache()?");
+				"CacheProvider is set to 'Hybrid' yet the service is not registered. " +
+				"Did you forget to add a hybrid caching implementation?");
+		}
+		if (conductorSettings.Cache.Provider == CacheProvider.Distributed &&
+			cache is NoCacheQueryService) {
+			logger.LogWarning(
+				"CacheProvider is set to 'Distributed' yet the service is not registered. " +
+				"Did you forget to add a distributed caching implementation?");
 		}
 	}
 

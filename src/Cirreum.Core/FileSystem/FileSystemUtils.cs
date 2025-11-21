@@ -1,8 +1,14 @@
 ﻿namespace Cirreum.FileSystem;
 
+/// <summary>
+/// Helper utilities for file system services.
+/// </summary>
 public static class FileSystemUtils {
 
-	private static readonly string defaultSearchPattern = "*";
+	/// <summary>
+	/// The default search pattern: * (star)
+	/// </summary>
+	public const string DefaultSearchPattern = "*";
 
 	/// <summary>
 	/// Validates and normalizes search patterns, ensuring consistent behavior.
@@ -10,16 +16,14 @@ public static class FileSystemUtils {
 	/// <param name="patterns">Single pattern or enumerable of patterns</param>
 	/// <returns>Normalized collection of search patterns</returns>
 	public static IEnumerable<string> NormalizeSearchPatterns(params string?[] patterns) {
-
-		if (patterns == null || patterns.Length == 0) {
-			return [defaultSearchPattern];
+		if (patterns.Length == 0) {
+			return [DefaultSearchPattern];
 		}
 
-		return patterns
+		var normalized = patterns
 			.Where(p => !string.IsNullOrWhiteSpace(p))
-			.Select(p => p ?? defaultSearchPattern) // More explicit null handling
-			.DefaultIfEmpty(defaultSearchPattern);
+			.Select(p => p!.Trim()); // p! is safe here due to Where clause
 
+		return normalized.Any() ? normalized : [DefaultSearchPattern];
 	}
-
 }

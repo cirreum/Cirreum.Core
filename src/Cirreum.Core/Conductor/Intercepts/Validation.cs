@@ -5,7 +5,7 @@ using FluentValidation.Results;
 using System.Collections.Generic;
 using System.Threading;
 
-public sealed class Validation<TRequest, TResponse>
+sealed class Validation<TRequest, TResponse>
 	: IIntercept<TRequest, TResponse>
 	where TRequest : notnull {
 

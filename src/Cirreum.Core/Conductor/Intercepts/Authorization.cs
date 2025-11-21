@@ -19,7 +19,7 @@ using Cirreum.Conductor;
 /// anywhere in the application.
 /// </para>
 /// </remarks>
-public sealed class Authorization<TRequest, TResponse>(
+sealed class Authorization<TRequest, TResponse>(
 	IAuthorizationEvaluator authorizor
 ) : IIntercept<TRequest, TResponse>
 	where TRequest : IAuthorizableRequestBase {

@@ -1,9 +1,19 @@
 ﻿namespace Cirreum.FileSystem;
 
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+
 /// <summary>
 /// Defines the interface for MAUI Hybrid file system operations that bridge
 /// native platform capabilities with web-based UI.
 /// </summary>
+/// <remarks>
+/// Methods in this interface may throw platform-specific exceptions depending on the 
+/// runtime implementation, including permission-related errors and file system access issues.
+/// </remarks>
 public interface IMauiHybridFileSystem {
 	/// <summary>
 	/// Gets the path to the app's local data directory on the native platform.
@@ -29,6 +39,11 @@ public interface IMauiHybridFileSystem {
 	/// <param name="fileTypes">Optional file type filters (e.g., ".pdf", ".jpg").</param>
 	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>The selected file result, or null if cancelled.</returns>
+	/// <exception cref="PlatformNotSupportedException">Thrown when the operation is not supported on the current platform.</exception>
+	/// <remarks>
+	/// Platform-specific exceptions may be thrown depending on the runtime implementation, 
+	/// such as permission-related errors or file system access issues.
+	/// </remarks>
 	Task<FilePickerResult?> PickFileAsync(IEnumerable<string>? fileTypes = null, CancellationToken cancellationToken = default);
 
 	/// <summary>
@@ -37,7 +52,24 @@ public interface IMauiHybridFileSystem {
 	/// <param name="fileTypes">Optional file type filters (e.g., ".pdf", ".jpg").</param>
 	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>The collection of selected file results.</returns>
+	/// <exception cref="PlatformNotSupportedException">Thrown when the operation is not supported on the current platform.</exception>
+	/// <remarks>
+	/// Platform-specific exceptions may be thrown depending on the runtime implementation, 
+	/// such as permission-related errors or file system access issues.
+	/// </remarks>
 	Task<IEnumerable<FilePickerResult>> PickMultipleFilesAsync(IEnumerable<string>? fileTypes = null, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Prompts the user to select a folder from the native file picker.
+	/// </summary>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+	/// <returns>The selected folder path, or null if cancelled.</returns>
+	/// <exception cref="PlatformNotSupportedException">Thrown when the operation is not supported on the current platform.</exception>
+	/// <remarks>
+	/// Platform-specific exceptions may be thrown depending on the runtime implementation, 
+	/// such as permission-related errors or file system access issues.
+	/// </remarks>
+	Task<string?> PickFolderAsync(CancellationToken cancellationToken = default);
 
 	/// <summary>
 	/// Prompts the user to save a file to the native file system.
@@ -47,7 +79,29 @@ public interface IMauiHybridFileSystem {
 	/// <param name="contentType">The MIME type of the content.</param>
 	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>True if the file was saved successfully; otherwise false.</returns>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="fileName"/> or <paramref name="data"/> is null.</exception>
+	/// <exception cref="PlatformNotSupportedException">Thrown when the operation is not supported on the current platform.</exception>
+	/// <remarks>
+	/// Platform-specific exceptions may be thrown depending on the runtime implementation, 
+	/// such as permission-related errors or file system access issues.
+	/// </remarks>
 	Task<bool> SaveFileAsync(string fileName, byte[] data, string contentType = "application/octet-stream", CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Prompts the user to save a file to the native file system.
+	/// </summary>
+	/// <param name="fileName">The suggested file name.</param>
+	/// <param name="data">The file content as a stream.</param>
+	/// <param name="contentType">The MIME type of the content.</param>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+	/// <returns>True if the file was saved successfully; otherwise false.</returns>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="fileName"/> or <paramref name="data"/> is null.</exception>
+	/// <exception cref="PlatformNotSupportedException">Thrown when the operation is not supported on the current platform.</exception>
+	/// <remarks>
+	/// Platform-specific exceptions may be thrown depending on the runtime implementation, 
+	/// such as permission-related errors or file system access issues.
+	/// </remarks>
+	Task<bool> SaveFileAsync(string fileName, Stream data, string contentType = "application/octet-stream", CancellationToken cancellationToken = default);
 
 	/// <summary>
 	/// Shares a file using the native platform's share capabilities.
@@ -56,6 +110,13 @@ public interface IMauiHybridFileSystem {
 	/// <param name="title">Optional title for the share dialog.</param>
 	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>True if the share was successful; otherwise false.</returns>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="filePath"/> is null.</exception>
+	/// <exception cref="FileNotFoundException">Thrown when the file at <paramref name="filePath"/> does not exist.</exception>
+	/// <exception cref="PlatformNotSupportedException">Thrown when the operation is not supported on the current platform.</exception>
+	/// <remarks>
+	/// Platform-specific exceptions may be thrown depending on the runtime implementation, 
+	/// such as permission-related errors or file system access issues.
+	/// </remarks>
 	Task<bool> ShareFileAsync(string filePath, string? title = null, CancellationToken cancellationToken = default);
 
 	/// <summary>
@@ -64,6 +125,13 @@ public interface IMauiHybridFileSystem {
 	/// <param name="filePath">The path to the file to open.</param>
 	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>True if the file was opened successfully; otherwise false.</returns>
+	/// <exception cref="ArgumentNullException">Thrown when <paramref name="filePath"/> is null.</exception>
+	/// <exception cref="FileNotFoundException">Thrown when the file at <paramref name="filePath"/> does not exist.</exception>
+	/// <exception cref="PlatformNotSupportedException">Thrown when the operation is not supported on the current platform.</exception>
+	/// <remarks>
+	/// Platform-specific exceptions may be thrown depending on the runtime implementation, 
+	/// such as permission-related errors or file system access issues.
+	/// </remarks>
 	Task<bool> OpenFileAsync(string filePath, CancellationToken cancellationToken = default);
 }
 
@@ -82,9 +150,14 @@ public sealed class FilePickerResult {
 	public string? FullPath { get; init; }
 
 	/// <summary>
-	/// Gets the content type of the file.
+	/// Gets the content type (MIME type) of the file.
 	/// </summary>
 	public string? ContentType { get; init; }
+
+	/// <summary>
+	/// Gets the file size in bytes, if available.
+	/// </summary>
+	public long? FileSize { get; init; }
 
 	/// <summary>
 	/// Opens a read stream for the file.

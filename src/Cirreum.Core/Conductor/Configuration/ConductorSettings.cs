@@ -14,6 +14,7 @@
 		  "users": {
 			"Expiration": "00:10:00",
 			"LocalExpiration": "00:02:00"
+			"FailureExpiration": "00:00:10"
 		  }
 		}
 
@@ -21,6 +22,7 @@
 		"QueryOverrides": {
 		  "GetCriticalUserDataQuery": {
 			"Expiration": "00:00:30"
+			"FailureExpiration": "00:00:10"
 		  }
 		}
 	  }
