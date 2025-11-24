@@ -19,19 +19,19 @@ internal static partial class RemoteClientTelemetry {
 
 	// Counters
 	private static readonly Counter<long> _requestCounter = _meter.CreateCounter<long>(
-		"remote.client.requests.total",
+		"remote_services.client.requests",
 		description: "Total number of remote client requests");
 
 	private static readonly Counter<long> _requestFailedCounter = _meter.CreateCounter<long>(
-		"remote.client.requests.failed.total",
+		"remote_services.client.requests.failed",
 		description: "Total number of failed remote client requests");
 
 	private static readonly Counter<long> _requestCanceledCounter = _meter.CreateCounter<long>(
-		"remote.client.requests.canceled.total",
+		"remote_services.client.requests.canceled",
 		description: "Total number of canceled remote client requests");
 
 	private static readonly Histogram<double> _requestDuration = _meter.CreateHistogram<double>(
-		"remote.client.requests.duration",
+		"remote_services.client.request.duration",
 		unit: "ms",
 		description: "Remote client request duration in milliseconds");
 
@@ -45,15 +45,15 @@ internal static partial class RemoteClientTelemetry {
 			$"HTTP {httpMethod}",
 			ActivityKind.Client);
 
-		activity?.SetTag("http.method", httpMethod);
-		activity?.SetTag("http.endpoint", endpoint);
-		activity?.SetTag("http.client.type", clientType);
+		activity?.SetTag("http.request.method", httpMethod);
+		activity?.SetTag("url.path", endpoint);
+		activity?.SetTag("remote_services.client.type", clientType);
 
 		return activity;
 	}
 
 	internal static void SetActivitySuccess(Activity? activity, int statusCode) {
-		activity?.SetTag("http.status_code", statusCode);
+		activity?.SetTag("http.response.status_code", statusCode);
 		activity?.SetStatus(ActivityStatusCode.Ok);
 	}
 
@@ -61,10 +61,10 @@ internal static partial class RemoteClientTelemetry {
 		if (activity is not null) {
 			activity.SetStatus(ActivityStatusCode.Error, ex.Message);
 			activity.SetTag("error.type", ex.GetType().Name);
-			activity.SetTag("http.request.failed", true);
+			activity.SetTag("remote_services.request.failed", true);
 
 			if (statusCode.HasValue) {
-				activity.SetTag("http.status_code", statusCode.Value);
+				activity.SetTag("http.response.status_code", statusCode.Value);
 			}
 
 			activity.AddException(ex);
@@ -74,7 +74,7 @@ internal static partial class RemoteClientTelemetry {
 	internal static void SetActivityCanceled(Activity? activity, OperationCanceledException oce) {
 		if (activity is not null) {
 			activity.SetStatus(ActivityStatusCode.Error, "Canceled");
-			activity.SetTag("http.request.canceled", true);
+			activity.SetTag("remote_services.request.canceled", true);
 			activity.AddException(oce);
 		}
 	}
@@ -154,17 +154,17 @@ internal static partial class RemoteClientTelemetry {
 		string? errorType = null) {
 		var tags = new TagList
 		{
-			{ "http.method", httpMethod },
-			{ "http.endpoint", endpoint },
-			{ "http.client.type", clientType },
-			{ "http.request.succeeded", success },
-			{ "http.request.failed", !success && !canceled },
-			{ "http.request.canceled", canceled },
-			{ "http.request.status", canceled ? "canceled" : success ? "success" : "failure" }
+			{ "http.request.method", httpMethod },
+			{ "url.path", endpoint },
+			{ "remote_services.client.type", clientType },
+			{ "remote_services.request.succeeded", success },
+			{ "remote_services.request.failed", !success && !canceled },
+			{ "remote_services.request.canceled", canceled },
+			{ "remote_services.request.status", canceled ? "canceled" : success ? "success" : "failure" }
 		};
 
 		if (statusCode.HasValue) {
-			tags.Add("http.status_code", statusCode.Value);
+			tags.Add("http.response.status_code", statusCode.Value);
 		}
 
 		if (errorType is not null) {

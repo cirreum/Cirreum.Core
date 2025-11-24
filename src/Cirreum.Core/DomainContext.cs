@@ -2,7 +2,17 @@
 
 using System.Diagnostics;
 
-internal static class DomainContext {
+/// <summary>
+/// Provides shared context and configuration keys for the Cirreum domain framework.
+/// </summary>
+public static class DomainContext {
+
+	/// <summary>
+	/// The key used to store the resolved <see cref="DomainRuntimeType"/> in the
+	/// <see cref="Microsoft.Extensions.Hosting.IHostApplicationBuilder.Properties"/> dictionary
+	/// during application configuration and setup.
+	/// </summary>
+	public const string RuntimeTypeKey = "Cirreum:DomainRuntimeType";
 
 	private static bool _initialized = false;
 

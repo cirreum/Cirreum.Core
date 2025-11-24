@@ -17,19 +17,19 @@ internal static class RequestTelemetry {
 		new(CirreumTelemetry.Meters.ConductorDispatcher, CirreumTelemetry.Version);
 
 	private static readonly Counter<long> _requestCounter = _meter.CreateCounter<long>(
-		ConductorTelemetry.RequestsTotalTag,
+		ConductorTelemetry.RequestsTotalMetric,
 		description: "Total number of requests dispatched");
 
 	private static readonly Counter<long> _requestFailedCounter = _meter.CreateCounter<long>(
-		ConductorTelemetry.RequestsFailedTotalTag,
+		ConductorTelemetry.RequestsFailedTotalMetric,
 		description: "Total number of failed requests");
 
 	private static readonly Counter<long> _requestCanceledCounter = _meter.CreateCounter<long>(
-		ConductorTelemetry.RequestsCanceledTotalTag,
+		ConductorTelemetry.RequestsCanceledTotalMetric,
 		description: "Total number of canceled requests");
 
 	private static readonly Histogram<double> _requestDuration = _meter.CreateHistogram<double>(
-		ConductorTelemetry.RequestsDurationTag,
+		ConductorTelemetry.RequestsDurationHistogram,
 		unit: "ms",
 		description: "Request processing duration in milliseconds");
 

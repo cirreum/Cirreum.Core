@@ -5,7 +5,6 @@
 /// Use these names when configuring OpenTelemetry instrumentation.
 /// </summary>
 public static class CirreumTelemetry {
-
 	/// <summary>
 	/// The version of the Cirreum library.
 	/// </summary>
@@ -19,44 +18,42 @@ public static class CirreumTelemetry {
 		/// <summary>
 		/// Activity source for Conductor dispatcher operations (handlers, intercepts, validation, authorization).
 		/// </summary>
-		public const string ConductorDispatcher = "cirreum.conductor.dispatcher";
+		public const string ConductorDispatcher = "Cirreum.Conductor.Dispatcher";
 
 		/// <summary>
-		/// Activity source for Conductor dispatcher operations (handlers, intercepts, validation, authorization).
+		/// Activity source for Conductor publisher operations.
 		/// </summary>
-		public const string ConductorPublisher = "cirreum.conductor.publisher";
+		public const string ConductorPublisher = "Cirreum.Conductor.Publisher";
 
 		/// <summary>
 		/// Activity source for remote service client operations (HTTP, gRPC).
 		/// </summary>
-		public const string RemoteServicesClient = "cirreum.remote-services.client";
-
+		public const string RemoteServicesClient = "Cirreum.RemoteServices.Client";
 	}
 
 	/// <summary>
 	/// All meter names used by Cirreum components.
 	/// </summary>
 	public static class Meters {
-
 		/// <summary>
 		/// Meter for Conductor dispatcher metrics (request counts, durations, failures).
 		/// </summary>
-		public const string ConductorDispatcher = "cirreum.conductor.dispatcher";
+		public const string ConductorDispatcher = "Cirreum.Conductor.Dispatcher";
 
 		/// <summary>
-		/// Meter for Conductor dispatcher metrics (request counts, durations, failures).
+		/// Meter for Conductor publisher metrics.
 		/// </summary>
-		public const string ConductorPublisher = "cirreum.conductor.publisher";
+		public const string ConductorPublisher = "Cirreum.Conductor.Publisher";
 
 		/// <summary>
-		/// Meter for Conductor cache metrics (hits, misses, evictions, durations).
+		/// Meter for Conductor Cacheable Query metrics (hits, misses, evictions, durations).
 		/// </summary>
-		public const string ConductorCache = "cirreum.conductor.cache";
+		public const string ConductorCache = "Cirreum.Conductor.QueryCache";
 
 		/// <summary>
 		/// Meter for remote service client metrics (request counts, durations, status codes).
 		/// </summary>
-		public const string RemoteServicesClient = "cirreum.remote-services.client";
+		public const string RemoteServicesClient = "Cirreum.RemoteServices.Client";
 	}
 
 }

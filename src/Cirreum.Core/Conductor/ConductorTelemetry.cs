@@ -4,13 +4,33 @@
 /// Constants for OpenTelemetry instrumentation.
 /// </summary>
 public static class ConductorTelemetry {
-
-
+	// Metrics
 	/// <summary>
 	/// Metric: Cache operation duration in milliseconds.
 	/// </summary>
 	public const string CacheDurationMetric = "conductor.cache.duration";
 
+	/// <summary>
+	/// Metric: Total number of requests.
+	/// </summary>
+	public const string RequestsTotalMetric = "conductor.requests.total";
+
+	/// <summary>
+	/// Metric: Total number of failed requests.
+	/// </summary>
+	public const string RequestsFailedTotalMetric = "conductor.requests.failed";
+
+	/// <summary>
+	/// Metric: Total number of canceled requests.
+	/// </summary>
+	public const string RequestsCanceledTotalMetric = "conductor.requests.canceled";
+
+	/// <summary>
+	/// Metric: Histogram of request duration.
+	/// </summary>
+	public const string RequestsDurationHistogram = "conductor.requests.duration";
+
+	// Tags/Attributes
 	/// <summary>
 	/// Tag: Query type name.
 	/// </summary>
@@ -27,12 +47,12 @@ public static class ConductorTelemetry {
 	public const string QueryStatusTag = "query.status";
 
 	/// <summary>
-	/// Tag: Error type tag.
+	/// Tag: Error type.
 	/// </summary>
 	public const string ErrorTypeTag = "error.type";
 
 	/// <summary>
-	/// Tag: Request type tag.
+	/// Tag: Request type.
 	/// </summary>
 	public const string RequestTypeTag = "request.type";
 
@@ -42,7 +62,7 @@ public static class ConductorTelemetry {
 	public const string RequestHasResponseTag = "request.has_response";
 
 	/// <summary>
-	/// Tag: Response type tag.
+	/// Tag: Response type.
 	/// </summary>
 	public const string ResponseTypeTag = "response.type";
 
@@ -52,7 +72,7 @@ public static class ConductorTelemetry {
 	public const string RequestStatusTag = "request.status";
 
 	/// <summary>
-	/// Tag: Request success (true/false).
+	/// Tag: Request succeeded (true/false).
 	/// </summary>
 	public const string RequestSucceededTag = "request.succeeded";
 
@@ -65,24 +85,4 @@ public static class ConductorTelemetry {
 	/// Tag: Request canceled (true/false).
 	/// </summary>
 	public const string RequestCanceledTag = "request.canceled";
-
-	/// <summary>
-	/// Tag: Requests total.
-	/// </summary>
-	public const string RequestsTotalTag = "requests.total";
-
-	/// <summary>
-	/// Tag: Requests failed total.
-	/// </summary>
-	public const string RequestsFailedTotalTag = "requests.failed";
-
-	/// <summary>
-	/// Tag: Requests canceled total.
-	/// </summary>
-	public const string RequestsCanceledTotalTag = "requests.canceled";
-
-	/// <summary>
-	/// Tag: Histogram of requests duration.
-	/// </summary>
-	public const string RequestsDurationTag = "requests.duration";
 }
