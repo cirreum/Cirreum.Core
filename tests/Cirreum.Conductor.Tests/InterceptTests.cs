@@ -268,7 +268,7 @@ public class InterceptTests {
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddOpenIntercept(typeof(LoggingIntercept<,>))
 					.AddOpenIntercept(typeof(FatalIntercept<,>));
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 		});
 
 		var provider = services.BuildServiceProvider();
@@ -288,7 +288,7 @@ public class InterceptTests {
 				builder
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddOpenIntercept(typeof(LoggingIntercept<,>));
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 		});
 
 		var provider = services.BuildServiceProvider();
@@ -316,7 +316,7 @@ public class InterceptTests {
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddOpenIntercept(typeof(LoggingIntercept<,>))
 					.AddOpenIntercept(typeof(TimingIntercept<,>));
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 		});
 
 		var provider = services.BuildServiceProvider();
@@ -345,7 +345,7 @@ public class InterceptTests {
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddOpenIntercept(typeof(ResultModifyingIntercept<,>))
 					.AddOpenIntercept(typeof(HandlerPerformance<,>));
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 		});
 
 		var provider = services.BuildServiceProvider();
@@ -373,7 +373,7 @@ public class InterceptTests {
 				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 				.AddIntercept<SpecificIntercept>()
 				.AddOpenIntercept(typeof(LoggingIntercept<,>));
-		}, Shared.SequentialSettings);
+		}, o => o.WithSetting(Shared.SequentialSettings));
 
 		var provider = services.BuildServiceProvider();
 
@@ -402,7 +402,7 @@ public class InterceptTests {
 				builder
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddOpenIntercept(typeof(LoggingIntercept<,>));
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 		});
 		var provider = services.BuildServiceProvider();
 		var dispatcher = provider.GetRequiredService<IDispatcher>();
@@ -427,7 +427,7 @@ public class InterceptTests {
 				builder
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddOpenIntercept(typeof(LoggingIntercept<,>));
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 		});
 
 		var provider = services.BuildServiceProvider();
@@ -453,7 +453,7 @@ public class InterceptTests {
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddIntercept<ShortCircuitIntercept>()
 					.AddOpenIntercept(typeof(HandlerPerformance<,>));
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 		});
 
 
@@ -478,7 +478,7 @@ public class InterceptTests {
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddOpenIntercept(typeof(LoggingIntercept<,>))
 					.AddIntercept<SpecificIntercept>();
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 		});
 
 		using var sp = services.BuildServiceProvider();
@@ -523,7 +523,7 @@ public class InterceptTests {
 				builder
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddIntercept<VoidShortCircuit>();
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 		});
 		using var sp = services.BuildServiceProvider();
 		var dispatcher = sp.GetRequiredService<IDispatcher>();
@@ -540,7 +540,7 @@ public class InterceptTests {
 				builder
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddOpenIntercept(typeof(ErrorHandlingIntercept<,>));
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 		});
 
 		using var sp = services.BuildServiceProvider();
@@ -572,7 +572,7 @@ public class InterceptTests {
 				.AddIntercept<ShortCircuitIntercept>()
 				.AddOpenIntercept(typeof(HandlerPerformance<,>))
 				.AddOpenIntercept(typeof(QueryCaching<,>));
-		}, Shared.SequentialSettings);
+		}, o => o.WithSetting(Shared.SequentialSettings));
 
 		var sp = services.BuildServiceProvider();
 
@@ -618,7 +618,7 @@ public class InterceptTests {
 				.AddOpenIntercept(typeof(ErrorHandlingIntercept<,>))
 				.AddOpenIntercept(typeof(HandlerPerformance<,>))
 				.AddOpenIntercept(typeof(QueryCaching<,>));
-		}, Shared.SequentialSettings);
+		}, o => o.WithSetting(Shared.SequentialSettings));
 
 		var sp = services.BuildServiceProvider();
 
@@ -645,7 +645,7 @@ public class InterceptTests {
 			builder
 				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 				.AddIntercept<ShortCircuitIntercept>(); // Closed generic
-		}, Shared.SequentialSettings);
+		}, o => o.WithSetting(Shared.SequentialSettings));
 
 		var sp = services.BuildServiceProvider();
 
@@ -738,7 +738,7 @@ public class InterceptTests {
 				.AddOpenIntercept(typeof(Validation<,>))
 				.AddIntercept<ShortCircuitIntercept>()  // Closed
 				.AddOpenIntercept(typeof(HandlerPerformance<,>));
-		}, Shared.SequentialSettings);
+		}, o => o.WithSetting(Shared.SequentialSettings));
 
 		var sp = services.BuildServiceProvider();
 
@@ -767,7 +767,7 @@ public class InterceptTests {
 			builder
 				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 				.AddOpenIntercept(typeof(Authorization<,>));
-		}, Shared.SequentialSettings);
+		}, o => o.WithSetting(Shared.SequentialSettings));
 
 		var sp = services.BuildServiceProvider();
 
@@ -801,7 +801,7 @@ public class InterceptTests {
 			builder
 				.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 				.AddOpenIntercept(typeof(QueryCaching<,>));
-		}, Shared.SequentialSettings);
+		}, o => o.WithSetting(Shared.SequentialSettings));
 
 		var sp = services.BuildServiceProvider();
 
@@ -832,7 +832,7 @@ public class InterceptTests {
 				builder
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddOpenIntercept(typeof(LoggingIntercept<,>));
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 			services.AddTransient<IRequestHandler<AuditableEcho, string>, AuditableEchoHandler>();
 		});
 
@@ -865,7 +865,7 @@ public class InterceptTests {
 				builder
 					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
 					.AddOpenIntercept(typeof(FatalIntercept<,>));
-			}, Shared.SequentialSettings);
+			}, o => o.WithSetting(Shared.SequentialSettings));
 			services.AddTransient<IRequestHandler<AuditableEcho, string>, AuditableEchoHandler>();
 		});
 

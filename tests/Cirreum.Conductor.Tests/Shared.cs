@@ -36,18 +36,55 @@ public static class Shared {
 		}
 	};
 
+	public static readonly Action<ConductorSettings> ConfigureSequentialSettings = settings => {
+		settings.PublisherStrategy = PublisherStrategy.Sequential;
+		settings.Cache = new ConductorCacheSettings {
+			Provider = CacheProvider.InMemory,
+			DefaultExpiration = TimeSpan.FromMinutes(5)
+		};
+	};
+
+
+	public static readonly Action<ConductorSettings> ConfigureFireAndForgetSettings = settings => {
+		settings.PublisherStrategy = PublisherStrategy.FireAndForget;
+		settings.Cache = new ConductorCacheSettings {
+			Provider = CacheProvider.InMemory,
+			DefaultExpiration = TimeSpan.FromMinutes(5)
+		};
+	};
+
+	public static readonly Action<ConductorSettings> ConfigureParallelSettings = settings => {
+		settings.PublisherStrategy = PublisherStrategy.Parallel;
+		settings.Cache = new ConductorCacheSettings {
+			Provider = CacheProvider.InMemory,
+			DefaultExpiration = TimeSpan.FromMinutes(5)
+		};
+	};
+
+
 	public static IServiceCollection ArrangeConductor(
 		ConductorSettings? conductorSettings = default,
 		Action<IServiceCollection>? builder = null) {
+
+
+		var resolvedSettings = conductorSettings;
+		if (resolvedSettings is null) {
+			resolvedSettings = new ConductorSettings();
+			ConfigureSequentialSettings(resolvedSettings);
+		}
+
 		return ArrangeServices(builder)
-			.AddConductor(builder => {
-				builder
-					.RegisterFromAssemblies(typeof(Shared).Assembly)
+			.AddConductor(
+				c => {
+					c.RegisterFromAssemblies(typeof(Shared).Assembly)
 					.AddOpenIntercept(typeof(Validation<,>))
 					.AddOpenIntercept(typeof(Authorization<,>))
 					.AddOpenIntercept(typeof(HandlerPerformance<,>))
 					.AddOpenIntercept(typeof(QueryCaching<,>));
-			}, conductorSettings ?? SequentialSettings);
+				},
+				o => {
+					o.WithSetting(resolvedSettings);
+				});
 	}
 
 	public static IServiceCollection ArrangeServices(
@@ -70,8 +107,6 @@ public static class Shared {
 		});
 
 		services.AddDomainContextInitilizer();
-
-		services.TryAddSingleton(SequentialSettings);
 
 		services.AddSingleton<IDomainEnvironment>(sp =>
 			new TestApplicationEnvironment());
@@ -104,20 +139,20 @@ public static class Shared {
 		var services = ArrangeServices(builder);
 
 		// Register concrete Publisher (internal, accessible via InternalsVisibleTo)
-		services.TryAddSingleton(sp => new Publisher(
+		services.TryAddTransient(sp => new Publisher(
 			sp,
-			SequentialSettings.PublisherStrategy,
+			PublisherStrategy.Sequential,
 			sp.GetRequiredService<ILogger<Publisher>>()));
 
 		// Register concrete Dispatcher (internal, accessible via InternalsVisibleTo)
-		services.TryAddSingleton(sp => new Dispatcher(
+		services.TryAddTransient(sp => new Dispatcher(
 			sp,
 			sp.GetRequiredService<Publisher>()));
 
 		// Register public interface facades - all resolve to same singleton instances
-		services.TryAddSingleton<IPublisher>(sp => sp.GetRequiredService<Publisher>());
-		services.TryAddSingleton<IDispatcher>(sp => sp.GetRequiredService<Dispatcher>());
-		services.TryAddSingleton<IConductor>(sp => sp.GetRequiredService<Dispatcher>());
+		services.TryAddTransient<IPublisher>(sp => sp.GetRequiredService<Publisher>());
+		services.TryAddTransient<IDispatcher>(sp => sp.GetRequiredService<Dispatcher>());
+		services.TryAddTransient<IConductor>(sp => sp.GetRequiredService<Dispatcher>());
 
 		var sp = services.BuildServiceProvider();
 

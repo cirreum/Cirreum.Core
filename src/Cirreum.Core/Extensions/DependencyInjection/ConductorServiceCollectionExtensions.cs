@@ -1,9 +1,11 @@
-﻿namespace Microsoft.Extensions.DependencyInjection;
+﻿namespace Cirreum;
 
 using Cirreum.Conductor;
 using Cirreum.Conductor.Caching;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Extensions.Internal;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
@@ -16,71 +18,176 @@ public static class ConductorServiceCollectionExtensions {
 	private const string ConductorRegisteredKey = "__ConductorRegistered";
 
 	/// <summary>
-	/// Adds Cirreum.Conductor services including the dispatcher, publisher, and allows
-	/// manual configuration of request handlers, intercepts, and notification handlers.
+	/// Adds Conductor services using configuration-based settings and optional overrides.
 	/// </summary>
-	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
-	/// <param name="configure">Action to configure the conductor builder.</param>
-	/// <param name="settings">The conductor settings.</param>
-	/// <returns>The <see cref="IServiceCollection"/> for chaining.</returns>
-	/// <remarks>
-	/// <para>
-	/// This is a low-level API. Most applications should use <c>AddDomainServices</c> instead,
-	/// which provides an opinionated setup including validation, authorization, and a standard intercept pipeline.
-	/// </para>
-	/// <para>
-	/// Use this method directly only when you need complete control over the Conductor configuration
-	/// and don't want the domain services framework.
-	/// </para>
-	/// </remarks>
+	/// <param name="services">
+	/// The <see cref="IServiceCollection"/> to add services to.
+	/// </param>
+	/// <param name="configuration">
+	/// The application <see cref="IConfiguration"/> used to bind <see cref="ConductorSettings"/>.
+	/// The configuration section defaults to <see cref="ConductorSettings.SectionName"/>,
+	/// but can be overridden via <see cref="ConductorOptionsBuilder.WithConfigurationSection(string)"/>.
+	/// </param>
+	/// <param name="configureConductor">
+	/// Optional action to configure the <see cref="ConductorBuilder"/>, typically used to
+	/// register request handlers, notification handlers, and intercepts from one or more assemblies.
+	/// If omitted, a no-op builder is used.
+	/// </param>
+	/// <param name="configureOptions">
+	/// Optional action to customize <see cref="ConductorOptionsBuilder"/>, allowing overrides
+	/// of configuration-bound settings (e.g., publisher strategy, cache behavior, dispatcher lifetime)
+	/// and additional intercept configuration.
+	/// </param>
+	/// <returns>
+	/// The <see cref="IServiceCollection"/> for chaining.
+	/// </returns>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown if <paramref name="services"/> or <paramref name="configuration"/> is <c>null</c>.
+	/// </exception>
 	public static IServiceCollection AddConductor(
 		this IServiceCollection services,
-		Action<ConductorBuilder> configure,
-		ConductorSettings settings) {
+		IConfiguration configuration,
+		Action<ConductorBuilder>? configureConductor = null,
+		Action<ConductorOptionsBuilder>? configureOptions = null) {
 
-		// Idempotency check
-		if (services.Any(sd => sd.ServiceKey?.ToString() == ConductorRegisteredKey)) {
+		ArgumentNullException.ThrowIfNull(services);
+		ArgumentNullException.ThrowIfNull(configuration);
+
+		// Options builder initialized with IConfiguration; will bind settings lazily.
+		var optionsBuilder = new ConductorOptionsBuilder(configuration);
+
+		// Allow caller (including higher-level APIs like AddDomainServices) to tweak options.
+		configureOptions?.Invoke(optionsBuilder);
+
+		// Ensure we always have a builder delegate.
+		configureConductor ??= static _ => { };
+
+		return services.AddConductorInternal(configureConductor, optionsBuilder, applyDefaultPipeline: false);
+	}
+
+	/// <summary>
+	/// Adds Conductor services using code-based configuration only (no <see cref="IConfiguration"/>).
+	/// </summary>
+	/// <param name="services">
+	/// The <see cref="IServiceCollection"/> to add services to.
+	/// </param>
+	/// <param name="configureConductor">
+	/// Action to configure the <see cref="ConductorBuilder"/>, typically used to register
+	/// request handlers, notification handlers, and intercepts from one or more assemblies.
+	/// </param>
+	/// <param name="configureOptions">
+	/// Optional action to configure core Conductor options, such as dispatcher lifetime,
+	/// publisher strategy, cache behavior, and the intercept pipeline.
+	/// </param>
+	/// <returns>
+	/// The <see cref="IServiceCollection"/> for chaining.
+	/// </returns>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown if <paramref name="services"/> or <paramref name="configureConductor"/> is <c>null</c>.
+	/// </exception>
+	public static IServiceCollection AddConductor(
+		this IServiceCollection services,
+		Action<ConductorBuilder> configureConductor,
+		Action<ConductorOptionsBuilder>? configureOptions = null) {
+
+		ArgumentNullException.ThrowIfNull(services);
+		ArgumentNullException.ThrowIfNull(configureConductor);
+
+		var optionsBuilder = new ConductorOptionsBuilder();
+		configureOptions?.Invoke(optionsBuilder);
+
+		return services.AddConductorInternal(configureConductor, optionsBuilder, applyDefaultPipeline: false);
+	}
+
+	internal static IServiceCollection AddConductorInternal(
+		this IServiceCollection services,
+		Action<ConductorBuilder> configureConductor,
+		ConductorOptionsBuilder optionsBuilder,
+		bool applyDefaultPipeline) {
+
+		ArgumentNullException.ThrowIfNull(services);
+		ArgumentNullException.ThrowIfNull(configureConductor);
+		ArgumentNullException.ThrowIfNull(optionsBuilder);
+
+		// Idempotency: prevent double-registration of Conductor on the same service collection.
+		if (services.Any(sd => Equals(sd.ServiceKey, ConductorRegisteredKey))) {
 			throw new InvalidOperationException(
 				"Conductor services have already been registered. " +
 				"AddConductor should only be called once per service collection. " +
-				"If using AddDomainServices, do not call AddConductor directly.");
+				"If using higher-level convenience APIs (such as AddDomainServices), " +
+				"do not call AddConductor directly.");
 		}
-		services.AddKeyedSingleton<object>(ConductorRegisteredKey, new object());
 
-		// Register concrete Publisher (internal, accessible via InternalsVisibleTo)
-		services.TryAddSingleton(sp => new Publisher(
-			sp,
-			settings.PublisherStrategy,
-			sp.GetRequiredService<ILogger<Publisher>>()));
+		services.AddKeyedSingleton(ConductorRegisteredKey, new object());
 
-		// Register concrete Dispatcher (internal, accessible via InternalsVisibleTo)
-		services.TryAddSingleton(sp => new Dispatcher(
-			sp,
-			sp.GetRequiredService<Publisher>()));
+		// Resolve settings and dispatcher lifetime from the options builder.
+		var settings = optionsBuilder.GetSettings();
+		var dispatcherLifetime = optionsBuilder.DispatcherLifetime;
 
-		// Register public interface facades - all resolve to same singleton instances
-		services.TryAddSingleton<IPublisher>(sp => sp.GetRequiredService<Publisher>());
-		services.TryAddSingleton<IDispatcher>(sp => sp.GetRequiredService<Dispatcher>());
-		services.TryAddSingleton<IConductor>(sp => sp.GetRequiredService<Dispatcher>());
+		// Make settings visible to the rest of the graph
+		services.AddSingleton(settings);
 
-		// Register cache service based on configuration
+		// Register concrete Publisher
+		services.TryAdd(ServiceDescriptor.Describe(
+			typeof(Publisher),
+			sp => new Publisher(
+				sp,
+				settings.PublisherStrategy,
+				sp.GetRequiredService<ILogger<Publisher>>()),
+			dispatcherLifetime));
+
+		// Register concrete Dispatcher using configured lifetime.
+		services.TryAdd(ServiceDescriptor.Describe(
+			typeof(Dispatcher),
+			sp => new Dispatcher(
+				sp,
+				sp.GetRequiredService<Publisher>()),
+			dispatcherLifetime));
+
+		// Register public facades with the same lifetime as Dispatcher.
+		services.TryAdd(ServiceDescriptor.Describe(
+			typeof(IPublisher),
+			sp => sp.GetRequiredService<Publisher>(),
+			dispatcherLifetime));
+
+		services.TryAdd(ServiceDescriptor.Describe(
+			typeof(IDispatcher),
+			sp => sp.GetRequiredService<Dispatcher>(),
+			dispatcherLifetime));
+
+		services.TryAdd(ServiceDescriptor.Describe(
+			typeof(IConductor),
+			sp => sp.GetRequiredService<Dispatcher>(),
+			dispatcherLifetime));
+
+		// Register cache services based on configuration.
 		services.AddCacheableQueryService(settings);
 
-		// Create and configure the builder
+		// Configure the Conductor builder (handlers, notifications, intercepts).
 		var builder = new ConductorBuilder();
-		configure(builder);
 
-		// Register handlers and notification handlers from configured assemblies
+		// Let the caller register assemblies, handlers, and any custom intercepts first.
+		configureConductor(builder);
+
+		// Only apply the standard pipeline (Validation → Auth → [custom] → Perf → Cache)
+		// when we're in the "domain" / opinionated path.
+		if (applyDefaultPipeline) {
+			optionsBuilder.ConfigureIntercepts(builder);
+		}
+
+		// Register request handlers and notification handlers from configured assemblies.
 		services.AddRequestHandlers([.. builder.Assemblies]);
 		services.AddNotificationHandlers([.. builder.Assemblies]);
 
-		// Register intercepts in the order they were added to the builder
+		// Register intercept descriptors in the order they were configured on the builder.
 		foreach (var interceptDescriptor in builder.Intercepts) {
 			services.Add(interceptDescriptor);
 		}
 
 		return services;
+
 	}
+
 
 	private static void AddCacheableQueryService(
 		this IServiceCollection services,

@@ -91,7 +91,7 @@ public sealed class DispatcherTests {
 		// Arrange
 		var services = new ServiceCollection();
 		var dispatcher = Shared.ArrangeSimpleDispatcher(services => {
-			services.AddSingleton<IDispatcher, Dispatcher>();
+			services.AddTransient<IDispatcher, Dispatcher>();
 			services.AddTransient<IRequestHandler<FatalRequest, string>, FatalHandler>();
 		});
 
@@ -108,7 +108,7 @@ public sealed class DispatcherTests {
 		// Arrange
 		var services = new ServiceCollection();
 		var dispatcher = Shared.ArrangeSimpleDispatcher(services => {
-			services.AddSingleton<IDispatcher, Dispatcher>();
+			services.AddTransient<IDispatcher, Dispatcher>();
 			services.AddTransient<IRequestHandler<Echo, string>, CancelAwareEchoHandler>();
 		});
 
@@ -216,7 +216,7 @@ public sealed class DispatcherTests {
 			sp.AddTransient<IRequestHandler<AuthRequest>>(sp => authHandler);
 			sp.AddConductor(options => {
 				options.AddOpenIntercept(typeof(Authorization<,>));
-			}, Shared.SequentialSettings);
+			});
 		});
 		var sp = services.BuildServiceProvider();
 
@@ -242,7 +242,7 @@ public sealed class DispatcherTests {
 			sp.AddTransient<IRequestHandler<AuthRequest>>(sp => authHandler);
 			sp.AddConductor(options => {
 				options.AddOpenIntercept(typeof(Authorization<,>));
-			}, Shared.SequentialSettings);
+			});
 		});
 		var sp = services.BuildServiceProvider();
 

@@ -85,13 +85,13 @@ public static class Shared {
 
 		services.AddDomainContextInitilizer();
 
-		services.AddSingleton<IPublisher>(sp =>
+		services.AddTransient<IPublisher>(sp =>
 		new Publisher(
 			sp,
 			PublisherStrategy.Sequential,
 			sp.GetRequiredService<ILogger<Publisher>>()));
 
-		services.AddSingleton<IDispatcher, Dispatcher>();
+		services.AddTransient<IDispatcher, Dispatcher>();
 
 		if (builder is not null) {
 			builder(services);
