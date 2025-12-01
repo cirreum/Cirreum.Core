@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -112,7 +113,12 @@ public abstract class RemoteClient {
 
 		for (var attempt = 0; attempt < maxAttempts; attempt++) {
 			try {
-				return await operation(cancellationToken);
+				var result = await operation(cancellationToken);
+				if (result.IsSuccess) {
+					return result;
+				}
+				var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+				await Task.Delay(delay, cancellationToken);
 			} catch (Exception ex) when (attempt < maxAttempts - 1 && this.IsTransient(ex)) {
 				lastException = ex;
 				if (this.Logger.IsEnabled(LogLevel.Warning)) {
@@ -149,7 +155,13 @@ public abstract class RemoteClient {
 
 		for (var attempt = 0; attempt < maxAttempts; attempt++) {
 			try {
-				return await operation(cancellationToken);
+				var result = await operation(cancellationToken);
+				if (result.IsSuccess) {
+					return result;
+				}
+				// Continue to next attempt
+				var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+				await Task.Delay(delay, cancellationToken);
 			} catch (Exception ex) when (attempt < maxAttempts - 1 && this.IsTransient(ex)) {
 				lastException = ex;
 				if (this.Logger.IsEnabled(LogLevel.Warning)) {
@@ -920,33 +932,19 @@ public abstract class RemoteClient {
 			RemoteClientTelemetry.RecordSuccess(method, endpoint, this.typeName, (int)response.StatusCode, elapsed, this.Logger);
 			return Result<T>.Success(data);
 
-		} catch (UnauthenticatedAccessException uae) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-			RemoteClientTelemetry.SetActivityError(activity, uae, 401);
-			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, 401, elapsed, uae, this.Logger);
-			throw;
-		} catch (ForbiddenAccessException fae) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-			RemoteClientTelemetry.SetActivityError(activity, fae, 403);
-			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, 403, elapsed, fae, this.Logger);
-			throw;
-		} catch (OperationCanceledException oce) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-			RemoteClientTelemetry.SetActivityCanceled(activity, oce);
-			RemoteClientTelemetry.RecordCanceled(method, endpoint, this.typeName, elapsed, oce, this.Logger);
-			throw;
-		} catch (HttpRequestException hre) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-			RemoteClientTelemetry.SetActivityError(activity, hre, (int?)hre.StatusCode);
-			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, (int?)hre.StatusCode, elapsed, hre, this.Logger);
-			return Result<T>.Fail(hre);
 		} catch (Exception fex) when (fex.IsFatal()) {
 			throw;
 		} catch (Exception ex) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-			RemoteClientTelemetry.SetActivityError(activity, ex);
-			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, null, elapsed, ex, this.Logger);
-			return Result<T>.Fail(ex);
+			var edi = ExceptionDispatchInfo.Capture(ex);
+			var error = this.HandleRemoteExceptionCore(
+				edi,
+				method,
+				endpoint,
+				this.typeName,
+				startTimestamp,
+				activity);
+
+			return Result<T>.Fail(error);
 		}
 	}
 
@@ -976,35 +974,66 @@ public abstract class RemoteClient {
 			RemoteClientTelemetry.SetActivitySuccess(activity, (int)response.StatusCode);
 			RemoteClientTelemetry.RecordSuccess(method, endpoint, this.typeName, (int)response.StatusCode, elapsed, this.Logger);
 			return Result.Success;
-		} catch (UnauthenticatedAccessException uae) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-			RemoteClientTelemetry.SetActivityError(activity, uae, 401);
-			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, 401, elapsed, uae, this.Logger);
-			throw;
-		} catch (ForbiddenAccessException fae) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-			RemoteClientTelemetry.SetActivityError(activity, fae, 403);
-			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, 403, elapsed, fae, this.Logger);
-			throw;
-		} catch (OperationCanceledException oce) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-			RemoteClientTelemetry.SetActivityCanceled(activity, oce);
-			RemoteClientTelemetry.RecordCanceled(method, endpoint, this.typeName, elapsed, oce, this.Logger);
-			throw;
-		} catch (HttpRequestException hre) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-			RemoteClientTelemetry.SetActivityError(activity, hre, (int?)hre.StatusCode);
-			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, (int?)hre.StatusCode, elapsed, hre, this.Logger);
-			return Result.Fail(hre);
+
 		} catch (Exception fex) when (fex.IsFatal()) {
 			throw;
 		} catch (Exception ex) {
-			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
-			RemoteClientTelemetry.SetActivityError(activity, ex);
-			RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, null, elapsed, ex, this.Logger);
-			return Result.Fail(ex);
+			var edi = ExceptionDispatchInfo.Capture(ex);
+			var error = this.HandleRemoteExceptionCore(
+				edi,
+				method,
+				endpoint,
+				this.typeName,
+				startTimestamp,
+				activity);
+
+			return Result.Fail(error);
 		}
 	}
+
+	private Exception HandleRemoteExceptionCore(
+		ExceptionDispatchInfo edi,
+		string method,
+		string endpoint,
+		string typeName,
+		long startTimestamp,
+		Activity? activity) {
+
+		var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
+		var ex = edi.SourceException;
+
+		switch (ex) {
+			case UnauthenticatedAccessException uae:
+				RemoteClientTelemetry.SetActivityError(activity, uae, 401);
+				RemoteClientTelemetry.RecordFailure(method, endpoint, typeName, 401, elapsed, uae, this.Logger);
+				edi.Throw(); // never returns
+				return uae;
+
+			case ForbiddenAccessException fae:
+				RemoteClientTelemetry.SetActivityError(activity, fae, 403);
+				RemoteClientTelemetry.RecordFailure(method, endpoint, typeName, 403, elapsed, fae, this.Logger);
+				edi.Throw(); // never returns
+				return fae;
+
+			case OperationCanceledException oce:
+				RemoteClientTelemetry.SetActivityCanceled(activity, oce);
+				RemoteClientTelemetry.RecordCanceled(method, endpoint, typeName, elapsed, oce, this.Logger);
+				edi.Throw(); // never returns
+				return oce;
+
+			case HttpRequestException hre:
+				RemoteClientTelemetry.SetActivityError(activity, hre, (int?)hre.StatusCode);
+				RemoteClientTelemetry.RecordFailure(method, endpoint, typeName, (int?)hre.StatusCode, elapsed, hre, this.Logger);
+				return hre;
+
+			default:
+				RemoteClientTelemetry.SetActivityError(activity, ex);
+				RemoteClientTelemetry.RecordFailure(method, endpoint, typeName, null, elapsed, ex, this.Logger);
+				return ex;
+		}
+
+	}
+
 
 	/// <summary>
 	/// Processes HTTP response into Result&lt;T&gt;.
@@ -1109,83 +1138,39 @@ public abstract class RemoteClient {
 	}
 
 	/// <summary>
-	/// Processes HTTP response into Result&lt;T&gt;.
-	/// Handles success and API exceptions consistently
-	/// and throw for authN/authZ.
-	/// </summary>
-	private async Task<Result> ProcessResultResponseAsync(
-		Task<HttpResponseMessage> action) {
-		try {
-
-			var response = await action;
-			if (response.IsSuccessStatusCode) {
-				return Result.Success;
-			}
-
-			if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) {
-				var err = await response.Content.ReadAsStringAsync();
-				throw new UnauthenticatedAccessException(err);
-			}
-
-			if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) {
-				var err = await response.Content.ReadAsStringAsync();
-				throw new ForbiddenAccessException(err);
-			}
-
-			var exceptionModel = await this.ParseErrorResponse(response);
-			if (this.Logger.IsEnabled(LogLevel.Error)) {
-				this.Logger.LogError("API error: {Title}. Details: {Detail}",
-					exceptionModel.Title,
-					exceptionModel.Detail);
-			}
-			return Result.Fail(new ApiException(exceptionModel));
-
-		} catch (Exception ex) when (ex switch {
-			OperationCanceledException => false,
-			UnauthenticatedAccessException => false,
-			ForbiddenAccessException => false,
-			_ => true
-		}) {
-			// ApiException or Unknown Exceptions
-			return Result.Fail(ex);
-		}
-	}
-
-
-	/// <summary>
 	/// Processes the HTTP response and handles common error scenarios.
 	/// </summary>
 	/// <param name="action">The HTTP request task to process.</param>
 	/// <returns>The HTTP response message if successful, or null if an error occurred.</returns>
 	private async Task<HttpResponseMessage?> ProcessResponseAsync(Task<HttpResponseMessage> action) {
-		try {
-			var response = await action;
-			if (response.IsSuccessStatusCode) {
-				return response;
+		var response = await action;
+		if (response.IsSuccessStatusCode) {
+			var contentType = response.Content.Headers.ContentType?.MediaType;
+			if (contentType == "application/problem+json") {
+				// Server sent error as 200 - treat as error
+				var resultExceptionModel = await this.ParseErrorResponse(response);
+				throw new ApiException(resultExceptionModel);
 			}
-
-			if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) {
-				var err = await response.Content.ReadAsStringAsync();
-				throw new UnauthenticatedAccessException(err);
-			}
-
-			if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) {
-				var err = await response.Content.ReadAsStringAsync();
-				throw new ForbiddenAccessException(err);
-			}
-
-			var exceptionModel = await this.ParseErrorResponse(response);
-			if (this.Logger.IsEnabled(LogLevel.Error)) {
-				this.Logger.LogError("API error: {Title}. Details: {Detail}",
-					exceptionModel.Title,
-					exceptionModel.Detail);
-			}
-			throw new ApiException(exceptionModel);
-
-		} catch (Exception ex) when (ex is not ApiException) {
-			this.Logger.LogError(ex, "Unexpected error during API call");
-			throw;
+			return response;
 		}
+
+		if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) {
+			var err = await response.Content.ReadAsStringAsync();
+			throw new UnauthenticatedAccessException(err);
+		}
+
+		if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) {
+			var err = await response.Content.ReadAsStringAsync();
+			throw new ForbiddenAccessException(err);
+		}
+
+		var exceptionModel = await this.ParseErrorResponse(response);
+		if (this.Logger.IsEnabled(LogLevel.Error)) {
+			this.Logger.LogError("API error: {Title}. Details: {Detail}",
+				exceptionModel.Title,
+				exceptionModel.Detail);
+		}
+		throw new ApiException(exceptionModel);
 	}
 
 	/// <summary>
