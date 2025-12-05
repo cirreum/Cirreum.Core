@@ -14,7 +14,7 @@
 		<PackageReference Include="Cirreum.Result" Version="1.0.2" />
 		<PackageReference Include="OpenTelemetry.Api" Version="1.14.0" />
 		<PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.14.0" />
-		<PackageReference Include="FluentValidation" Version="12.1.0" />
+		<PackageReference Include="FluentValidation" Version="12.1.1" />
 		<PackageReference Include="Humanizer.Core" Version="3.0.1" />
 		<PackageReference Include="SmartFormat" Version="3.6.1" />
 		<PackageReference Include="CsvHelper" Version="33.1.0" />
