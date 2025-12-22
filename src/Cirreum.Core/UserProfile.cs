@@ -233,16 +233,11 @@ public sealed class UserProfile {
 		this.PreferredUserName ??= principal.FindFirst("preferred_username")?.Value;
 		this.Oid ??= ClaimsHelper.ResolveOid(principal);
 
-		if (string.IsNullOrWhiteSpace(this.Organization.OrganizationId)) {
-			var tid = ClaimsHelper.ResolveTid(principal) ?? "";
+		if (this.Organization.IsEmpty) {
+			var tid = ClaimsHelper.ResolveTid(principal);
 			if (!string.IsNullOrWhiteSpace(tid)) {
-				var oldOrg = this.Organization;
-				this.Organization = new() {
-					OrganizationId = tid,
-					OrganizationName = oldOrg.OrganizationName,
-					DirectoryGroupsRaw = oldOrg.DirectoryGroupsRaw,
-					DirectoryRolesRaw = oldOrg.DirectoryRolesRaw,
-					Metadata = oldOrg.Metadata
+				this.Organization = this.Organization with {
+					OrganizationId = tid
 				};
 			}
 		}

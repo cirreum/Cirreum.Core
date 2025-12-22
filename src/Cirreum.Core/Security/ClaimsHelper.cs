@@ -298,7 +298,7 @@ public static class ClaimsHelper {
 	public static string? ResolveTid(ClaimsPrincipal principal) {
 
 		if (principal.Identity is ClaimsIdentity identity) {
-			return ResolveOid(identity);
+			return ResolveTid(identity);
 		}
 
 		var tid = principal.FindFirst("tid")?.Value;

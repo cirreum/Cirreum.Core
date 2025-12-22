@@ -9,9 +9,12 @@ using System.Text.Json.Serialization;
 /// </summary>
 public record UserProfileOrganization {
 
-	public static UserProfileOrganization Empty => new UserProfileOrganization {
+	public static UserProfileOrganization Empty { get; } = new UserProfileOrganization {
 		OrganizationId = "None"
 	};
+
+	[JsonIgnore]
+	public bool IsEmpty => this.OrganizationId is null or "" or "None";
 
 	/// <summary>
 	/// Required. Unique identifier for the organization, normalized across providers
