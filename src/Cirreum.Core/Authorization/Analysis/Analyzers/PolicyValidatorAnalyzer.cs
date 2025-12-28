@@ -1,4 +1,4 @@
-﻿namespace Cirreum.Authorization.Analysis.Analyzers;
+namespace Cirreum.Authorization.Analysis.Analyzers;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,6 +10,49 @@ public class PolicyValidatorAnalyzer(
 ) : IAuthorizationAnalyzer {
 
 	public const string AnalyzerCategory = "Policy Validators";
+
+	#region Issue Definitions
+
+	private static class Issues {
+
+		public static IssueDefinition DuplicateOrderValues(int order, IEnumerable<string> policyNames) {
+			var names = policyNames.ToList();
+			var recommendation = names.Count == 2
+				? $"Assign different order values to '{names[0]}' and '{names[1]}' to ensure predictable execution."
+				: "Assign unique order values to each policy validator to ensure predictable execution sequence.";
+
+			return new(
+				$"Multiple policy validators have the same order ({order}): {string.Join(", ", names)}",
+				recommendation);
+		}
+
+		public static IssueDefinition LargeOrderingGap(int before, int after) => new(
+			$"Large gap in policy ordering between {before} and {after}",
+			"Consider consolidating order values for easier maintenance. Large gaps aren't harmful but may indicate removed policies.");
+
+		public static IssueDefinition NoRuntimeTypeSupport(string policyName) => new(
+			$"Policy '{policyName}' doesn't support any runtime types",
+			"Specify supported runtime types for this policy validator, or remove it if no longer needed.");
+
+		public static IssueDefinition NoCurrentRuntimeCoverage(DomainRuntimeType runtimeType) => new(
+			$"Current runtime type '{runtimeType}' has no policy validator coverage",
+			"Register policy validators that support the current runtime type to ensure policies are enforced.");
+
+		public static IssueDefinition PolicyNotForCurrentRuntime(string policyName, DomainRuntimeType currentRuntime, DomainRuntimeType[] supportedRuntimes) => new(
+			$"Policy '{policyName}' doesn't support current runtime type '{currentRuntime}' (supports: {string.Join(", ", supportedRuntimes)})",
+			"This policy won't execute in the current runtime. Verify this is intentional or add support for the current runtime type.");
+
+		public static IssueDefinition MultiplePolicesForSameAttribute(string attributeName, IEnumerable<string> policyNames) => new(
+			$"Multiple policies target the same attribute type '{attributeName}': {string.Join(", ", policyNames)}",
+			"Consider consolidating these policies or ensure they have different order values for predictable behavior.");
+
+		public static IssueDefinition UnusedAttributePolicy(string policyName, string attributeName) => new(
+			$"Attribute policy '{policyName}' targets attribute '{attributeName}' but no resources use this attribute",
+			"Either apply this attribute to resources that need this policy, or remove the unused policy validator.");
+
+	}
+
+	#endregion
 
 	public AnalysisReport Analyze() {
 
@@ -73,22 +116,26 @@ public class PolicyValidatorAnalyzer(
 		// Check for duplicate order values
 		var orderGroups = policyValidators.GroupBy(pv => pv.Order).Where(g => g.Count() > 1);
 		foreach (var group in orderGroups) {
+			var issue = Issues.DuplicateOrderValues(group.Key, group.Select(g => g.PolicyName));
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
-				Description: $"Multiple policy validators have the same order ({group.Key}): {string.Join(", ", group.Select(g => g.PolicyName))}",
-				RelatedTypeNames: [.. group.Select(g => g.GetType().FullName ?? g.GetType().Name)]));
+				Description: issue.Description,
+				RelatedTypeNames: [.. group.Select(g => g.GetType().FullName ?? g.GetType().Name)],
+				Recommendation: issue.Recommendation));
 		}
 
 		// Check for large gaps in ordering
 		var orders = policyValidators.Select(pv => pv.Order).OrderBy(o => o).ToList();
 		for (var i = 1; i < orders.Count; i++) {
 			if (orders[i] - orders[i - 1] > 100) {
+				var issue = Issues.LargeOrderingGap(orders[i - 1], orders[i]);
 				issues.Add(new AnalysisIssue(
 					Category: AnalyzerCategory,
 					Severity: IssueSeverity.Info,
-					Description: $"Large gap in policy ordering between {orders[i - 1]} and {orders[i]}",
-					RelatedTypeNames: [orders[i - 1].ToString(), orders[i].ToString()]));
+					Description: issue.Description,
+					RelatedTypeNames: [orders[i - 1].ToString(), orders[i].ToString()],
+					Recommendation: issue.Recommendation));
 			}
 		}
 
@@ -103,38 +150,44 @@ public class PolicyValidatorAnalyzer(
 		// Check for policies that don't support any runtime types
 		var unsupportedPolicies = policyValidators.Where(pv => pv.SupportedRuntimeTypes.Length == 0);
 		foreach (var policy in unsupportedPolicies) {
+			var issue = Issues.NoRuntimeTypeSupport(policy.PolicyName);
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
-				Description: $"Policy '{policy.PolicyName}' doesn't support any runtime types",
-				RelatedTypeNames: [policy.GetType().FullName ?? policy.GetType().Name]));
+				Description: issue.Description,
+				RelatedTypeNames: [policy.GetType().FullName ?? policy.GetType().Name],
+				Recommendation: issue.Recommendation));
 		}
 
-		// ✅ Check if the CURRENT runtime type has policy coverage using bitwise flags
+		// Check if the CURRENT runtime type has policy coverage
 		var policiesForCurrentRuntime = policyValidators
 			.Where(pv => pv.SupportedRuntimeTypes.Contains(currentRuntimeType))
 			.ToList();
 
 		if (policiesForCurrentRuntime.Count == 0 && policyValidators.Count > 0) {
+			var issue = Issues.NoCurrentRuntimeCoverage(currentRuntimeType);
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
-				Description: $"Current runtime type '{currentRuntimeType}' has no policy validator coverage",
-				RelatedTypeNames: [currentRuntimeType.ToString()]));
+				Description: issue.Description,
+				RelatedTypeNames: [currentRuntimeType.ToString()],
+				Recommendation: issue.Recommendation));
 		}
 
-		// ✅ Warn about policies that don't support the current runtime
+		// Warn about policies that don't support the current runtime
 		var irrelevantPolicies = policyValidators
 			.Where(pv => pv.SupportedRuntimeTypes.Length > 0 &&
 						 !pv.SupportedRuntimeTypes.Contains(currentRuntimeType))
 			.ToList();
 
 		foreach (var policy in irrelevantPolicies) {
+			var issue = Issues.PolicyNotForCurrentRuntime(policy.PolicyName, currentRuntimeType, policy.SupportedRuntimeTypes);
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Info,
-				Description: $"Policy '{policy.PolicyName}' doesn't support current runtime type '{currentRuntimeType}' (supports: {string.Join(", ", policy.SupportedRuntimeTypes)})",
-				RelatedTypeNames: [policy.GetType().FullName ?? policy.GetType().Name]));
+				Description: issue.Description,
+				RelatedTypeNames: [policy.GetType().FullName ?? policy.GetType().Name],
+				Recommendation: issue.Recommendation));
 		}
 
 		return issues;
@@ -161,11 +214,13 @@ public class PolicyValidatorAnalyzer(
 		}
 
 		foreach (var kvp in attributeTypes.Where(kvp => kvp.Value.Count > 1)) {
+			var issue = Issues.MultiplePolicesForSameAttribute(kvp.Key.Name, kvp.Value.Select(p => p.PolicyName));
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
-				Description: $"Multiple policies target the same attribute type '{kvp.Key.Name}': {string.Join(", ", kvp.Value.Select(p => p.PolicyName))}",
-				RelatedTypeNames: [.. kvp.Value.Select(p => p.GetType().FullName ?? p.GetType().Name)]));
+				Description: issue.Description,
+				RelatedTypeNames: [.. kvp.Value.Select(p => p.GetType().FullName ?? p.GetType().Name)],
+				Recommendation: issue.Recommendation));
 		}
 
 		return issues;
@@ -185,11 +240,13 @@ public class PolicyValidatorAnalyzer(
 				var resourcesWithAttribute = FindResourcesWithAttribute(attributeType);
 
 				if (resourcesWithAttribute.Count == 0) {
+					var issue = Issues.UnusedAttributePolicy(policy.PolicyName, attributeType.Name);
 					issues.Add(new AnalysisIssue(
 						Category: AnalyzerCategory,
 						Severity: IssueSeverity.Warning,
-						Description: $"Attribute policy '{policy.PolicyName}' targets attribute '{attributeType.Name}' but no resources use this attribute",
-						RelatedTypeNames: [policy.GetType().FullName ?? policy.GetType().Name, attributeType.FullName ?? attributeType.Name]));
+						Description: issue.Description,
+						RelatedTypeNames: [policy.GetType().FullName ?? policy.GetType().Name, attributeType.FullName ?? attributeType.Name],
+						Recommendation: issue.Recommendation));
 				}
 			}
 		}

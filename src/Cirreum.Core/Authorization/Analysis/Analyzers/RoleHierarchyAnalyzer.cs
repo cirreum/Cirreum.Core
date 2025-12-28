@@ -1,4 +1,4 @@
-﻿namespace Cirreum.Authorization.Analysis.Analyzers;
+namespace Cirreum.Authorization.Analysis.Analyzers;
 
 using System.Collections.Immutable;
 
@@ -10,6 +10,38 @@ public class RoleHierarchyAnalyzer(
 ) : IAuthorizationAnalyzerWithOptions {
 
 	public const string AnalyzerCategory = "Role Hierarchy";
+
+	#region Issue Definitions
+
+	private static class Issues {
+
+		public static IssueDefinition HierarchyTooDeep(int actual, int max) => new(
+			$"Role hierarchy depth of {actual} exceeds recommended maximum of {max}",
+			"Flatten the role hierarchy to reduce complexity. Deep hierarchies can impact performance and make authorization harder to reason about.");
+
+		public static IssueDefinition IsolatedRoles(List<Role> isolated) {
+			var recommendation = isolated.Count == 1
+				? $"Connect '{isolated[0]}' to the main hierarchy or remove it if no longer needed."
+				: "Connect these isolated roles to the main hierarchy or remove them if no longer needed. Isolated roles may indicate incomplete configuration.";
+
+			return new(
+				$"Found {isolated.Count} isolated role(s) not connected to main hierarchy",
+				recommendation);
+		}
+
+		public static IssueDefinition CircularReference(List<Role> cycle) {
+			var recommendation = cycle.Count == 2
+				? "Remove the direct circular inheritance between these two roles."
+				: "Review the inheritance chain and break the cycle at the most logical point. Circular references can cause infinite loops and unpredictable authorization behavior.";
+
+			return new(
+				$"Circular reference detected in role hierarchy: {string.Join(" -> ", cycle)}",
+				recommendation);
+		}
+
+	}
+
+	#endregion
 
 	public AnalysisReport Analyze() => this.Analyze(AnalysisOptions.Default);
 
@@ -52,21 +84,25 @@ public class RoleHierarchyAnalyzer(
 		metrics[$"{MetricCategories.RoleHierarchy}MaxDepth"] = maxDepth;
 
 		if (maxDepth > options.MaxHierarchyDepth) {
+			var issue = Issues.HierarchyTooDeep(maxDepth, options.MaxHierarchyDepth);
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
-				Description: $"Role hierarchy depth of {maxDepth} exceeds recommended maximum of {options.MaxHierarchyDepth}",
-				RelatedTypeNames: [.. longestPath.Select(r => r.ToString())]));
+				Description: issue.Description,
+				RelatedTypeNames: [.. longestPath.Select(r => r.ToString())],
+				Recommendation: issue.Recommendation));
 		}
 
 		// Detect isolated roles (not part of main hierarchy)
 		var isolatedRoles = FindIsolatedRoles(registry, allRoles);
 		if (isolatedRoles.Count > 0) {
+			var issue = Issues.IsolatedRoles(isolatedRoles);
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
-				Description: $"Found {isolatedRoles.Count} isolated roles not connected to main hierarchy",
-				RelatedTypeNames: [.. isolatedRoles.Select(r => r.ToString())]));
+				Description: issue.Description,
+				RelatedTypeNames: [.. isolatedRoles.Select(r => r.ToString())],
+				Recommendation: issue.Recommendation));
 		}
 
 		return (issues, metrics);
@@ -82,11 +118,13 @@ public class RoleHierarchyAnalyzer(
 
 			if (HasCycle(registry, role, visited, path)) {
 				var cycle = path.Reverse().ToList();
+				var issue = Issues.CircularReference(cycle);
 				issues.Add(new AnalysisIssue(
 					Category: AnalyzerCategory,
 					Severity: IssueSeverity.Error,
-					Description: $"Circular reference detected in role hierarchy: {string.Join(" -> ", cycle)}",
-					RelatedTypeNames: [.. cycle.Select(r => r.ToString())]));
+					Description: issue.Description,
+					RelatedTypeNames: [.. cycle.Select(r => r.ToString())],
+					Recommendation: issue.Recommendation));
 			}
 		}
 

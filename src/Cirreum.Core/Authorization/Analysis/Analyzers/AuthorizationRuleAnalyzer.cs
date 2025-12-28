@@ -1,4 +1,4 @@
-﻿namespace Cirreum.Authorization.Analysis.Analyzers;
+namespace Cirreum.Authorization.Analysis.Analyzers;
 
 using Cirreum.Authorization.Modeling;
 
@@ -8,6 +8,28 @@ using Cirreum.Authorization.Modeling;
 public class AuthorizationRuleAnalyzer : IAuthorizationAnalyzerWithOptions {
 
 	public const string AnalyzerCategory = "Authorization Rules";
+
+	#region Issue Definitions
+
+	private static class Issues {
+
+		public static IssueDefinition OrphanedAuthorizers(int count) {
+			var recommendation = count == 1
+				? "This authorizer references a resource that doesn't exist. Remove it or fix the resource type reference."
+				: "These authorizers reference resources that don't exist. Remove them or fix the resource type references.";
+
+			return new(
+				$"Found {count} authorizer(s) with no matching resource type (orphaned authorizers)",
+				recommendation);
+		}
+
+		public static IssueDefinition ResourcesWithOnlyRoleChecks(int count) => new(
+			$"Found {count} resource(s) with only role-based authorization checks",
+			"Role-based authorization is valid. Consider adding resource-specific checks if finer-grained control is needed.");
+
+	}
+
+	#endregion
 
 	public AnalysisReport Analyze() => this.Analyze(AnalysisOptions.Default);
 
@@ -31,11 +53,13 @@ public class AuthorizationRuleAnalyzer : IAuthorizationAnalyzerWithOptions {
 				.Select(r => r.AuthorizorType)
 				.Distinct()
 				.ToList();
+			var issue = Issues.OrphanedAuthorizers(orphanedAuthorizers.Count);
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Error,
-				Description: $"Found {orphanedAuthorizers.Count} authorizers with no matching resource type (orphaned authorizers)",
-				RelatedTypeNames: [.. orphanedAuthorizers.Select(t => t.FullName ?? t.Name)]));
+				Description: issue.Description,
+				RelatedTypeNames: [.. orphanedAuthorizers.Select(t => t.FullName ?? t.Name)],
+				Recommendation: issue.Recommendation));
 		}
 
 		// Check for resources with only role-based checks (informational)
@@ -49,11 +73,13 @@ public class AuthorizationRuleAnalyzer : IAuthorizationAnalyzerWithOptions {
 				.ToList();
 
 			if (resourcesWithOnlyRoleChecks.Count != 0) {
+				var issue = Issues.ResourcesWithOnlyRoleChecks(resourcesWithOnlyRoleChecks.Count);
 				issues.Add(new AnalysisIssue(
 					Category: AnalyzerCategory,
 					Severity: IssueSeverity.Info,
-					Description: $"Found {resourcesWithOnlyRoleChecks.Count} resources with only role-based authorization checks",
-					RelatedTypeNames: [.. resourcesWithOnlyRoleChecks.Select(g => g.Key.FullName ?? g.Key.Name)]));
+					Description: issue.Description,
+					RelatedTypeNames: [.. resourcesWithOnlyRoleChecks.Select(g => g.Key.FullName ?? g.Key.Name)],
+					Recommendation: issue.Recommendation));
 			}
 		}
 
