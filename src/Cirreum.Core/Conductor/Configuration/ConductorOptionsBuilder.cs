@@ -34,8 +34,8 @@ public class ConductorOptionsBuilder {
 	/// <returns>The builder for method chaining.</returns>
 	public ConductorOptionsBuilder ConfigureSettings(Action<ConductorSettings> configure) {
 		ArgumentNullException.ThrowIfNull(configure);
-		_settings ??= new ConductorSettings();
-		configure(_settings);
+		this._settings ??= new ConductorSettings();
+		configure(this._settings);
 		return this;
 	}
 
@@ -65,7 +65,7 @@ public class ConductorOptionsBuilder {
 				"builder.AddOpenIntercept(...) instead.");
 		}
 
-		_interceptConfigurations.Add(configure);
+		this._interceptConfigurations.Add(configure);
 		return this;
 	}
 
@@ -74,7 +74,7 @@ public class ConductorOptionsBuilder {
 	/// Defaults to <see cref="ServiceLifetime.Transient"/>.
 	/// </summary>
 	public ConductorOptionsBuilder WithLifetime(ServiceLifetime lifetime) {
-		_dispatcherLifetime = lifetime;
+		this._dispatcherLifetime = lifetime;
 		return this;
 	}
 
@@ -96,7 +96,7 @@ public class ConductorOptionsBuilder {
 	/// </exception>
 	public ConductorOptionsBuilder WithConfigurationSection(string sectionName) {
 		ArgumentException.ThrowIfNullOrWhiteSpace(sectionName);
-		_configurationSection = sectionName;
+		this._configurationSection = sectionName;
 		return this;
 	}
 
@@ -107,25 +107,25 @@ public class ConductorOptionsBuilder {
 	/// <returns>The current instance of <see cref="ConductorOptionsBuilder"/> with the specified settings applied.</returns>
 	public ConductorOptionsBuilder WithSetting(ConductorSettings settings) {
 		ArgumentNullException.ThrowIfNull(settings);
-		_settings = settings;
+		this._settings = settings;
 		return this;
 	}
 
 	internal bool CustomInterceptsAllowed { get; set; } = false;
 
-	internal ServiceLifetime DispatcherLifetime => _dispatcherLifetime;
+	internal ServiceLifetime DispatcherLifetime => this._dispatcherLifetime;
 
 	internal ConductorSettings GetSettings() {
 		// Priority 1: Manual settings (explicit ConfigureSettings call)
-		if (_settings is not null) {
-			return _settings;
+		if (this._settings is not null) {
+			return this._settings;
 		}
 
 		// Priority 2: Configuration binding (explicit BindConfiguration call)
-		if (_configuration is not null) {
-			_settings = new ConductorSettings();
-			_configuration.GetSection(_configurationSection).Bind(_settings);
-			return _settings;
+		if (this._configuration is not null) {
+			this._settings = new ConductorSettings();
+			this._configuration.GetSection(this._configurationSection).Bind(this._settings);
+			return this._settings;
 		}
 
 		// Priority 3: Defaults (no configuration provided)
@@ -135,18 +135,18 @@ public class ConductorOptionsBuilder {
 	internal void ConfigureIntercepts(ConductorBuilder builder) {
 		// Core intercepts in fixed order
 		builder
-			.AddOpenIntercept(typeof(Validation<,>), _dispatcherLifetime)
-			.AddOpenIntercept(typeof(Authorization<,>), _dispatcherLifetime);
+			.AddOpenIntercept(typeof(Validation<,>), this._dispatcherLifetime)
+			.AddOpenIntercept(typeof(Authorization<,>), this._dispatcherLifetime);
 
 		// Custom intercepts (extensibility point)
-		foreach (var config in _interceptConfigurations) {
+		foreach (var config in this._interceptConfigurations) {
 			config(builder);
 		}
 
 		// Wrapping and pre-emptive intercepts
 		builder
-			.AddOpenIntercept(typeof(HandlerPerformance<,>), _dispatcherLifetime)
-			.AddOpenIntercept(typeof(QueryCaching<,>), _dispatcherLifetime);
+			.AddOpenIntercept(typeof(HandlerPerformance<,>), this._dispatcherLifetime)
+			.AddOpenIntercept(typeof(QueryCaching<,>), this._dispatcherLifetime);
 	}
 
 }

@@ -6,7 +6,7 @@
 public record AnalysisReport {
 
 	/// <summary>
-	/// private constructor, use <see cref="ForCategory(string, List{AnalysisIssue}?, Dictionary{string, object}?)"/>
+	/// private constructor, use <see cref="ForCategory(string, List{AnalysisIssue}?, Dictionary{string, int}?)"/>
 	/// or <see cref="Combine(List{AnalysisReport})"/>
 	/// </summary>
 	private AnalysisReport() {
@@ -26,7 +26,7 @@ public record AnalysisReport {
 	/// <summary>
 	/// Gets additional metrics collected during analysis.
 	/// </summary>
-	public Dictionary<string, object> Metrics { get; init; } = [];
+	public Dictionary<string, int> Metrics { get; init; } = [];
 
 	/// <summary>
 	/// Gets the set of analyzer categories that were run.
@@ -39,7 +39,7 @@ public record AnalysisReport {
 	public static AnalysisReport ForCategory(
 		string category,
 		List<AnalysisIssue>? issues = null,
-		Dictionary<string, object>? metrics = null) {
+		Dictionary<string, int>? metrics = null) {
 		return new AnalysisReport {
 			Issues = issues ?? [],
 			Metrics = metrics ?? [],

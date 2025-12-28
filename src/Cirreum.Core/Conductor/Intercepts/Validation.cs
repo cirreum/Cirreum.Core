@@ -15,10 +15,10 @@ sealed class Validation<TRequest, TResponse>
 	public Validation(IEnumerable<IValidator<TRequest>> validators) {
 
 		// Materialize once, no matter how DI gives it to us
-		_validators = validators as IReadOnlyList<IValidator<TRequest>>
+		this._validators = validators as IReadOnlyList<IValidator<TRequest>>
 					  ?? [.. validators];
 
-		_hasValidators = _validators.Count > 0;
+		this._hasValidators = this._validators.Count > 0;
 	}
 
 	public async Task<Result<TResponse>> HandleAsync(
@@ -27,7 +27,7 @@ sealed class Validation<TRequest, TResponse>
 		CancellationToken cancellationToken) {
 
 		// FAST PATH: no validators → just forward, no async state machine
-		if (!_hasValidators) {
+		if (!this._hasValidators) {
 			return await next(context, cancellationToken).ConfigureAwait(false);
 		}
 

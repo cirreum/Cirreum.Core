@@ -26,9 +26,9 @@ sealed class QueryCaching<TRequest, TResponse>
 		ICacheableQueryService cache,
 		ConductorSettings conductorSettings,
 		ILogger<QueryCaching<TRequest, TResponse>> logger) {
-		_cache = cache;
-		_conductorSettings = conductorSettings;
-		_logger = logger;
+		this._cache = cache;
+		this._conductorSettings = conductorSettings;
+		this._logger = logger;
 
 		// Check once at construction time instead of every request
 		if (conductorSettings.Cache.Provider == CacheProvider.Hybrid &&
@@ -52,8 +52,8 @@ sealed class QueryCaching<TRequest, TResponse>
 
 		var category = context.Request.CacheCategory ?? "uncategorized";
 
-		if (_logger.IsEnabled(LogLevel.Debug)) {
-			_logger.LogDebug(
+		if (this._logger.IsEnabled(LogLevel.Debug)) {
+			this._logger.LogDebug(
 				"Processing cacheable query: {QueryType} (Category: {Category}, CacheKey: {CacheKey})",
 				context.RequestType,
 				category,
@@ -66,7 +66,7 @@ sealed class QueryCaching<TRequest, TResponse>
 		var startTime = Timing.Start();
 
 		// Get from Cache, or Read from real Handler and store in Cache
-		var result = await _cache.GetOrCreateAsync(
+		var result = await this._cache.GetOrCreateAsync(
 			context.Request.CacheKey,
 			async (ct) => await next(context, ct), // actual handler that reads data
 			effectiveSettings,
@@ -83,8 +83,8 @@ sealed class QueryCaching<TRequest, TResponse>
 
 		_cacheOperationDuration.Record(elapsed, telemetryTags);
 
-		if (_logger.IsEnabled(LogLevel.Debug)) {
-			_logger.LogDebug(
+		if (this._logger.IsEnabled(LogLevel.Debug)) {
+			this._logger.LogDebug(
 				"Query {QueryType} completed: Status={Status}, Category={Category}, Duration={Duration}ms",
 				context.RequestType,
 				result.IsSuccess ? "Success" : "Failed",
@@ -97,7 +97,7 @@ sealed class QueryCaching<TRequest, TResponse>
 
 	private QueryCacheSettings BuildEffectiveSettings(TRequest request, string queryTypeName) {
 		var querySettings = request.Cache;
-		var cacheOptions = _conductorSettings.Cache;
+		var cacheOptions = this._conductorSettings.Cache;
 
 		var expiration = querySettings.Expiration;
 		var localExpiration = querySettings.LocalExpiration;
@@ -110,8 +110,8 @@ sealed class QueryCaching<TRequest, TResponse>
 			localExpiration = categoryOverrides.LocalExpiration ?? localExpiration;
 			failureExpiration = categoryOverrides.FailureExpiration ?? failureExpiration;
 
-			if (_logger.IsEnabled(LogLevel.Debug)) {
-				_logger.LogDebug("Applied category override '{Category}' for {QueryType}",
+			if (this._logger.IsEnabled(LogLevel.Debug)) {
+				this._logger.LogDebug("Applied category override '{Category}' for {QueryType}",
 					request.CacheCategory, queryTypeName);
 			}
 		}
@@ -122,8 +122,8 @@ sealed class QueryCaching<TRequest, TResponse>
 			localExpiration = queryOverrides.LocalExpiration ?? localExpiration;
 			failureExpiration = queryOverrides.FailureExpiration ?? failureExpiration;
 
-			if (_logger.IsEnabled(LogLevel.Debug)) {
-				_logger.LogDebug("Applied exact override for {QueryType}", queryTypeName);
+			if (this._logger.IsEnabled(LogLevel.Debug)) {
+				this._logger.LogDebug("Applied exact override for {QueryType}", queryTypeName);
 			}
 		}
 

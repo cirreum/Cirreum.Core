@@ -7,17 +7,18 @@ using System.Collections.Immutable;
 /// </summary>
 public class RoleHierarchyAnalyzer(
 	IAuthorizationRoleRegistry registry
-) : IAuthorizationAnalyzer {
+) : IAuthorizationAnalyzerWithOptions {
 
-	private const string AnalyzerCategory = "Role Hierarchy";
-	private const int MaxDepth = 10;
+	public const string AnalyzerCategory = "Role Hierarchy";
 
-	public AnalysisReport Analyze() {
+	public AnalysisReport Analyze() => this.Analyze(AnalysisOptions.Default);
+
+	public AnalysisReport Analyze(AnalysisOptions options) {
 		var issues = new List<AnalysisIssue>();
-		var metrics = new Dictionary<string, object>();
+		var metrics = new Dictionary<string, int>();
 
 		// Analyze basic hierarchy structure
-		var (structureIssues, structureMetrics) = AnalyzeHierarchyStructure(registry);
+		var (structureIssues, structureMetrics) = AnalyzeHierarchyStructure(registry, options);
 		issues.AddRange(structureIssues);
 		foreach (var metric in structureMetrics) {
 			metrics[metric.Key] = metric.Value;
@@ -30,31 +31,32 @@ public class RoleHierarchyAnalyzer(
 		return AnalysisReport.ForCategory(AnalyzerCategory, issues, metrics);
 	}
 
-	private static (List<AnalysisIssue>, Dictionary<string, object>) AnalyzeHierarchyStructure(
-		IAuthorizationRoleRegistry registry) {
+	private static (List<AnalysisIssue>, Dictionary<string, int>) AnalyzeHierarchyStructure(
+		IAuthorizationRoleRegistry registry,
+		AnalysisOptions options) {
 
 		var issues = new List<AnalysisIssue>();
-		var metrics = new Dictionary<string, object>();
+		var metrics = new Dictionary<string, int>();
 		var allRoles = registry.GetRegisteredRoles();
 
 		// Find top-level roles (not inherited by any other role)
 		var topRoles = allRoles.Where(r => registry.GetInheritingRoles(r).Count == 0).ToList();
-		metrics["TopLevelRolesCount"] = topRoles.Count;
+		metrics[$"{MetricCategories.RoleHierarchy}TopLevelRolesCount"] = topRoles.Count;
 
 		// Find leaf roles (don't inherit from any other role)
 		var leafRoles = allRoles.Where(r => registry.GetInheritedRoles(r).Count == 0).ToList();
-		metrics["LeafRolesCount"] = leafRoles.Count;
+		metrics[$"{MetricCategories.RoleHierarchy}LeafRolesCount"] = leafRoles.Count;
 
 		// Calculate hierarchy depth
 		var (maxDepth, longestPath) = FindLongestPath(registry);
-		metrics["MaxHierarchyDepth"] = maxDepth;
+		metrics[$"{MetricCategories.RoleHierarchy}MaxDepth"] = maxDepth;
 
-		if (maxDepth > MaxDepth) {
+		if (maxDepth > options.MaxHierarchyDepth) {
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
-				Description: $"Role hierarchy depth of {maxDepth} exceeds recommended maximum of {MaxDepth}",
-				RelatedObjects: [.. longestPath.Cast<object>()]));
+				Description: $"Role hierarchy depth of {maxDepth} exceeds recommended maximum of {options.MaxHierarchyDepth}",
+				RelatedTypeNames: [.. longestPath.Select(r => r.ToString())]));
 		}
 
 		// Detect isolated roles (not part of main hierarchy)
@@ -64,7 +66,7 @@ public class RoleHierarchyAnalyzer(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
 				Description: $"Found {isolatedRoles.Count} isolated roles not connected to main hierarchy",
-				RelatedObjects: [.. isolatedRoles.Cast<object>()]));
+				RelatedTypeNames: [.. isolatedRoles.Select(r => r.ToString())]));
 		}
 
 		return (issues, metrics);
@@ -84,7 +86,7 @@ public class RoleHierarchyAnalyzer(
 					Category: AnalyzerCategory,
 					Severity: IssueSeverity.Error,
 					Description: $"Circular reference detected in role hierarchy: {string.Join(" -> ", cycle)}",
-					RelatedObjects: [.. cycle.Cast<object>()]));
+					RelatedTypeNames: [.. cycle.Select(r => r.ToString())]));
 			}
 		}
 

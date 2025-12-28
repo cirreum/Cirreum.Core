@@ -75,10 +75,10 @@ public abstract class UserStateBase : IUserState {
 	public bool IsApplicationUserLoaded => this._applicationUserLoaded;
 
 	public T? GetApplicationUser<T>() where T : class, IApplicationUser {
-		if (_applicationUser is not null
-			&& _applicationUserType is not null
-			&& _applicationUserType == typeof(T)) {
-			return (T)_applicationUser;
+		if (this._applicationUser is not null
+			&& this._applicationUserType is not null
+			&& this._applicationUserType == typeof(T)) {
+			return (T)this._applicationUser;
 		}
 		return null;
 	}

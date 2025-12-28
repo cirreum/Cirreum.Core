@@ -1,23 +1,22 @@
 ﻿namespace Cirreum.Authorization.Visualization;
 
 using Cirreum.Authorization.Analysis;
-using Cirreum.Authorization.Analysis.Analyzers;
 using System.Text;
 
-public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
+public class AuthorizationDocumenter : IAuthorizationDocumenter {
 
 	private readonly IAuthorizationRoleRegistry _roleRegistry;
 	private readonly IServiceProvider _services;
 
-	public EnhancedAuthorizationDocumenter(IAuthorizationRoleRegistry roleRegistry, IServiceProvider services) {
+	public AuthorizationDocumenter(IAuthorizationRoleRegistry roleRegistry, IServiceProvider services) {
 		this._roleRegistry = roleRegistry;
 		this._services = services;
-		EnhancedAuthorizationRuleProvider.Instance.Initialize(services);
+		AuthorizationRuleProvider.Instance.Initialize(services);
 	}
 
 	public async Task<string> GenerateMarkdown() {
 		var sb = new StringBuilder();
-		var combinedInfo = EnhancedAuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
+		var combinedInfo = AuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
 
 		sb.AppendLine("# Authorization System Documentation");
 		sb.AppendLine();
@@ -53,6 +52,30 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 
 		sb.AppendLine();
 
+		// Domain Architecture Section
+		sb.AppendLine("## Domain Architecture");
+		sb.AppendLine();
+
+		// Get domain data from the unified provider
+		var catalog = AuthorizationRuleProvider.Instance.GetCatalog();
+
+		// Extract metrics
+		var totalRequests = catalog.Metrics.TotalResources;
+		var protectedRequests = catalog.Metrics.ProtectedResources;
+		var anonymousRequests = catalog.Metrics.AnonymousResources;
+		var coveragePercentage = catalog.Metrics.OverallCoveragePercentage;
+		var domainBoundaries = catalog.Metrics.TotalDomains;
+
+		sb.AppendLine("### Domain Summary");
+		sb.AppendLine();
+		sb.AppendLine($"- **Domain Boundaries**: {domainBoundaries}");
+		sb.AppendLine($"- **Total Resources**: {totalRequests}");
+		sb.AppendLine($"- **Protected Resources**: {protectedRequests} ({coveragePercentage}%)");
+		sb.AppendLine($"- **Anonymous Resources**: {anonymousRequests}");
+		sb.AppendLine();
+
+		// Domain details are available in the Domain Architecture tab and analysis results
+
 		// Rest of the existing documentation...
 		sb.AppendLine("## Role Hierarchy");
 		sb.AppendLine();
@@ -62,7 +85,7 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine();
 
 		// Enhanced Analysis Results
-		var analysisReport = await this.GetEnhancedAnalysisReportAsync();
+		var analysisReport = await this.GetAnalysisReportAsync();
 		sb.Append(analysisReport.ToMarkdown());
 
 		return sb.ToString();
@@ -70,8 +93,8 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 
 	public async Task<string> GenerateCsv() {
 		var sb = new StringBuilder();
-		var combinedInfo = EnhancedAuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
-		var allRoles = _roleRegistry.GetRegisteredRoles();
+		var combinedInfo = AuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
+		var allRoles = this._roleRegistry.GetRegisteredRoles();
 
 		sb.AppendLine("# ENHANCED AUTHORIZATION SYSTEM EXPORT");
 		sb.AppendLine($"# Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
@@ -89,7 +112,7 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 			sb.AppendLine(
 				$"PolicyValidator," +
 				$"{EscapeCsvField(policy.PolicyName)}," +
-				$"{EscapeCsvField(policy.ValidatorType.Name)}," +
+				$"{EscapeCsvField(policy.PolicyType.Name)}," +
 				$"{policy.Order}," +
 				$"{policy.IsAttributeBased}," +
 				$"{EscapeCsvField(targetAttribute)}," +
@@ -105,7 +128,7 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 
 		var processedRoles = new HashSet<string>();
 		foreach (var role in allRoles) {
-			var childRoles = _roleRegistry.GetInheritedRoles(role);
+			var childRoles = this._roleRegistry.GetInheritedRoles(role);
 			foreach (var childRole in childRoles) {
 				// Calculate an approximate inheritance depth for visualization tools
 				var inheritanceDepth = 1; // Default to direct inheritance
@@ -147,7 +170,7 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 			// Determine if the ABAC rule includes RBAC
 			var includesRBAC =
 				!string.IsNullOrWhiteSpace(rule.PropertyPath)
-				&& rule.PropertyPath == nameof(AuthorizationContext<IAuthorizableResource>.EffectiveRoles);
+				&& rule.PropertyPath == nameof(AuthorizationContext<>.EffectiveRoles);
 
 			// Extract validation type for better categorization
 			var validationType = ExtractValidationType(rule.ValidationLogic);
@@ -155,7 +178,7 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 			sb.AppendLine(
 				$"AuthRule," +
 				$"{EscapeCsvField(rule.ResourceType.Name)}," +
-				$"{EscapeCsvField(rule.ValidatorType.Name)}," +
+				$"{EscapeCsvField(rule.AuthorizorType.Name)}," +
 				$"{EscapeCsvField(rule.PropertyPath ?? "AuthorizationContext")}," +
 				$"{EscapeCsvField(validationType)}," +
 				$"{EscapeCsvField(rule.Message)}," +
@@ -166,7 +189,11 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 
 		sb.AppendLine();
 
-		// SECTION 3: Resource-Role Matrix (excellent for heat map visualizations)
+		// SECTION 3: Domain Architecture
+		// Note: Domain architecture details are available in the Domain Architecture 
+		// analyzer results and the dedicated Domain Architecture tab/section
+
+		// SECTION 4: Resource-Role Matrix (excellent for heat map visualizations)
 		sb.AppendLine("## RESOURCE ROLE MATRIX");
 		sb.AppendLine("Section,ResourceName,RoleName,AccessConditions");
 
@@ -204,27 +231,24 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 
 		sb.AppendLine();
 
-		// SECTION 4: Security analysis with improved structure
-		var analysisReport = await this.GetEnhancedAnalysisReportAsync();
+		// SECTION 5: Security analysis with improved structure
+		var analysisReport = await this.GetAnalysisReportAsync();
 		sb.AppendLine("## SECURITY ANALYSIS");
 		sb.AppendLine("Section,Category,Severity,Description,RelatedObjects,ImpactedResources,ImpactedRoles");
 
 		foreach (var issue in analysisReport.Issues) {
 			// Join related objects with semicolon for CSV compatibility
-			var relatedObjs = string.Join(";", issue.RelatedObjects.Select(o => o.ToString()));
+			var relatedObjs = string.Join(";", issue.RelatedTypeNames);
 
 			// Extract impacted resources
 			var impactedResources = string.Join(";",
-				issue.RelatedObjects
-					.OfType<Type>()
-					.Where(t => resourceTypes.Contains(t.Name))
-					.Select(t => t.Name));
+				issue.RelatedTypeNames
+					.Where(typeName => resourceTypes.Any(rt => typeName.Contains(rt))));
 
 			// Extract impacted roles
 			var impactedRoles = string.Join(";",
-				issue.RelatedObjects
-					.Where(o => allRoles.Any(r => o.ToString()?.Contains(r.ToString()) ?? false))
-					.Select(o => o.ToString()));
+				issue.RelatedTypeNames
+					.Where(typeName => allRoles.Any(r => typeName.Contains(r.ToString()))));
 
 			sb.AppendLine(
 				$"SecurityIssue," +
@@ -303,8 +327,8 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("<h1>Authorization System Documentation</h1>");
 
 		// Get data for statistics
-		var combinedInfo = EnhancedAuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
-		var allRoles = _roleRegistry.GetRegisteredRoles();
+		var combinedInfo = AuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
+		var allRoles = this._roleRegistry.GetRegisteredRoles();
 
 		// Add executive summary with statistics
 		sb.AppendLine("<div class=\"stats-grid\">");
@@ -329,6 +353,7 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 		// Enhanced tabs - ADD NEW POLICY TAB
 		sb.AppendLine("<div class=\"tabs\">");
 		sb.AppendLine("  <div class=\"tab active\" onclick=\"showTab('overview')\">Overview</div>");
+		sb.AppendLine("  <div class=\"tab\" onclick=\"showTab('domain')\">Domain Architecture</div>");
 		sb.AppendLine("  <div class=\"tab\" onclick=\"showTab('policies')\">Policy Validators</div>");
 		sb.AppendLine("  <div class=\"tab\" onclick=\"showTab('roles')\">Roles</div>");
 		sb.AppendLine("  <div class=\"tab\" onclick=\"showTab('rules')\">Resource Rules</div>");
@@ -364,7 +389,72 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("  </div>");
 		sb.AppendLine("</div>");
 
-		// NEW: Policy Validators Tab
+		// NEW: Domain Architecture Tab
+		sb.AppendLine("<div id=\"domain\" class=\"tab-content\">");
+		sb.AppendLine("  <h2>Domain Architecture</h2>");
+		sb.AppendLine("  <p>Complete view of all CQRS operations (IRequest<T>) across your domain, including both protected and anonymous resources.</p>");
+
+		// Get domain data from the unified provider
+		var htmlCatalog = AuthorizationRuleProvider.Instance.GetCatalog();
+
+		// Extract overall metrics
+		var totalDomainResources = htmlCatalog.Metrics.TotalResources;
+		var protectedDomainResources = htmlCatalog.Metrics.ProtectedResources;
+		var anonymousDomainResources = htmlCatalog.Metrics.AnonymousResources;
+		var domainCoveragePercentage = htmlCatalog.Metrics.OverallCoveragePercentage;
+		var totalDomainBoundaries = htmlCatalog.Metrics.TotalDomains;
+
+		// Summary cards
+		sb.AppendLine("  <div class=\"stats-grid\">");
+		sb.AppendLine("    <div class=\"stat-card\">");
+		sb.AppendLine($"      <div class=\"stat-number\">{totalDomainBoundaries}</div>");
+		sb.AppendLine("      <div class=\"stat-label\">Domain Boundaries</div>");
+		sb.AppendLine("    </div>");
+		sb.AppendLine("    <div class=\"stat-card\">");
+		sb.AppendLine($"      <div class=\"stat-number\">{totalDomainResources}</div>");
+		sb.AppendLine("      <div class=\"stat-label\">Total Resources</div>");
+		sb.AppendLine("    </div>");
+		sb.AppendLine("    <div class=\"stat-card\">");
+		sb.AppendLine($"      <div class=\"stat-number\" style=\"color: #28a745;\">{protectedDomainResources}</div>");
+		sb.AppendLine("      <div class=\"stat-label\">Protected</div>");
+		sb.AppendLine("    </div>");
+		sb.AppendLine("    <div class=\"stat-card\">");
+		sb.AppendLine($"      <div class=\"stat-number\" style=\"color: #ffc107;\">{anonymousDomainResources}</div>");
+		sb.AppendLine("      <div class=\"stat-label\">Anonymous</div>");
+		sb.AppendLine("    </div>");
+		sb.AppendLine("    <div class=\"stat-card\">");
+		sb.AppendLine($"      <div class=\"stat-number\">{domainCoveragePercentage}%</div>");
+		sb.AppendLine("      <div class=\"stat-label\">Coverage</div>");
+		sb.AppendLine("    </div>");
+		sb.AppendLine("  </div>");
+
+		// Domain breakdown details are available through the Anonymous Resource analyzer issues and analysis
+
+		// Domain architecture issues - get from full analysis report
+		var analysisReportForDomain = await this.GetAnalysisReportAsync();
+		var domainIssues = analysisReportForDomain.Issues.Where(i => i.Category == "Anonymous Resources").ToList();
+		if (domainIssues.Count != 0) {
+			sb.AppendLine("  <h3>Architecture Recommendations</h3>");
+
+			foreach (var issue in domainIssues) {
+				var issueClass = issue.Severity switch {
+					IssueSeverity.Error => "error",
+					IssueSeverity.Warning => "warning",
+					_ => "info"
+				};
+
+				sb.AppendLine($"  <div class=\"{issueClass}\">");
+				sb.AppendLine($"    <strong>{issue.Severity}:</strong> {issue.Description}");
+				if (issue.RelatedTypeNames?.Count > 0 && issue.RelatedTypeNames.Count <= 5) {
+					sb.AppendLine($"    <div style=\"margin-top: 5px; font-size: 0.9em;\">Related: {string.Join(", ", issue.RelatedTypeNames)}</div>");
+				}
+				sb.AppendLine("  </div>");
+			}
+		}
+
+		sb.AppendLine("</div>");
+
+		// Policy Validators Tab
 		sb.AppendLine("<div id=\"policies\" class=\"tab-content\">");
 		sb.AppendLine("  <h2>Policy Validators</h2>");
 		sb.AppendLine("  <p>Cross-cutting authorization policies that apply to multiple resources based on attributes or global rules.</p>");
@@ -384,7 +474,7 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 					sb.AppendLine($"      {policy.PolicyName}");
 					sb.AppendLine($"    </h4>");
 					sb.AppendLine($"    <div><strong>Target Attribute:</strong> {policy.TargetAttributeType?.Name}</div>");
-					sb.AppendLine($"    <div><strong>Validator Type:</strong> {policy.ValidatorType.Name}</div>");
+					sb.AppendLine($"    <div><strong>Validator Type:</strong> {policy.PolicyType.Name}</div>");
 					sb.AppendLine($"    <div class=\"runtime-support\"><strong>Runtime Support:</strong> {string.Join(", ", policy.SupportedRuntimeTypes)}</div>");
 					sb.AppendLine($"    <div class=\"policy-description\">{policy.Description}</div>");
 					sb.AppendLine($"  </div>");
@@ -401,7 +491,7 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 					sb.AppendLine($"      <span class=\"policy-badge badge-order\">Order: {policy.Order}</span>");
 					sb.AppendLine($"      {policy.PolicyName}");
 					sb.AppendLine($"    </h4>");
-					sb.AppendLine($"    <div><strong>Validator Type:</strong> {policy.ValidatorType.Name}</div>");
+					sb.AppendLine($"    <div><strong>Validator Type:</strong> {policy.PolicyType.Name}</div>");
 					sb.AppendLine($"    <div class=\"runtime-support\"><strong>Runtime Support:</strong> {string.Join(", ", policy.SupportedRuntimeTypes)}</div>");
 					sb.AppendLine($"    <div class=\"policy-description\">{policy.Description}</div>");
 					sb.AppendLine($"  </div>");
@@ -468,14 +558,14 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 			sb.AppendLine($"  <div class=\"role {roleClass}\">");
 			sb.AppendLine($"    <h4>{role}</h4>");
 
-			var childRoles = _roleRegistry.GetInheritedRoles(role);
+			var childRoles = this._roleRegistry.GetInheritedRoles(role);
 			if (childRoles.Count > 0) {
 				sb.AppendLine("    <div class=\"inheritance\">");
 				sb.AppendLine("      <strong>Inherits from:</strong> " + string.Join(", ", childRoles));
 				sb.AppendLine("    </div>");
 			}
 
-			var parentRoles = _roleRegistry.GetInheritingRoles(role);
+			var parentRoles = this._roleRegistry.GetInheritingRoles(role);
 			if (parentRoles.Count > 0) {
 				sb.AppendLine("    <div class=\"inheritance\">");
 				sb.AppendLine("      <strong>Inherited by:</strong> " + string.Join(", ", parentRoles));
@@ -493,7 +583,7 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 		// Add role relationships for diagram
 		foreach (var role in allRoles) {
 			var roleId = role.ToString().Replace(":", "_");
-			var childRoles = _roleRegistry.GetInheritedRoles(role);
+			var childRoles = this._roleRegistry.GetInheritedRoles(role);
 
 			foreach (var childRole in childRoles) {
 				var childRoleId = childRole.ToString().Replace(":", "_");
@@ -531,7 +621,7 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 
 			// Group by validator
 			var validatorGroups = resourceGroup
-				.GroupBy(r => r.ValidatorType)
+				.GroupBy(r => r.AuthorizorType)
 				.OrderBy(g => g.Key.Name);
 
 			foreach (var validatorGroup in validatorGroups) {
@@ -568,7 +658,7 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("<div id=\"analysis\" class=\"tab-content\">");
 		sb.AppendLine("  <h2>Security Analysis</h2>");
 
-		var analysisReport = await this.GetEnhancedAnalysisReportAsync();
+		var analysisReport = await this.GetAnalysisReportAsync();
 
 		// Overall Status
 		sb.AppendLine("  <div class=\"resource\">");
@@ -606,8 +696,8 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 				foreach (var issue in severityGroup) {
 					sb.AppendLine($"    <div class=\"{severityClass}\">");
 					sb.AppendLine($"      <strong>Issue {issueIndex++}: {issue.Description}</strong>");
-					if (issue.RelatedObjects != null && issue.RelatedObjects.Any()) {
-						sb.AppendLine($"      <div>Related Objects: {string.Join(", ", issue.RelatedObjects)}</div>");
+					if (issue.RelatedTypeNames != null && issue.RelatedTypeNames.Any()) {
+						sb.AppendLine($"      <div>Related Objects: {string.Join(", ", issue.RelatedTypeNames)}</div>");
 					}
 					sb.AppendLine("    </div>");
 				}
@@ -631,10 +721,12 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 				sb.AppendLine($"    {issueId}[\"{severity}: {description}\"]");
 
 				// Connect issues to related roles if applicable
-				foreach (var relatedObj in issue.RelatedObjects) {
-					if (relatedObj is Role role) {
-						var roleId = role.ToString().Replace(":", "_");
-						sb.AppendLine($"    {issueId} -.-> {roleId}[\"{role}\"]");
+				foreach (var relatedTypeName in issue.RelatedTypeNames) {
+					// Check if this type name corresponds to a known role
+					var matchingRole = allRoles.FirstOrDefault(r => relatedTypeName.Contains(r.ToString()));
+					if (matchingRole != null) {
+						var roleId = matchingRole.ToString().Replace(":", "_");
+						sb.AppendLine($"    {issueId} -.-> {roleId}[\"{matchingRole}\"]");
 					}
 				}
 			}
@@ -683,7 +775,9 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("  ");
 		sb.AppendLine("  // Add active class to clicked tab");
 		sb.AppendLine("  document.querySelectorAll('.tab').forEach(tab => {");
-		sb.AppendLine("    if (tab.textContent.toLowerCase().includes(tabId.replace('policies', 'policy'))) {");
+		sb.AppendLine("    const tabText = tab.textContent.toLowerCase();");
+		sb.AppendLine("    const tabIdNormalized = tabId.replace('policies', 'policy').replace('domain', 'domain architecture');");
+		sb.AppendLine("    if (tabText.includes(tabIdNormalized) || (tabId === 'domain' && tabText.includes('domain'))) {");
 		sb.AppendLine("      tab.classList.add('active');");
 		sb.AppendLine("    }");
 		sb.AppendLine("  });");
@@ -736,16 +830,9 @@ public class EnhancedAuthorizationDocumenter : IAuthorizationDocumenter {
 
 	}
 
-	private Task<AnalysisReport> GetEnhancedAnalysisReportAsync() {
-		var analyzers = new List<IAuthorizationAnalyzer> {
-			new RoleHierarchyAnalyzer(this._roleRegistry),
-			new EnhancedAuthorizationRuleAnalyzer(this._services),
-			new PolicyValidatorAnalyzer(this._services)
-		};
-
-		var analyzer = new CompositeAnalyzer(analyzers);
-		return analyzer.AnalyzeAllAsync();
+	private async Task<AnalysisReport> GetAnalysisReportAsync() {
+		var analyzer = DefaultAnalyzerProvider.CreateAnalyzer(this._roleRegistry, this._services);
+		return await analyzer.AnalyzeAllAsync();
 	}
-
 
 }

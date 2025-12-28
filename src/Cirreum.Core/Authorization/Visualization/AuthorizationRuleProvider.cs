@@ -1,47 +1,78 @@
-﻿namespace Cirreum.Authorization.Visualization;
+namespace Cirreum.Authorization.Visualization;
 
+using Cirreum.Conductor;
 using FluentValidation;
 using FluentValidation.Internal;
 using FluentValidation.Validators;
 using Humanizer;
+using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
 using System.Reflection;
 
 /// <summary>
-/// Provides access to authorization rule information across the application.
-/// Acts as a central service for both analyzers and documenters.
+/// Provides access to all domain resources and their authorization information.
+/// This is the single source of truth for resource discovery and authorization rules.
+/// Scans ALL IRequest types (both protected and anonymous).
 /// </summary>
 public class AuthorizationRuleProvider() {
 
-	// Optional: Singleton instance for easy access
 	private static readonly Lazy<AuthorizationRuleProvider> _instance =
-		new Lazy<AuthorizationRuleProvider>(() => new AuthorizationRuleProvider());
+		new(() => new AuthorizationRuleProvider());
 
 	/// <summary>
 	/// Gets the singleton instance of the AuthorizationRuleProvider.
 	/// </summary>
 	public static AuthorizationRuleProvider Instance => _instance.Value;
 
-	// Optional: Cache the rules to avoid repeated reflection
-	private IReadOnlyList<AuthorizationRuleInfo>? _cachedRules;
+	// Cached data
+	private IReadOnlyList<ResourceTypeInfo>? _cachedResources;
+	private IReadOnlyList<AuthorizationRuleTypeInfo>? _cachedRules;
+	private IReadOnlyList<PolicyRuleTypeInfo>? _cachedPolicyRules;
+	private DomainCatalog? _cachedCatalog;
+	private IServiceProvider? _services;
+
+	public void Initialize(IServiceProvider services) {
+		this._services = services;
+		this.ClearCache();
+	}
 
 	/// <summary>
-	/// Gets all authorization rules defined in the application.
+	/// Gets the catalog organized by Domain Boundary -> Resource Kind -> Resource.
 	/// </summary>
-	/// <param name="useCache">Whether to use cached rules or refresh them.</param>
-	/// <returns>A read-only list of authorization rule information.</returns>
-	public IReadOnlyList<AuthorizationRuleInfo> GetAllRules(bool useCache = true) {
-
-		if (useCache && this._cachedRules != null) {
-			return this._cachedRules;
+	/// <remarks>
+	/// <para>
+	/// This is useful for visualization and analysis of the overall authorization structure.
+	/// </para>
+	/// <para>
+	/// The <see cref="DomainCatalog"/> is serializable and can be exported to JSON or other formats for reporting.
+	/// </para>
+	/// </remarks>
+	public DomainCatalog GetCatalog(bool useCache = true) {
+		if (useCache && this._cachedCatalog != null) {
+			return this._cachedCatalog;
 		}
 
-		var rules = new HashSet<AuthorizationRuleInfo>();
+		var allResources = this.GetAllResources(useCache);
+		this._cachedCatalog = DomainCatalog.Build(allResources);
+		return this._cachedCatalog;
+	}
 
-		// Find all types that inherit from AuthorizationValidatorBase<>
-		var assemblies = Cirreum.AssemblyScanner
-			.ScanAssemblies();
-		var validatorTypes = assemblies
+	#region Domain Resources
+
+	/// <summary>
+	/// Gets all domain resources (Commands, Queries, Events) with their authorization information.
+	/// Includes both protected and anonymous resources.
+	/// </summary>
+	public IReadOnlyList<ResourceTypeInfo> GetAllResources(bool useCache = true) {
+		if (useCache && this._cachedResources != null) {
+			return this._cachedResources;
+		}
+
+		var resources = new List<ResourceTypeInfo>();
+
+		// Step 1: Scan all assemblies for types
+		var assemblies = Cirreum.AssemblyScanner.ScanAssemblies();
+		var allTypes = assemblies
 			.SelectMany(a => {
 				try {
 					return a.GetTypes();
@@ -49,135 +80,364 @@ public class AuthorizationRuleProvider() {
 					return Type.EmptyTypes;
 				}
 			})
-			.Where(t => t.IsClass && !t.IsAbstract &&
-						t.BaseType?.IsGenericType == true &&
-						t.BaseType.GetGenericTypeDefinition() == typeof(AuthorizationValidatorBase<>));
+			.Where(t => t.IsClass && !t.IsAbstract)
+			.ToList();
 
-		foreach (var validatorType in validatorTypes) {
-			try {
-				// Find the concrete subclass of the generic base type
-				var resourceType = validatorType.BaseType?.GetGenericArguments()[0];
-				if (resourceType is null) {
-					continue;
-				}
+		// Step 2: Find all IDomainResource types
+		var domainResourceTypes = allTypes.Where(IsDomainResource).ToList();
 
-				// Extract validation rules
-				var ruleInfos = ExtractValidationRules(resourceType, validatorType);
-				rules.UnionWith(ruleInfos);
-			} catch (Exception ex) {
-				// Log the exception for debugging
-				Debug.WriteLine($"Error processing validator {validatorType.Name}: {ex.Message}");
-				// Skip validators that can't be instantiated or processed
+		// Step 3: Find all authorizors and build a lookup by resource type
+		var authorizorTypes = allTypes.Where(IsAuthorizationValidator).ToList();
+		var authorizorsByResource = new Dictionary<Type, Type>();
+		foreach (var authorizer in authorizorTypes) {
+			var resourceType = GetResourceTypeFromAuthorizor(authorizer);
+			if (resourceType != null) {
+				authorizorsByResource[resourceType] = authorizer;
 			}
+		}
+
+		// Step 4: Build ResourceInfo for each domain resource
+		foreach (var resourceType in domainResourceTypes) {
+			var hasAuthorizer = authorizorsByResource.TryGetValue(resourceType, out var authorizorType);
+			var rules = hasAuthorizer ? ExtractValidationRules(resourceType, authorizorType!) : [];
+
+			// IsAnonymous: not an IAuthorizableResource (doesn't participate in authorization)
+			var isAnonymous = !IsAuthorizableResource(resourceType);
+
+			// RequiresAuthorization: is an IAuthorizableRequest (flows through pipeline, must have authorizer)
+			var requiresAuthorization = !isAnonymous && ImplementsAuthorizableRequest(resourceType);
+
+			var resourceInfo = new ResourceTypeInfo(
+				ResourceType: resourceType,
+				DomainBoundary: GetDomainBoundary(resourceType),
+				ResourceKind: GetResourceKind(resourceType),
+				IsAnonymous: isAnonymous,
+				IsProtected: authorizorType != null,
+				RequiresAuthorization: requiresAuthorization,
+				AuthorizerType: authorizorType,
+				Rules: rules.AsReadOnly()
+			);
+
+			resources.Add(resourceInfo);
+		}
+
+		this._cachedResources = resources.AsReadOnly();
+		return this._cachedResources;
+
+	}
+
+	/// <summary>
+	/// Gets only anonymous resources (those that don't require authorization).
+	/// </summary>
+	public IReadOnlyList<ResourceTypeInfo> GetAnonymousResources(bool useCache = true) {
+		return this.GetAllResources(useCache).Where(r => r.IsAnonymous).ToList().AsReadOnly();
+	}
+
+	/// <summary>
+	/// Gets only authorizable resources (those that implement IAuthorizableResource).
+	/// </summary>
+	public IReadOnlyList<ResourceTypeInfo> GetAuthorizableResources(bool useCache = true) {
+		return this.GetAllResources(useCache).Where(r => !r.IsAnonymous).ToList().AsReadOnly();
+	}
+
+	#endregion
+
+	#region Authorization Rules
+
+	/// <summary>
+	/// Gets all authorization rules defined in the application.
+	/// </summary>
+	public IReadOnlyList<AuthorizationRuleTypeInfo> GetAllRules(bool useCache = true) {
+		if (useCache && this._cachedRules != null) {
+			return this._cachedRules;
+		}
+
+		var rules = new HashSet<AuthorizationRuleTypeInfo>();
+
+		// Find all authorizors
+		var assemblies = Cirreum.AssemblyScanner.ScanAssemblies();
+		var allTypes = assemblies
+			.SelectMany(a => {
+				try {
+					return a.GetTypes();
+				} catch {
+					return Type.EmptyTypes;
+				}
+			})
+			.Where(t => t.IsClass && !t.IsAbstract)
+			.ToList();
+		var authorizorTypes = allTypes.Where(IsAuthorizationValidator).ToList();
+
+		// Extract rules from each authorizor
+		foreach (var authorizorType in authorizorTypes) {
+
+			// Get the resource type this authorizor protects
+			var resourceType = GetResourceTypeFromAuthorizor(authorizorType);
+			resourceType ??= typeof(MissingResource);
+
+			// Extract validation rules
+			var ruleInfos = ExtractValidationRules(resourceType, authorizorType);
+			rules.UnionWith(ruleInfos);
+
 		}
 
 		this._cachedRules = rules.ToList().AsReadOnly();
 		return this._cachedRules;
+
 	}
 
 	/// <summary>
-	/// Gets all authorization rules for a specific resource type.
+	/// Retrieves information about all available authorization policy rules.
 	/// </summary>
-	/// <param name="resourceType">The resource type to get rules for.</param>
-	/// <returns>A read-only list of authorization rule information for the specified resource type.</returns>
-	public IReadOnlyList<AuthorizationRuleInfo> GetRulesForResourceType(Type resourceType) {
-		return this.GetAllRules()
-			.Where(r => r.ResourceType == resourceType)
-			.ToList()
-			.AsReadOnly();
+	/// <remarks>This method aggregates policy rule information from all registered IAuthorizationPolicyValidator
+	/// services. If caching is enabled and cached data is available, the method returns the cached results to improve
+	/// performance. Otherwise, it queries the underlying services to obtain the latest policy rules.</remarks>
+	/// <param name="useCache">true to return cached policy rule information if available; false to force retrieval of the latest policy rules
+	/// from the underlying services.</param>
+	/// <returns>A read-only list of PolicyRuleTypeInfo objects representing all discovered authorization policy rules. Returns an
+	/// empty list if no policy rules are available.</returns>
+	public IReadOnlyList<PolicyRuleTypeInfo> GetAllPolicyRules(bool useCache = true) {
+		if (useCache && this._cachedPolicyRules != null) {
+			return this._cachedPolicyRules;
+		}
+
+		if (this._services == null) {
+			return new List<PolicyRuleTypeInfo>().AsReadOnly();
+		}
+
+		var policyValidators = this._services.GetServices<IAuthorizationPolicyValidator>().ToList();
+		var policyRules = new List<PolicyRuleTypeInfo>();
+
+		foreach (var policy in policyValidators) {
+			var ruleInfo = new PolicyRuleTypeInfo(
+				PolicyName: policy.PolicyName,
+				PolicyType: policy.GetType(),
+				Order: policy.Order,
+				SupportedRuntimeTypes: policy.SupportedRuntimeTypes,
+				IsAttributeBased: IsAttributeBasedPolicy(policy),
+				TargetAttributeType: GetTargetAttributeType(policy),
+				Description: GetPolicyDescription(policy)
+			);
+			policyRules.Add(ruleInfo);
+		}
+
+		this._cachedPolicyRules = policyRules.AsReadOnly();
+		return this._cachedPolicyRules;
 	}
 
 	/// <summary>
-	/// Gets all authorization rules for a specific validator type.
+	/// Retrieves a combined view of resource and policy authorization rules, including the total number of protection
+	/// points.
 	/// </summary>
-	/// <param name="validatorType">The validator type to get rules for.</param>
-	/// <returns>A read-only list of authorization rule information for the specified validator type.</returns>
-	public IReadOnlyList<AuthorizationRuleInfo> GetRulesForValidatorType(Type validatorType) {
-		return this.GetAllRules()
-			.Where(r => r.ValidatorType == validatorType)
-			.ToList()
-			.AsReadOnly();
+	/// <param name="useCache">true to use cached rule data if available; false to force retrieval of the latest rules.</param>
+	/// <returns>A CombinedAuthorizationInfo object containing the current resource rules, policy rules, and the total count of
+	/// protection points.</returns>
+	public CombinedAuthorizationInfo GetCombinedAuthorizationInfo(bool useCache = true) {
+		var resourceRules = this.GetAllRules(useCache);
+		var policyRules = this.GetAllPolicyRules(useCache);
+
+		return new CombinedAuthorizationInfo(
+			ResourceRules: resourceRules,
+			PolicyRules: policyRules,
+			TotalProtectionPoints: resourceRules.Count + policyRules.Count
+		);
 	}
 
+	#endregion
+
+	#region Cache Management
+
 	/// <summary>
-	/// Clears the cached rules, forcing a refresh on the next call to GetAllRules().
+	/// Clears all cached data, forcing a refresh on the next call.
 	/// </summary>
 	public void ClearCache() {
+		this._cachedResources = null;
 		this._cachedRules = null;
+		this._cachedPolicyRules = null;
+		this._cachedCatalog = null;
 	}
 
-	private static List<AuthorizationRuleInfo> ExtractValidationRules(Type resourceType, Type validatorType) {
-		var rules = new List<AuthorizationRuleInfo>();
+	#endregion
 
-		// Create an instance of the validator
-		var validatorInstance = Activator.CreateInstance(validatorType);
+	#region Boundary/Kind Extraction
 
-		// Get the descriptor using reflection
-		var descriptorMethod = validatorType.GetMethod("CreateDescriptor", BindingFlags.Instance | BindingFlags.Public);
-		if (descriptorMethod != null && descriptorMethod.Invoke(validatorInstance, null) is IValidatorDescriptor descriptor) {
-			// Get all members with validators
-			var membersWithValidators = descriptor.GetMembersWithValidators();
+	private static string GetDomainBoundary(Type resourceType) {
+		var parts = resourceType.Namespace?.Split('.') ?? [];
+		var domainIndex = Array.IndexOf(parts, "Domain");
+		return domainIndex >= 0 && parts.Length > domainIndex + 1
+			? parts[domainIndex + 1]
+			: "Other";
+	}
 
-			foreach (var propertyGroup in membersWithValidators) {
-				var propertyPath = propertyGroup.Key;
+	private static string GetResourceKind(Type resourceType) {
+		var parts = resourceType.Namespace?.Split('.') ?? [];
+		return parts.LastOrDefault() ?? "Unknown";
+	}
 
-				// Get the rules for this property to check for conditions
-				var propertyRules = descriptor.GetRulesForMember(propertyPath);
-				var condition = GetConditionDescription(propertyRules);
+	#endregion
 
-				// Process each validator for this property
-				foreach (var (validator, options) in propertyGroup) {
-					if (validator is null) {
-						continue;
+	#region Type Detection Helpers
+
+	/// <summary>
+	/// Determines whether the specified type implements the IDomainResource interface.
+	/// </summary>
+	/// <param name="type">The type to examine for implementation of the IDomainResource interface. Cannot be null.</param>
+	/// <returns>true if the specified type implements IDomainResource; otherwise, false.</returns>
+	private static bool IsDomainResource(Type type) {
+		var interfaces = type.GetInterfaces();
+		return interfaces.Any(i => i.Name == nameof(IDomainResource));
+	}
+
+	/// <summary>
+	/// Determines whether the specified type implements the IAuthorizableResource interface.
+	/// </summary>
+	/// <param name="type">The type to examine for implementation of the IAuthorizableResource interface.</param>
+	/// <returns>true if the specified type implements IAuthorizableResource; otherwise, false.</returns>
+	private static bool IsAuthorizableResource(Type type) {
+		var interfaces = type.GetInterfaces();
+		return interfaces.Any(i => i.Name == nameof(IAuthorizableResource));
+	}
+
+	/// <summary>
+	/// Determines whether the specified type implements an authorizable request interface.
+	/// </summary>
+	/// <param name="type">The type to inspect for implementation of an authorizable request interface.</param>
+	/// <returns>true if the specified type implements IAuthorizableRequestBase, IAuthorizableRequest,
+	/// or IAuthorizableRequest{T}; otherwise, false.
+	/// </returns>
+	/// <remarks>This method checks for implementation of any of the recognized authorizable request marker
+	/// interfaces, including generic variants. Use this to identify types that support authorization in the request
+	/// pipeline.
+	/// </remarks>
+	private static bool ImplementsAuthorizableRequest(Type type) {
+		// Check if the type implements any of the request interfaces
+		return type.GetInterfaces().Any(i =>
+			i.Name == nameof(IAuthorizableRequestBase) ||
+			i.Name == nameof(IAuthorizableRequest) ||
+			(i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAuthorizableRequest<>)));
+	}
+
+	private static bool IsAuthorizationValidator(Type type) {
+		// Check for base class validators
+		if (type.BaseType?.IsGenericType == true &&
+			type.BaseType.GetGenericTypeDefinition() == typeof(AuthorizationValidatorBase<>)) {
+			return true;
+		}
+
+		// Check for interface-based validators
+		return type.GetInterfaces()
+			.Any(i => i.IsGenericType &&
+					  i.GetGenericTypeDefinition() == typeof(IAuthorizationResourceValidator<>));
+	}
+
+	private static Type? GetResourceTypeFromAuthorizor(Type authorizorType) {
+		// Try base class first
+		if (authorizorType.BaseType?.IsGenericType == true &&
+			authorizorType.BaseType.GetGenericTypeDefinition() == typeof(AuthorizationValidatorBase<>)) {
+			return authorizorType.BaseType.GetGenericArguments()[0];
+		}
+
+		// Try interface
+		var validatorInterface = authorizorType.GetInterfaces()
+			.FirstOrDefault(i => i.IsGenericType &&
+								 i.GetGenericTypeDefinition() == typeof(IAuthorizationResourceValidator<>));
+
+		return validatorInterface?.GetGenericArguments()[0];
+	}
+
+	private static bool IsAttributeBasedPolicy(IAuthorizationPolicyValidator policy) {
+		var baseType = policy.GetType().BaseType;
+		return baseType != null &&
+			   baseType.IsGenericType &&
+			   baseType.GetGenericTypeDefinition() == typeof(AttributeValidatorBase<>);
+	}
+
+	private static Type? GetTargetAttributeType(IAuthorizationPolicyValidator policy) {
+		if (!IsAttributeBasedPolicy(policy)) {
+			return null;
+		}
+
+		return policy.GetType().BaseType?.GetGenericArguments()[0];
+	}
+
+	private static string GetPolicyDescription(IAuthorizationPolicyValidator policy) {
+		var type = policy.GetType();
+		var description = type.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false)
+			.Cast<System.ComponentModel.DescriptionAttribute>()
+			.FirstOrDefault()?.Description;
+
+		return description ?? $"Policy validator: {policy.PolicyName}";
+	}
+
+	#endregion
+
+	#region Rule Extraction
+
+	private static List<AuthorizationRuleTypeInfo> ExtractValidationRules(Type resourceType, Type validatorType) {
+		var rules = new List<AuthorizationRuleTypeInfo>();
+
+		try {
+			// Create an instance of the validator
+			var validatorInstance = Activator.CreateInstance(validatorType);
+
+			// Get the descriptor using reflection
+			var descriptorMethod = validatorType.GetMethod("CreateDescriptor", BindingFlags.Instance | BindingFlags.Public);
+			if (descriptorMethod != null && descriptorMethod.Invoke(validatorInstance, null) is IValidatorDescriptor descriptor) {
+				// Get all members with validators
+				var membersWithValidators = descriptor.GetMembersWithValidators();
+
+				foreach (var propertyGroup in membersWithValidators) {
+					var propertyPath = propertyGroup.Key;
+					var propertyRules = descriptor.GetRulesForMember(propertyPath);
+					var condition = GetConditionDescription(propertyRules);
+
+					foreach (var (validator, options) in propertyGroup) {
+						if (validator is null) {
+							continue;
+						}
+
+						var validationLogic = GetValidationLogicDescription(validator);
+						var message = options.GetUnformattedErrorMessage() ?? "Default error message";
+
+						rules.Add(new AuthorizationRuleTypeInfo(
+							resourceType,
+							validatorType,
+							propertyPath,
+							validationLogic,
+							message,
+							condition
+						));
 					}
-
-					// Extract validation logic
-					var validationLogic = GetValidationLogicDescription(validator);
-
-					// Get error message
-					var message = options.GetUnformattedErrorMessage() ?? "Default error message";
-
-					// Add the rule info
-					rules.Add(new AuthorizationRuleInfo(
-						resourceType,
-						validatorType,
-						propertyPath,
-						validationLogic,
-						message,
-						condition
-					));
 				}
-			}
 
-			// Process include rules using the IIncludeRule interface
-			foreach (var rule in descriptor.Rules) {
-				if (rule is IIncludeRule) {
+				// Process include rules
+				foreach (var rule in descriptor.Rules) {
+					if (rule is IIncludeRule) {
+						rules.Add(new AuthorizationRuleTypeInfo(
+							resourceType,
+							validatorType,
+							rule.PropertyName ?? "AuthorizationContext",
+							"Included Validator",
+							"References another validator",
+							null
+						));
 
-					// This is an include rule
-					rules.Add(new AuthorizationRuleInfo(
-						resourceType,
-						validatorType,
-						rule.PropertyName ?? "AuthorizationContext",
-						"Included Validator",
-						"References another validator",
-						null
-					));
-
-					var ruleType = rule.GetType();
-					var validatorProperty = ruleType.GetProperty("Validator");
-					if (validatorProperty != null) {
-						var includedValidator = validatorProperty.GetValue(rule);
-						if (includedValidator != null) {
-							// You could extract more information about the included validator here
-							var includedValidatorType = includedValidator.GetType();
-							// Add the type name to the validation logic
-							rules[^1] = rules[^1] with {
-								ValidationLogic = $"Included Validator: {includedValidatorType.Name}"
-							};
+						var ruleType = rule.GetType();
+						var validatorProperty = ruleType.GetProperty("Validator");
+						if (validatorProperty != null) {
+							var includedValidator = validatorProperty.GetValue(rule);
+							if (includedValidator != null) {
+								var includedValidatorType = includedValidator.GetType();
+								rules[^1] = rules[^1] with {
+									ValidationLogic = $"Included Validator: {includedValidatorType.Name}"
+								};
+							}
 						}
 					}
 				}
 			}
+		} catch (Exception ex) {
+			Debug.WriteLine($"Error extracting rules from validator {validatorType.Name}: {ex.Message}");
 		}
 
 		return rules;
@@ -185,23 +445,16 @@ public class AuthorizationRuleProvider() {
 
 	private static string? GetConditionDescription(IEnumerable<IValidationRule> rules) {
 		foreach (var rule in rules) {
-			// Check if the rule has conditions by examining properties via reflection
 			var ruleType = rule.GetType();
 			var applyConditionProperty = ruleType.GetProperty("ApplyCondition");
 			var asyncApplyConditionProperty = ruleType.GetProperty("AsyncApplyCondition");
 
-			if (applyConditionProperty != null) {
-				var applyCondition = applyConditionProperty.GetValue(rule);
-				if (applyCondition != null) {
-					return "Has When condition";
-				}
+			if (applyConditionProperty?.GetValue(rule) != null) {
+				return "Has When condition";
 			}
 
-			if (asyncApplyConditionProperty != null) {
-				var asyncApplyCondition = asyncApplyConditionProperty.GetValue(rule);
-				if (asyncApplyCondition != null) {
-					return "Has async condition";
-				}
+			if (asyncApplyConditionProperty?.GetValue(rule) != null) {
+				return "Has async condition";
 			}
 		}
 
@@ -209,8 +462,6 @@ public class AuthorizationRuleProvider() {
 	}
 
 	private static string GetValidationLogicDescription(IPropertyValidator validator) {
-
-		// Basic validators
 		if (validator is INotNullValidator) {
 			return "Not Null";
 		}
@@ -219,7 +470,6 @@ public class AuthorizationRuleProvider() {
 			return "Not Empty";
 		}
 
-		// Length validators
 		if (validator is ILengthValidator lengthVal) {
 			if (lengthVal.Max == int.MaxValue) {
 				return $"Min Length: {lengthVal.Min}";
@@ -232,31 +482,26 @@ public class AuthorizationRuleProvider() {
 			return $"Length: {lengthVal.Min}-{lengthVal.Max}";
 		}
 
-		// Comparison validators
 		if (validator is IComparisonValidator compVal) {
 			var comparisonType = compVal.Comparison.ToString();
 			var valueToCompare = compVal.ValueToCompare?.ToString() ?? "null";
 			return $"{comparisonType} {valueToCompare}";
 		}
 
-		// Regex validator
 		if (validator is IRegularExpressionValidator regexVal) {
 			return $"Regex: {regexVal.Expression}";
 		}
 
-		// Email validator
 		if (validator is IEmailValidator) {
 			return "Email";
 		}
 
-		// Predicate validator
 		if (validator is IPredicateValidator) {
 			return "Custom Predicate";
 		}
 
-		// For unknown validators, return the name or type
 		return (validator.Name ?? validator.GetType().Name.Replace("Validator", "")).Humanize();
-
 	}
 
+	#endregion
 }

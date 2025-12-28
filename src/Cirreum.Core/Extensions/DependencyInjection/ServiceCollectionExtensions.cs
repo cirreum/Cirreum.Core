@@ -42,10 +42,10 @@ public static class ServiceCollectionExtensions {
 		this IServiceCollection services,
 		ServiceLifetime serviceLifetime = ServiceLifetime.Singleton) {
 		if (serviceLifetime == ServiceLifetime.Singleton) {
-			services.TryAddSingleton<IAuthorizationDocumenter, EnhancedAuthorizationDocumenter>();
+			services.TryAddSingleton<IAuthorizationDocumenter, AuthorizationDocumenter>();
 			return;
 		}
-		services.TryAddScoped<IAuthorizationDocumenter, EnhancedAuthorizationDocumenter>();
+		services.TryAddScoped<IAuthorizationDocumenter, AuthorizationDocumenter>();
 	}
 
 

@@ -20,7 +20,7 @@ public class BatchOperationException : Exception {
 	/// <param name="entityName"></param>
 	public BatchOperationException(HttpStatusCode statusCode, string entityName) : base(
 		$"Failed to execute the batch operation for {entityName}") {
-		StatusCode = statusCode;
+		this.StatusCode = statusCode;
 	}
 
 }

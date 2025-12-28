@@ -1,6 +1,7 @@
 ﻿namespace Cirreum.Authorization;
 /// <summary>
-/// Marker interface for resources that can participate in the authorization system.
+/// Marker interface that extends <see cref="IDomainResource"/>, for resources that can participate
+/// in the authorization system.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,4 +19,4 @@
 ///     <item><description>Can be evaluated by the authorization system</description></item>
 /// </list>
 /// </remarks>
-public interface IAuthorizableResource;
+public interface IAuthorizableResource : IDomainResource;

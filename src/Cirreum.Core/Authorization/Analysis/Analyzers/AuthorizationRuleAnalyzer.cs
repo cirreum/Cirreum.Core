@@ -3,44 +3,58 @@
 using Cirreum.Authorization.Visualization;
 
 /// <summary>
-/// Analyzes authorization validators and rules for security implications and consistency.
+/// Analyzes authorization rules for security implications and consistency.
 /// </summary>
-public class AuthorizationRuleAnalyzer : IAuthorizationAnalyzer {
+public class AuthorizationRuleAnalyzer : IAuthorizationAnalyzerWithOptions {
 
-	private const string AnalyzerCategory = "Authorization Rules";
+	public const string AnalyzerCategory = "Authorization Rules";
 
-	public AnalysisReport Analyze() {
+	public AnalysisReport Analyze() => this.Analyze(AnalysisOptions.Default);
+
+	public AnalysisReport Analyze(AnalysisOptions options) {
+
 		var issues = new List<AnalysisIssue>();
-		var metrics = new Dictionary<string, object>();
+		var metrics = new Dictionary<string, int>();
 		var rules = AuthorizationRuleProvider.Instance.GetAllRules();
-
-		// Analyze rules for potential issues
 		var rulesByResource = rules.GroupBy(r => r.ResourceType).ToList();
-		metrics["ResourceCount"] = rulesByResource.Count;
-		metrics["ValidatorCount"] = rules.Select(r => r.ValidatorType).Distinct().Count();
-		metrics["RuleCount"] = rules.Count;
+		var rulesWithMissingResource = rules.Where(r => r.ResourceType == typeof(MissingResource)).ToList();
 
-		// Check for resources with no validators
-		var resourcesWithNoRules = rulesByResource.Where(g => !g.Any()).ToList();
-		if (resourcesWithNoRules.Count != 0) {
+		// Capture metrics for this analyzer
+		metrics[$"{MetricCategories.AuthorizationRules}AuthorizerCount"] = rules.Select(r => r.AuthorizorType).Distinct().Count();
+		metrics[$"{MetricCategories.AuthorizationRules}ResourceCount"] = rulesByResource.Count(g => g.Key != typeof(MissingResource));
+		metrics[$"{MetricCategories.AuthorizationRules}OrphanedAuthorizerCount"] = rulesWithMissingResource.Select(r => r.AuthorizorType).Distinct().Count();
+		metrics[$"{MetricCategories.AuthorizationRules}RuleCount"] = rules.Count;
+
+		// Check for authorizers with a missing/orphaned resource (critical error)
+		if (rulesWithMissingResource.Count > 0) {
+			var orphanedAuthorizers = rulesWithMissingResource
+				.Select(r => r.AuthorizorType)
+				.Distinct()
+				.ToList();
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
-				Severity: IssueSeverity.Warning,
-				Description: $"Found {resourcesWithNoRules.Count} resources with no authorization rules",
-				RelatedObjects: [.. resourcesWithNoRules.Select(g => g.Key).Cast<object>()]));
+				Severity: IssueSeverity.Error,
+				Description: $"Found {orphanedAuthorizers.Count} authorizers with no matching resource type (orphaned authorizers)",
+				RelatedTypeNames: [.. orphanedAuthorizers.Select(t => t.FullName ?? t.Name)]));
 		}
 
-		// Check for resources with only HasRole checks
-		var resourcesWithOnlyRoleChecks = rulesByResource
-			.Where(g => g.All(r => r.ValidationLogic.Contains("HasRole") || r.ValidationLogic.Contains("HasAnyRole")))
-			.ToList();
+		// Check for resources with only role-based checks (informational)
+		if (options.IncludeInfoIssues) {
+			var resourcesWithOnlyRoleChecks = rulesByResource
+				.Where(g => g.Key != typeof(MissingResource))
+				.Where(g => g.All(r =>
+					r.ValidationLogic.Contains("HasRole") ||
+					r.ValidationLogic.Contains("HasAnyRole") ||
+					r.ValidationLogic.Contains("HasAllRoles")))
+				.ToList();
 
-		if (resourcesWithOnlyRoleChecks.Count != 0) {
-			issues.Add(new AnalysisIssue(
-				Category: AnalyzerCategory,
-				Severity: IssueSeverity.Info,
-				Description: $"Found {resourcesWithOnlyRoleChecks.Count} resources with only role-based checks",
-				RelatedObjects: [.. resourcesWithOnlyRoleChecks.Select(g => g.Key).Cast<object>()]));
+			if (resourcesWithOnlyRoleChecks.Count != 0) {
+				issues.Add(new AnalysisIssue(
+					Category: AnalyzerCategory,
+					Severity: IssueSeverity.Info,
+					Description: $"Found {resourcesWithOnlyRoleChecks.Count} resources with only role-based authorization checks",
+					RelatedTypeNames: [.. resourcesWithOnlyRoleChecks.Select(g => g.Key.FullName ?? g.Key.Name)]));
+			}
 		}
 
 		return AnalysisReport.ForCategory(AnalyzerCategory, issues, metrics);

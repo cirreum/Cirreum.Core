@@ -1,275 +1,410 @@
-﻿namespace Cirreum.Authorization.Visualization;
+namespace Cirreum.Authorization.Visualization;
 
 using Cirreum.Authorization.Analysis;
-using System.Linq;
 using System.Text;
 
 /// <summary>
-/// Custom formatters of an <see cref="AnalysisReport"/>.
+/// Report formatters that leverage analysis features like metric categories and extension methods.
 /// </summary>
 public static class AnalysisReportFormatters {
 
 	/// <summary>
-	/// Generates a Markdown report.
+	/// Generates a comprehensive Markdown report with better organization.
 	/// </summary>
-	/// <param name="report">The <see cref="AnalysisReport"/> to format.</param>
-	/// <returns>The formatted string.</returns>
 	public static string ToMarkdown(this AnalysisReport report) {
+		var sb = new StringBuilder();
 
-		var markdownBuilder = new StringBuilder();
+		// Use the summary extension
+		var summary = report.GetSummary();
 
-		// Overall Status
-		markdownBuilder.AppendLine("# Analysis Report");
-		markdownBuilder.AppendLine();
-		markdownBuilder.AppendLine("## Overall Status");
-		markdownBuilder.AppendLine();
-		markdownBuilder.AppendLine($"- **Issues Found**: {(report.HasIssues ? "Yes" : "No")}");
-		markdownBuilder.AppendLine($"- **Total Issues**: {report.Issues.Count}");
-		markdownBuilder.AppendLine();
+		sb.AppendLine("# Authorization Analysis Report");
+		sb.AppendLine();
+		sb.AppendLine($"**Generated**: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+		sb.AppendLine($"**Analyzers Run**: {summary.AnalyzerCount}");
+		sb.AppendLine();
 
-		// Quick Summary
-		markdownBuilder.AppendLine("### Summary");
-		markdownBuilder.AppendLine();
-		var errorCount = report.Issues.Count(i => i.Severity == IssueSeverity.Error);
-		var warningCount = report.Issues.Count(i => i.Severity == IssueSeverity.Warning);
-		var infoCount = report.Issues.Count(i => i.Severity == IssueSeverity.Info);
+		// Executive Summary using extension methods
+		sb.AppendLine("## Executive Summary");
+		sb.AppendLine();
+		sb.AppendLine($"| Status | Count |");
+		sb.AppendLine("|--------|-------|");
+		sb.AppendLine($"| 🔴 Errors | {summary.ErrorCount} |");
+		sb.AppendLine($"| 🟡 Warnings | {summary.WarningCount} |");
+		sb.AppendLine($"| 🟢 Info | {summary.InfoCount} |");
+		sb.AppendLine($"| **Total Issues** | **{summary.TotalIssues}** |");
+		sb.AppendLine();
+		sb.AppendLine($"**Overall Result**: {(summary.Passed ? "✅ PASSED" : "❌ FAILED")}");
+		if (summary.HighestSeverity.HasValue) {
+			sb.AppendLine($"**Highest Severity**: {summary.HighestSeverity.Value}");
+		}
+		sb.AppendLine();
 
-		markdownBuilder.AppendLine($"- 🔴 **Error**: {errorCount}");
-		markdownBuilder.AppendLine($"- 🟡 **Warning**: {warningCount}");
-		markdownBuilder.AppendLine($"- 🟢 **Info**: {infoCount}");
+		// Metrics grouped by category
+		if (report.Metrics.Count > 0) {
+			sb.AppendLine("## Metrics by Category");
+			sb.AppendLine();
 
-		// Detailed Issues Grouped by Category then by Severity
-		markdownBuilder.AppendLine();
-		markdownBuilder.AppendLine("## Detailed Issues");
-		foreach (var category in report.AnalyzerCategories.OrderBy(c => c)) {
-			markdownBuilder.AppendLine();
-			markdownBuilder.AppendLine($"### <span style=\"color: royalblue;\">{category}</span>");
-			markdownBuilder.AppendLine();
-			var categoryIssues = report.Issues.Where(i => i.Category == category);
+			var metricsByCategory = report.Metrics
+				.GroupBy(m => MetricCategories.GetMetricCategoryDisplayName(m.Key))
+				.OrderBy(g => g.Key);
 
-			if (!categoryIssues.Any()) {
-				markdownBuilder.AppendLine("- No issues found");
-				continue;
-			}
+			foreach (var categoryGroup in metricsByCategory) {
+				sb.AppendLine($"### {categoryGroup.Key}");
+				sb.AppendLine();
+				sb.AppendLine("| Metric | Value |");
+				sb.AppendLine("|--------|-------|");
 
-			// Within each category, group issues by Severity
-			foreach (var severityGroup in categoryIssues.GroupBy(issue => issue.Severity)) {
-				// Get a color based on severity (red for errors, orange for warnings, green for info, etc.)
-				var severityColor = GetSeverityColor(severityGroup.Key);
-				markdownBuilder.AppendLine();
-				markdownBuilder.AppendLine($"#### Severity: <span style=\"color: {severityColor};\">{severityGroup.Key}</span>");
-				markdownBuilder.AppendLine();
-				var issueIndex = 1;
-				foreach (var issue in severityGroup) {
-					markdownBuilder.AppendLine($"- **Issue {issueIndex++}:** {issue.Description}");
-					if (issue.RelatedObjects != null && issue.RelatedObjects.Any()) {
-						markdownBuilder.AppendLine($"  - **Related Objects**: {string.Join(", ", issue.RelatedObjects)}");
-					}
+				foreach (var metric in categoryGroup.OrderBy(m => m.Key)) {
+					var metricName = MetricCategories.GetMetricName(metric.Key);
+					sb.AppendLine($"| {metricName} | {metric.Value:N0} |");
 				}
-			}
-
-		}
-
-		// Metrics
-		if (report.Metrics.Count != 0) {
-			markdownBuilder.AppendLine();
-			markdownBuilder.AppendLine("## Metrics");
-			markdownBuilder.AppendLine();
-			foreach (var metric in report.Metrics) {
-				markdownBuilder.AppendLine($"- **{metric.Key}**: {metric.Value}");
+				sb.AppendLine();
 			}
 		}
 
-		// Analysis Insights
-		markdownBuilder.AppendLine();
-		markdownBuilder.AppendLine("## Analysis Insights");
-		markdownBuilder.AppendLine();
-		if (report.Issues.Count != 0) {
-			var mostFrequentIssueType = report.Issues
-				.GroupBy(i => i.Category)
-				.OrderByDescending(g => g.Count())
-				.First()
-				.Key;
-			var uniqueIssueTypesCount = report.Issues.Select(i => i.Category).Distinct().Count();
-			var severityDistribution = report.Issues
-				.GroupBy(i => i.Severity)
-				.OrderByDescending(g => g.Count())
-				.ToDictionary(g => g.Key, g => g.Count());
+		// Issues by severity using extension method
+		var issuesBySeverity = report.GetIssuesBySeverity();
+		if (issuesBySeverity.Count > 0) {
+			sb.AppendLine("## Issues by Severity");
+			sb.AppendLine();
 
-			markdownBuilder.AppendLine($"- **Most Frequent Issue Type**: {mostFrequentIssueType}");
-			markdownBuilder.AppendLine($"- **Total Unique Issue Types**: {uniqueIssueTypesCount}");
-			markdownBuilder.AppendLine("- **Severity Distribution**:");
-			foreach (var (severity, count) in severityDistribution) {
-				markdownBuilder.AppendLine($"  - {severity}: {count} ({(count * 100.0 / report.Issues.Count):F1}%)");
-			}
-		} else {
-			markdownBuilder.AppendLine("- No issues found.");
-		}
+			foreach (var severityLevel in new[] { IssueSeverity.Error, IssueSeverity.Warning, IssueSeverity.Info }) {
+				if (issuesBySeverity.TryGetValue(severityLevel, out var severityIssues)) {
+					sb.AppendLine($"### {GetSeverityIcon(severityLevel)} {severityLevel} Issues ({severityIssues.Count})");
+					sb.AppendLine();
 
-		return markdownBuilder.ToString();
+					// Group by category within severity
+					var byCategory = severityIssues.GroupBy(i => i.Category).OrderBy(g => g.Key);
+					foreach (var categoryGroup in byCategory) {
+						sb.AppendLine($"#### {categoryGroup.Key}");
+						sb.AppendLine();
 
-		// Local function to map severity to a color.
-		static string GetSeverityColor(IssueSeverity severity) {
-			return severity switch {
-				IssueSeverity.Error => "red",
-				IssueSeverity.Warning => "orange",
-				IssueSeverity.Info => "limegreen",
-				_ => "black"
-			};
-		}
-
-	}
-
-	/// <summary>
-	/// Generates a Text report.
-	/// </summary>
-	/// <param name="report">The <see cref="AnalysisReport"/> to format.</param>
-	/// <returns>The formatted string.</returns>
-	public static string ToText(this AnalysisReport report) {
-		var textBuilder = new StringBuilder();
-
-		// Report Header
-		textBuilder.AppendLine("╔══════════════════════════════════════════╗");
-		textBuilder.AppendLine("║           ANALYSIS REPORT                ║");
-		textBuilder.AppendLine("╚══════════════════════════════════════════╝");
-		textBuilder.AppendLine();
-
-		// Status Overview
-		textBuilder.AppendLine("Status Overview:");
-		textBuilder.AppendLine("----------------");
-		textBuilder.AppendLine($"* Issues Found: {(report.HasIssues ? "Yes" : "No")}");
-		textBuilder.AppendLine($"* Total Issues: {report.Issues.Count}");
-		textBuilder.AppendLine($"* Has Critical Issues: {report.Issues.Any(i => i.Severity == IssueSeverity.Error)}");
-		textBuilder.AppendLine();
-
-		// Detailed Analysis by Category
-		textBuilder.AppendLine("Detailed Analysis:");
-		textBuilder.AppendLine("------------------");
-
-		// Materialize categories: if AnalyzerCategories is empty, fall back on the categories in Issues.
-		var categories = report.AnalyzerCategories.Count != 0
-			? report.AnalyzerCategories.OrderBy(c => c).ToList()
-			: [.. report.Issues.Select(i => i.Category).Distinct().OrderBy(c => c)];
-
-		foreach (var category in categories) {
-			textBuilder.AppendLine($"[{category}]");
-			// Materialize issues in this category
-			var categoryIssues = report.Issues
-				.Where(i => i.Category == category)
-				.ToList();
-
-			if (categoryIssues.Count == 0) {
-				textBuilder.AppendLine("  * No issues found");
-			} else {
-				// Group issues by severity, mirroring the Markdown logic.
-				foreach (var severityGroup in categoryIssues.GroupBy(i => i.Severity).OrderByDescending(g => g.Key)) {
-					textBuilder.AppendLine($"  {severityGroup.Key}:");
-					var issueIndex = 1;
-					foreach (var issue in severityGroup) {
-						textBuilder.AppendLine($"    Issue {issueIndex++}: {issue.Description}");
-						if (issue.RelatedObjects?.Any() == true) {
-							textBuilder.AppendLine($"      Related: {string.Join(", ", issue.RelatedObjects)}");
+						foreach (var issue in categoryGroup) {
+							sb.AppendLine($"- {issue.Description}");
+							if (issue.RelatedTypeNames.Count > 0) {
+								sb.AppendLine($"  - **Affected Types**: `{string.Join("`, `", issue.RelatedTypeNames)}`");
+							}
 						}
+						sb.AppendLine();
 					}
 				}
 			}
-			textBuilder.AppendLine();
 		}
 
-		// Metrics Summary
-		if (report.Metrics.Count != 0) {
-			textBuilder.AppendLine("Metrics Summary:");
-			textBuilder.AppendLine("----------------");
-			foreach (var metric in report.Metrics.OrderBy(m => m.Key)) {
-				textBuilder.AppendLine($"{metric.Key}: {metric.Value}");
-			}
-			textBuilder.AppendLine();
+		// Analyzer coverage
+		sb.AppendLine("## Analyzer Coverage");
+		sb.AppendLine();
+		sb.AppendLine("| Analyzer Category | Issues Found |");
+		sb.AppendLine("|-------------------|--------------|");
+
+		var issuesByCategory = report.GetIssuesByCategory();
+		foreach (var category in report.AnalyzerCategories.OrderBy(c => c)) {
+			var issueCount = issuesByCategory.TryGetValue(category, out var issues) ? issues.Count : 0;
+			sb.AppendLine($"| {category} | {issueCount} |");
 		}
 
-		// Analysis Insights
-		textBuilder.AppendLine("Analysis Insights:");
-		textBuilder.AppendLine("------------------");
-		if (report.Issues.Count != 0) {
-			var mostFrequentIssueType = report.Issues
-				.GroupBy(i => i.Category)
-				.OrderByDescending(g => g.Count())
-				.First().Key;
-			var uniqueIssueTypesCount = report.Issues.Select(i => i.Category).Distinct().Count();
-
-			textBuilder.AppendLine($"* Most Frequent Issue Type: {mostFrequentIssueType}");
-			textBuilder.AppendLine($"* Total Unique Issue Types: {uniqueIssueTypesCount}");
-		} else {
-			textBuilder.AppendLine("* No issues found in any category");
-		}
-
-		return textBuilder.ToString();
+		return sb.ToString();
 	}
 
 	/// <summary>
-	/// Generates a Csv report.
+	/// Generates a simple text report.
 	/// </summary>
-	/// <param name="report">The <see cref="AnalysisReport"/> to format.</param>
-	/// <returns>The formatted string.</returns>
-	public static string ToCsv(this AnalysisReport report) {
+	public static string ToText(this AnalysisReport report) {
+		var sb = new StringBuilder();
+		var summary = report.GetSummary();
 
-		var csvBuilder = new StringBuilder();
+		sb.AppendLine("AUTHORIZATION ANALYSIS REPORT");
+		sb.AppendLine("================================");
+		sb.AppendLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+		sb.AppendLine($"Analyzers: {summary.AnalyzerCount}");
+		sb.AppendLine();
 
-		// Issues CSV
-		csvBuilder.AppendLine("Category,Severity,Description,RelatedObjects");
-		foreach (var issue in report.Issues) {
-			csvBuilder.AppendLine(
-				$"{EscapeCsvField(issue.Category)}," +
-				$"{EscapeCsvField(issue.Severity)}," +
-				$"{EscapeCsvField(issue.Description)}," +
-				$"{EscapeCsvField(issue.RelatedObjects != null ? string.Join("; ", issue.RelatedObjects) : string.Empty)}"
-			);
-		}
+		sb.AppendLine("EXECUTIVE SUMMARY");
+		sb.AppendLine("-----------------");
+		sb.AppendLine($"Errors:   {summary.ErrorCount}");
+		sb.AppendLine($"Warnings: {summary.WarningCount}");
+		sb.AppendLine($"Info:     {summary.InfoCount}");
+		sb.AppendLine($"Total:    {summary.TotalIssues}");
+		sb.AppendLine($"Result:   {(summary.Passed ? "PASSED" : "FAILED")}");
+		sb.AppendLine();
 
-		// Metrics CSV
-		if (report.Metrics.Count != 0) {
-			csvBuilder.AppendLine();
-			csvBuilder.AppendLine("Metric,Value");
-			foreach (var metric in report.Metrics) {
-				csvBuilder.AppendLine($"{EscapeCsvField(metric.Key)},{EscapeCsvField(metric.Value)}");
+		if (report.Issues.Count > 0) {
+			sb.AppendLine("ISSUES");
+			sb.AppendLine("------");
+			var issuesByCategory = report.GetIssuesByCategory();
+			foreach (var category in report.AnalyzerCategories.OrderBy(c => c)) {
+				if (issuesByCategory.TryGetValue(category, out var issues) && issues.Count > 0) {
+					sb.AppendLine($"\n{category}:");
+					foreach (var issue in issues.OrderBy(i => i.Severity)) {
+						sb.AppendLine($"  [{issue.Severity}] {issue.Description}");
+					}
+				}
 			}
 		}
 
-		// Analysis Insights CSV
-		csvBuilder.AppendLine();
-		csvBuilder.AppendLine("Insight,Value");
-		if (report.Issues.Count != 0) {
-			var mostFrequentIssueType = report.Issues
-				.GroupBy(i => i.Category)
-				.OrderByDescending(g => g.Count())
-				.First()
-				.Key;
-			var uniqueIssueTypesCount = report.Issues.Select(i => i.Category).Distinct().Count();
-
-			csvBuilder.AppendLine($"{EscapeCsvField("Most Frequent Issue Type")},{EscapeCsvField(mostFrequentIssueType)}");
-			csvBuilder.AppendLine($"{EscapeCsvField("Total Unique Issue Types")},{EscapeCsvField(uniqueIssueTypesCount)}");
-		} else {
-			csvBuilder.AppendLine($"{EscapeCsvField("Analysis Insights")},{EscapeCsvField("No issues found")}");
-		}
-
-		return csvBuilder.ToString();
+		return sb.ToString();
 	}
 
-	private static string EscapeCsvField(object value) {
+	/// <summary>
+	/// Generates an HTML report with interactive features.
+	/// </summary>
+	public static string ToHtml(this AnalysisReport report) {
+		var sb = new StringBuilder();
+		var summary = report.GetSummary();
+
+		// HTML header with enhanced styling
+		sb.AppendLine("<!DOCTYPE html>");
+		sb.AppendLine("<html>");
+		sb.AppendLine("<head>");
+		sb.AppendLine("  <title>Authorization Analysis Report</title>");
+		sb.AppendLine("  <style>");
+		sb.AppendLine(@"
+	body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 20px; background: #f5f5f5; }
+	.container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+	h1, h2, h3 { color: #333; }
+	.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+	.summary-card { background: #f8f9fa; padding: 20px; border-radius: 6px; text-align: center; border-left: 4px solid #007bff; }
+	.summary-card.error { border-color: #dc3545; }
+	.summary-card.warning { border-color: #ffc107; }
+	.summary-card.info { border-color: #28a745; }
+	.summary-card.pass { border-color: #28a745; background: #d4edda; }
+	.summary-card.fail { border-color: #dc3545; background: #f8d7da; }
+	.metric-category { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 6px; }
+	.metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+	.metric-item { display: flex; justify-content: space-between; padding: 8px; background: white; border-radius: 4px; }
+	.issue-card { margin: 10px 0; padding: 15px; border-radius: 6px; border-left: 4px solid; }
+	.issue-error { border-color: #dc3545; background: #f8d7da; }
+	.issue-warning { border-color: #ffc107; background: #fff3cd; }
+	.issue-info { border-color: #17a2b8; background: #d1ecf1; }
+	.related-types { margin-top: 5px; font-family: monospace; font-size: 0.9em; color: #666; }
+	.filter-buttons { margin: 20px 0; }
+	.filter-button { padding: 8px 16px; margin: 0 5px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; }
+	.filter-button.active { background: #007bff; color: white; }
+	table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+	th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+	th { background: #f8f9fa; font-weight: 600; }
+  </style>");
+		sb.AppendLine("</head>");
+		sb.AppendLine("<body>");
+		sb.AppendLine("<div class=\"container\">");
+
+		// Header
+		sb.AppendLine($"<h1>Authorization Analysis Report</h1>");
+		sb.AppendLine($"<p>Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss} | Analyzers: {summary.AnalyzerCount}</p>");
+
+		// Summary cards
+		sb.AppendLine("<div class=\"summary-grid\">");
+		sb.AppendLine($"  <div class=\"summary-card {(summary.Passed ? "pass" : "fail")}\">");
+		sb.AppendLine($"    <h2>{(summary.Passed ? "✅ PASSED" : "❌ FAILED")}</h2>");
+		sb.AppendLine($"    <p>{summary.TotalIssues} Total Issues</p>");
+		sb.AppendLine("  </div>");
+		sb.AppendLine($"  <div class=\"summary-card error\">");
+		sb.AppendLine($"    <h3>🔴 {summary.ErrorCount}</h3>");
+		sb.AppendLine("    <p>Errors</p>");
+		sb.AppendLine("  </div>");
+		sb.AppendLine($"  <div class=\"summary-card warning\">");
+		sb.AppendLine($"    <h3>🟡 {summary.WarningCount}</h3>");
+		sb.AppendLine("    <p>Warnings</p>");
+		sb.AppendLine("  </div>");
+		sb.AppendLine($"  <div class=\"summary-card info\">");
+		sb.AppendLine($"    <h3>🟢 {summary.InfoCount}</h3>");
+		sb.AppendLine("    <p>Info</p>");
+		sb.AppendLine("  </div>");
+		sb.AppendLine("</div>");
+
+		// Metrics by category
+		if (report.Metrics.Count > 0) {
+			sb.AppendLine("<h2>Metrics</h2>");
+
+			var metricsByCategory = report.Metrics
+				.GroupBy(m => MetricCategories.GetMetricCategoryDisplayName(m.Key))
+				.OrderBy(g => g.Key);
+
+			foreach (var category in metricsByCategory) {
+				sb.AppendLine($"<div class=\"metric-category\">");
+				sb.AppendLine($"  <h3>{category.Key}</h3>");
+				sb.AppendLine("  <div class=\"metric-grid\">");
+
+				foreach (var metric in category.OrderBy(m => m.Key)) {
+					var name = MetricCategories.GetMetricName(metric.Key);
+					sb.AppendLine($"    <div class=\"metric-item\">");
+					sb.AppendLine($"      <span>{name}</span>");
+					sb.AppendLine($"      <strong>{metric.Value:N0}</strong>");
+					sb.AppendLine("    </div>");
+				}
+
+				sb.AppendLine("  </div>");
+				sb.AppendLine("</div>");
+			}
+		}
+
+		// Issues with filtering
+		var issuesBySeverity = report.GetIssuesBySeverity();
+		if (issuesBySeverity.Count > 0) {
+			sb.AppendLine("<h2>Issues</h2>");
+
+			// Filter buttons
+			sb.AppendLine("<div class=\"filter-buttons\">");
+			sb.AppendLine("  <button class=\"filter-button active\" onclick=\"filterIssues('all')\">All</button>");
+			sb.AppendLine("  <button class=\"filter-button\" onclick=\"filterIssues('error')\">Errors</button>");
+			sb.AppendLine("  <button class=\"filter-button\" onclick=\"filterIssues('warning')\">Warnings</button>");
+			sb.AppendLine("  <button class=\"filter-button\" onclick=\"filterIssues('info')\">Info</button>");
+			sb.AppendLine("</div>");
+
+			sb.AppendLine("<div id=\"issues-container\">");
+
+			foreach (var (severity, issues) in issuesBySeverity.OrderBy(kvp => kvp.Key)) {
+				var severityClass = severity.ToString().ToLower();
+				var icon = GetSeverityIcon(severity);
+
+				foreach (var issue in issues) {
+					sb.AppendLine($"<div class=\"issue-card issue-{severityClass}\" data-severity=\"{severityClass}\">");
+					sb.AppendLine($"  <strong>{icon} [{issue.Category}]</strong> {issue.Description}");
+
+					if (issue.RelatedTypeNames.Count > 0) {
+						sb.AppendLine($"  <div class=\"related-types\">Types: {string.Join(", ", issue.RelatedTypeNames)}</div>");
+					}
+
+					sb.AppendLine("</div>");
+				}
+			}
+
+			sb.AppendLine("</div>");
+		}
+
+		// Analyzer coverage table
+		sb.AppendLine("<h2>Analyzer Coverage</h2>");
+		sb.AppendLine("<table>");
+		sb.AppendLine("  <thead>");
+		sb.AppendLine("    <tr><th>Analyzer</th><th>Issues Found</th><th>Status</th></tr>");
+		sb.AppendLine("  </thead>");
+		sb.AppendLine("  <tbody>");
+
+		var issuesByCategory = report.GetIssuesByCategory();
+		foreach (var analyzer in report.AnalyzerCategories.OrderBy(a => a)) {
+			var count = issuesByCategory.TryGetValue(analyzer, out var issues) ? issues.Count : 0;
+			var status = count == 0 ? "✅ Clean" : "⚠️ Issues Found";
+			sb.AppendLine($"    <tr><td>{analyzer}</td><td>{count}</td><td>{status}</td></tr>");
+		}
+
+		sb.AppendLine("  </tbody>");
+		sb.AppendLine("</table>");
+
+		// JavaScript for filtering
+		sb.AppendLine(@"
+<script>
+function filterIssues(severity) {
+  const buttons = document.querySelectorAll('.filter-button');
+  buttons.forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  const issues = document.querySelectorAll('.issue-card');
+  issues.forEach(issue => {
+	if (severity === 'all' || issue.dataset.severity === severity) {
+	  issue.style.display = 'block';
+	} else {
+	  issue.style.display = 'none';
+	}
+  });
+}
+</script>");
+
+		sb.AppendLine("</div>");
+		sb.AppendLine("</body>");
+		sb.AppendLine("</html>");
+
+		return sb.ToString();
+	}
+
+	/// <summary>
+	/// Generates an enhanced CSV report with better structure.
+	/// </summary>
+	public static string ToCsv(this AnalysisReport report) {
+		var sb = new StringBuilder();
+		var summary = report.GetSummary();
+
+		// Summary section
+		sb.AppendLine("# AUTHORIZATION ANALYSIS REPORT");
+		sb.AppendLine($"# Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+		sb.AppendLine($"# Status: {(summary.Passed ? "PASSED" : "FAILED")}");
+		sb.AppendLine($"# Total Issues: {summary.TotalIssues} (Errors: {summary.ErrorCount}, Warnings: {summary.WarningCount}, Info: {summary.InfoCount})");
+		sb.AppendLine();
+
+		// Issues by severity and category
+		sb.AppendLine("## ISSUES");
+		sb.AppendLine("Severity,Category,Description,RelatedTypes,TypeCount");
+
+		var issuesBySeverity = report.GetIssuesBySeverity();
+		foreach (var severity in new[] { IssueSeverity.Error, IssueSeverity.Warning, IssueSeverity.Info }) {
+			if (issuesBySeverity.TryGetValue(severity, out var issues)) {
+				foreach (var issue in issues.OrderBy(i => i.Category)) {
+					sb.AppendLine(
+						$"{EscapeCsv(severity)}," +
+						$"{EscapeCsv(issue.Category)}," +
+						$"{EscapeCsv(issue.Description)}," +
+						$"{EscapeCsv(string.Join("; ", issue.RelatedTypeNames))}," +
+						$"{issue.RelatedTypeNames.Count}"
+					);
+				}
+			}
+		}
+		sb.AppendLine();
+
+		// Metrics grouped by category
+		sb.AppendLine("## METRICS BY CATEGORY");
+		sb.AppendLine("Category,MetricName,Value");
+
+		var metricsByCategory = report.Metrics
+			.GroupBy(m => MetricCategories.GetMetricCategoryDisplayName(m.Key))
+			.OrderBy(g => g.Key);
+
+		foreach (var category in metricsByCategory) {
+			foreach (var metric in category.OrderBy(m => m.Key)) {
+				var name = MetricCategories.GetMetricName(metric.Key);
+				sb.AppendLine($"{EscapeCsv(category.Key)},{EscapeCsv(name)},{metric.Value}");
+			}
+		}
+		sb.AppendLine();
+
+		// Analyzer summary
+		sb.AppendLine("## ANALYZER SUMMARY");
+		sb.AppendLine("AnalyzerCategory,IssueCount,ErrorCount,WarningCount,InfoCount");
+
+		var issuesByCategory = report.GetIssuesByCategory();
+		foreach (var analyzer in report.AnalyzerCategories.OrderBy(a => a)) {
+			if (issuesByCategory.TryGetValue(analyzer, out var issues)) {
+				var errors = issues.Count(i => i.Severity == IssueSeverity.Error);
+				var warnings = issues.Count(i => i.Severity == IssueSeverity.Warning);
+				var infos = issues.Count(i => i.Severity == IssueSeverity.Info);
+				sb.AppendLine($"{EscapeCsv(analyzer)},{issues.Count},{errors},{warnings},{infos}");
+			} else {
+				sb.AppendLine($"{EscapeCsv(analyzer)},0,0,0,0");
+			}
+		}
+
+		return sb.ToString();
+	}
+
+	// Helper methods
+
+	private static string GetSeverityIcon(IssueSeverity severity) {
+		return severity switch {
+			IssueSeverity.Error => "🔴",
+			IssueSeverity.Warning => "🟡",
+			IssueSeverity.Info => "🟢",
+			_ => "⚪"
+		};
+	}
+
+	private static string EscapeCsv(object value) {
 		if (value == null) {
 			return string.Empty;
 		}
 
-		var stringValue = value.ToString();
-		if (string.IsNullOrWhiteSpace(stringValue)) {
-			return string.Empty;
+		var str = value.ToString() ?? string.Empty;
+		if (str.Contains('"') || str.Contains(',') || str.Contains('\n')) {
+			return $"\"{str.Replace("\"", "\"\"")}\"";
 		}
-
-		// Escape quotes and wrap in quotes if needed
-		if (stringValue.Contains('"') || stringValue.Contains(',') || stringValue.Contains('\n')) {
-			stringValue = $"\"{stringValue.Replace("\"", "\"\"")}\"";
-		}
-
-		return stringValue;
+		return str;
 	}
-
 }

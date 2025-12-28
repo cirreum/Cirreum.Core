@@ -9,20 +9,20 @@ public class PolicyValidatorAnalyzer(
 	IServiceProvider services
 ) : IAuthorizationAnalyzer {
 
-	private const string AnalyzerCategory = "Policy Validators";
+	public const string AnalyzerCategory = "Policy Validators";
 
 	public AnalysisReport Analyze() {
 
 		var issues = new List<AnalysisIssue>();
-		var metrics = new Dictionary<string, object>();
+		var metrics = new Dictionary<string, int>();
 
 		var policyValidators = services.GetServices<IAuthorizationPolicyValidator>().ToList();
 		var domainEnvironment = services.GetRequiredService<IDomainEnvironment>();
 
 		// Basic metrics
-		metrics["PolicyCount"] = policyValidators.Count;
-		metrics["AttributePolicyCount"] = policyValidators.Count(IsAttributeBasedPolicy);
-		metrics["GlobalPolicyCount"] = policyValidators.Count(pv => !IsAttributeBasedPolicy(pv));
+		metrics[$"{MetricCategories.PolicyValidation}PolicyCount"] = policyValidators.Count;
+		metrics[$"{MetricCategories.PolicyValidation}AttributePolicyCount"] = policyValidators.Count(IsAttributeBasedPolicy);
+		metrics[$"{MetricCategories.PolicyValidation}GlobalPolicyCount"] = policyValidators.Count(pv => !IsAttributeBasedPolicy(pv));
 
 		// Analyze policy ordering conflicts
 		var orderingIssues = AnalyzePolicyOrdering(policyValidators);
@@ -41,6 +41,7 @@ public class PolicyValidatorAnalyzer(
 		issues.AddRange(attributeIssues);
 
 		return AnalysisReport.ForCategory(AnalyzerCategory, issues, metrics);
+
 	}
 
 	/// <summary>
@@ -76,7 +77,7 @@ public class PolicyValidatorAnalyzer(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
 				Description: $"Multiple policy validators have the same order ({group.Key}): {string.Join(", ", group.Select(g => g.PolicyName))}",
-				RelatedObjects: [.. group]));
+				RelatedTypeNames: [.. group.Select(g => g.GetType().FullName ?? g.GetType().Name)]));
 		}
 
 		// Check for large gaps in ordering
@@ -87,7 +88,7 @@ public class PolicyValidatorAnalyzer(
 					Category: AnalyzerCategory,
 					Severity: IssueSeverity.Info,
 					Description: $"Large gap in policy ordering between {orders[i - 1]} and {orders[i]}",
-					RelatedObjects: [orders[i - 1], orders[i]]));
+					RelatedTypeNames: [orders[i - 1].ToString(), orders[i].ToString()]));
 			}
 		}
 
@@ -106,7 +107,7 @@ public class PolicyValidatorAnalyzer(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
 				Description: $"Policy '{policy.PolicyName}' doesn't support any runtime types",
-				RelatedObjects: [policy]));
+				RelatedTypeNames: [policy.GetType().FullName ?? policy.GetType().Name]));
 		}
 
 		// ✅ Check if the CURRENT runtime type has policy coverage using bitwise flags
@@ -119,7 +120,7 @@ public class PolicyValidatorAnalyzer(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
 				Description: $"Current runtime type '{currentRuntimeType}' has no policy validator coverage",
-				RelatedObjects: [currentRuntimeType]));
+				RelatedTypeNames: [currentRuntimeType.ToString()]));
 		}
 
 		// ✅ Warn about policies that don't support the current runtime
@@ -133,7 +134,7 @@ public class PolicyValidatorAnalyzer(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Info,
 				Description: $"Policy '{policy.PolicyName}' doesn't support current runtime type '{currentRuntimeType}' (supports: {string.Join(", ", policy.SupportedRuntimeTypes)})",
-				RelatedObjects: [policy]));
+				RelatedTypeNames: [policy.GetType().FullName ?? policy.GetType().Name]));
 		}
 
 		return issues;
@@ -164,13 +165,14 @@ public class PolicyValidatorAnalyzer(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
 				Description: $"Multiple policies target the same attribute type '{kvp.Key.Name}': {string.Join(", ", kvp.Value.Select(p => p.PolicyName))}",
-				RelatedObjects: [.. kvp.Value]));
+				RelatedTypeNames: [.. kvp.Value.Select(p => p.GetType().FullName ?? p.GetType().Name)]));
 		}
 
 		return issues;
 	}
 
 	private static List<AnalysisIssue> AnalyzeAttributeUsage(List<IAuthorizationPolicyValidator> policyValidators) {
+
 		var issues = new List<AnalysisIssue>();
 
 		// Find attribute-based policies
@@ -187,7 +189,7 @@ public class PolicyValidatorAnalyzer(
 						Category: AnalyzerCategory,
 						Severity: IssueSeverity.Warning,
 						Description: $"Attribute policy '{policy.PolicyName}' targets attribute '{attributeType.Name}' but no resources use this attribute",
-						RelatedObjects: [policy, attributeType]));
+						RelatedTypeNames: [policy.GetType().FullName ?? policy.GetType().Name, attributeType.FullName ?? attributeType.Name]));
 				}
 			}
 		}
