@@ -1,6 +1,6 @@
 ﻿namespace Cirreum.Authorization.Analysis.Analyzers;
 
-using Cirreum.Authorization.Visualization;
+using Cirreum.Authorization.Modeling;
 
 /// <summary>
 /// Analyzes authorization rules for security implications and consistency.
@@ -15,7 +15,7 @@ public class AuthorizationRuleAnalyzer : IAuthorizationAnalyzerWithOptions {
 
 		var issues = new List<AnalysisIssue>();
 		var metrics = new Dictionary<string, int>();
-		var rules = AuthorizationRuleProvider.Instance.GetAllRules();
+		var rules = AuthorizationModel.Instance.GetAuthorizationRules();
 		var rulesByResource = rules.GroupBy(r => r.ResourceType).ToList();
 		var rulesWithMissingResource = rules.Where(r => r.ResourceType == typeof(MissingResource)).ToList();
 

@@ -1,6 +1,7 @@
 namespace Cirreum.Authorization.Analysis.Analyzers;
 
-using Cirreum.Authorization.Visualization;
+using Cirreum.Authorization.Modeling;
+using Cirreum.Authorization.Modeling.Types;
 using Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
@@ -18,7 +19,7 @@ public class AuthorizableResourceAnalyzer(
 		var metrics = new Dictionary<string, int>();
 
 		// Get resources
-		var authorizableResources = AuthorizationRuleProvider.Instance.GetAuthorizableResources();
+		var authorizableResources = AuthorizationModel.Instance.GetAuthorizableResources();
 		var protectedResources = authorizableResources.Where(r => r.IsProtected).ToList();
 		var unprotectedResources = authorizableResources.Where(r => !r.IsProtected).ToList();
 		var policyValidators = services.GetServices<IAuthorizationPolicyValidator>().ToList();

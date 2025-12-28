@@ -1,4 +1,4 @@
-﻿namespace Cirreum.Authorization.Visualization;
+﻿namespace Cirreum.Authorization.Documentation.Formatters;
 
 using Cirreum.Authorization;
 using System.Data;

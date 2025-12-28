@@ -1,4 +1,4 @@
-﻿namespace Cirreum.Authorization.Visualization;
+﻿namespace Cirreum.Authorization.Modeling.Export;
 
 /// <summary>
 /// Aggregate metrics for the entire resource catalog.

@@ -1,4 +1,4 @@
-﻿namespace Cirreum.Authorization.Visualization;
+﻿namespace Cirreum.Authorization.Modeling.Export;
 
 /// <summary>
 /// A domain boundary (e.g., "Customers") containing the domain resources (aka Commands/Queries).

@@ -1,4 +1,4 @@
-namespace Cirreum.Authorization.Visualization;
+namespace Cirreum.Authorization.Modeling.Export;
 
 /// <summary>
 /// Represents detailed information about an authorization rule.

@@ -1,5 +1,4 @@
-namespace Cirreum.Authorization.Visualization;
-
+namespace Cirreum.Authorization.Modeling.Export;
 /// <summary>
 /// The complete catalog of domain resources organized hierarchically.
 /// Structure: Domain -> Kind -> Resource
@@ -24,10 +23,7 @@ public record DomainCatalog {
 	/// <summary>
 	/// Builds a catalog from a flat list of resources.
 	/// </summary>
-	public static DomainCatalog Build(IEnumerable<ResourceTypeInfo> resources) {
-
-		// Convert to serializable ResourceInfo upfront
-		var resourceList = resources.Select(r => r.ToResourceInfo()).ToList();
+	public static DomainCatalog Build(List<ResourceInfo> resourceList) {
 
 		// Group by domain -> kind
 		var domainGroups = resourceList

@@ -1,4 +1,4 @@
-﻿namespace Cirreum.Authorization.Visualization;
+﻿namespace Cirreum.Authorization.Modeling.Export;
 
 /// <summary>
 /// Represents serializable metadata about a policy rule for visualization or inspection.

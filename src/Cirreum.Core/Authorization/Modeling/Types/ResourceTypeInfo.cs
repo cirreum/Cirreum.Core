@@ -1,4 +1,6 @@
-﻿namespace Cirreum.Authorization.Visualization;
+﻿namespace Cirreum.Authorization.Modeling.Types;
+
+using Cirreum.Authorization.Modeling.Export;
 
 /// <summary>
 /// Internal type used during analysis that includes CLR Type references.

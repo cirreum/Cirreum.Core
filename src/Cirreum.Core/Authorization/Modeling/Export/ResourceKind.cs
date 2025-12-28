@@ -1,5 +1,4 @@
-﻿namespace Cirreum.Authorization.Visualization;
-
+﻿namespace Cirreum.Authorization.Modeling.Export;
 /// <summary>
 /// A resource kind within a domain (e.g., "Commands", "Queries").
 /// </summary>

@@ -1,6 +1,6 @@
 namespace Cirreum.Authorization.Analysis.Analyzers;
 
-using Cirreum.Authorization.Visualization;
+using Cirreum.Authorization.Modeling;
 
 /// <summary>
 /// Analyzes anonymous resources and detects security gaps.
@@ -23,7 +23,7 @@ public class AnonymousResourceAnalyzer : IAuthorizationAnalyzer {
 		var metrics = new Dictionary<string, int>();
 
 		// Get all anonymous resources
-		var anonymousResources = AuthorizationRuleProvider.Instance.GetAnonymousResources();
+		var anonymousResources = AuthorizationModel.Instance.GetAnonymousResources();
 
 		var suspiciousAnonymous = anonymousResources
 			.Where(r => IsPotentiallySecuritySensitive(r.ResourceType.Name))

@@ -1,5 +1,4 @@
-namespace Cirreum.Authorization.Visualization;
-
+namespace Cirreum.Authorization.Modeling.Export;
 /// <summary>
 /// Represents a domain resource with its authorization information.
 /// This is the serializable view of a resource - whether protected or anonymous.

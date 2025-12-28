@@ -1,5 +1,9 @@
-namespace Cirreum.Authorization.Visualization;
+namespace Cirreum.Authorization.Modeling;
 
+using Cirreum;
+using Cirreum.Authorization;
+using Cirreum.Authorization.Modeling.Export;
+using Cirreum.Authorization.Modeling.Types;
 using Cirreum.Conductor;
 using FluentValidation;
 using FluentValidation.Internal;
@@ -14,15 +18,15 @@ using System.Reflection;
 /// This is the single source of truth for resource discovery and authorization rules.
 /// Scans ALL IRequest types (both protected and anonymous).
 /// </summary>
-public class AuthorizationRuleProvider() {
+public class AuthorizationModel() {
 
-	private static readonly Lazy<AuthorizationRuleProvider> _instance =
-		new(() => new AuthorizationRuleProvider());
+	private static readonly Lazy<AuthorizationModel> _instance =
+		new(() => new AuthorizationModel());
 
 	/// <summary>
 	/// Gets the singleton instance of the AuthorizationRuleProvider.
 	/// </summary>
-	public static AuthorizationRuleProvider Instance => _instance.Value;
+	public static AuthorizationModel Instance => _instance.Value;
 
 	// Cached data
 	private IReadOnlyList<ResourceTypeInfo>? _cachedResources;
@@ -52,9 +56,13 @@ public class AuthorizationRuleProvider() {
 			return this._cachedCatalog;
 		}
 
-		var allResources = this.GetAllResources(useCache);
+		var allResources = this
+			.GetAllResources(useCache)
+			.Select(r => r.ToResourceInfo())
+			.ToList();
 		this._cachedCatalog = DomainCatalog.Build(allResources);
 		return this._cachedCatalog;
+
 	}
 
 	#region Domain Resources
@@ -142,12 +150,12 @@ public class AuthorizationRuleProvider() {
 
 	#endregion
 
-	#region Authorization Rules
+	#region Authorization/Policy Rules
 
 	/// <summary>
 	/// Gets all authorization rules defined in the application.
 	/// </summary>
-	public IReadOnlyList<AuthorizationRuleTypeInfo> GetAllRules(bool useCache = true) {
+	public IReadOnlyList<AuthorizationRuleTypeInfo> GetAuthorizationRules(bool useCache = true) {
 		if (useCache && this._cachedRules != null) {
 			return this._cachedRules;
 		}
@@ -196,7 +204,7 @@ public class AuthorizationRuleProvider() {
 	/// from the underlying services.</param>
 	/// <returns>A read-only list of PolicyRuleTypeInfo objects representing all discovered authorization policy rules. Returns an
 	/// empty list if no policy rules are available.</returns>
-	public IReadOnlyList<PolicyRuleTypeInfo> GetAllPolicyRules(bool useCache = true) {
+	public IReadOnlyList<PolicyRuleTypeInfo> GetPolicyRules(bool useCache = true) {
 		if (useCache && this._cachedPolicyRules != null) {
 			return this._cachedPolicyRules;
 		}
@@ -232,14 +240,14 @@ public class AuthorizationRuleProvider() {
 	/// <param name="useCache">true to use cached rule data if available; false to force retrieval of the latest rules.</param>
 	/// <returns>A CombinedAuthorizationInfo object containing the current resource rules, policy rules, and the total count of
 	/// protection points.</returns>
-	public CombinedAuthorizationInfo GetCombinedAuthorizationInfo(bool useCache = true) {
-		var resourceRules = this.GetAllRules(useCache);
-		var policyRules = this.GetAllPolicyRules(useCache);
+	public CombinedRuleTypeInfo GetAllRules(bool useCache = true) {
+		var resourceRules = this.GetAuthorizationRules(useCache);
+		var policyRules = this.GetPolicyRules(useCache);
 
-		return new CombinedAuthorizationInfo(
+		return new CombinedRuleTypeInfo(
 			ResourceRules: resourceRules,
 			PolicyRules: policyRules,
-			TotalProtectionPoints: resourceRules.Count + policyRules.Count
+			TotalRules: resourceRules.Count + policyRules.Count
 		);
 	}
 

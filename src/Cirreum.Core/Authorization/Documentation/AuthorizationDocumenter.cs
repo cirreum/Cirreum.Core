@@ -1,6 +1,8 @@
-﻿namespace Cirreum.Authorization.Visualization;
+﻿namespace Cirreum.Authorization.Documentation;
 
 using Cirreum.Authorization.Analysis;
+using Cirreum.Authorization.Documentation.Formatters;
+using Cirreum.Authorization.Modeling;
 using System.Text;
 
 public class AuthorizationDocumenter : IAuthorizationDocumenter {
@@ -11,12 +13,12 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 	public AuthorizationDocumenter(IAuthorizationRoleRegistry roleRegistry, IServiceProvider services) {
 		this._roleRegistry = roleRegistry;
 		this._services = services;
-		AuthorizationRuleProvider.Instance.Initialize(services);
+		AuthorizationModel.Instance.Initialize(services);
 	}
 
 	public async Task<string> GenerateMarkdown() {
 		var sb = new StringBuilder();
-		var combinedInfo = AuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
+		var combinedInfo = AuthorizationModel.Instance.GetAllRules();
 
 		sb.AppendLine("# Authorization System Documentation");
 		sb.AppendLine();
@@ -24,9 +26,9 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		// Executive Summary
 		sb.AppendLine("## Executive Summary");
 		sb.AppendLine();
-		sb.AppendLine($"- **Total Authorization Protection Points**: {combinedInfo.TotalProtectionPoints}");
-		sb.AppendLine($"- **Resource-Specific Validators**: {combinedInfo.ResourceRules.Count}");
-		sb.AppendLine($"- **Policy Validators**: {combinedInfo.PolicyRules.Count}");
+		sb.AppendLine($"- **Total Authorization Rules**: {combinedInfo.TotalRules}");
+		sb.AppendLine($"- **Resource Rules**: {combinedInfo.ResourceRules.Count}");
+		sb.AppendLine($"- **Policy Rules**: {combinedInfo.PolicyRules.Count}");
 		sb.AppendLine($"- **Protected Resource Types**: {combinedInfo.ResourceRules.Select(r => r.ResourceType).Distinct().Count()}");
 		sb.AppendLine();
 
@@ -57,7 +59,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine();
 
 		// Get domain data from the unified provider
-		var catalog = AuthorizationRuleProvider.Instance.GetCatalog();
+		var catalog = AuthorizationModel.Instance.GetCatalog();
 
 		// Extract metrics
 		var totalRequests = catalog.Metrics.TotalResources;
@@ -93,16 +95,16 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 
 	public async Task<string> GenerateCsv() {
 		var sb = new StringBuilder();
-		var combinedInfo = AuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
+		var combinedInfo = AuthorizationModel.Instance.GetAllRules();
 		var allRoles = this._roleRegistry.GetRegisteredRoles();
 
-		sb.AppendLine("# ENHANCED AUTHORIZATION SYSTEM EXPORT");
-		sb.AppendLine($"# Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-		sb.AppendLine($"# Total Protection Points: {combinedInfo.TotalProtectionPoints}");
+		sb.AppendLine("AUTHORIZATION SYSTEM EXPORT");
+		sb.AppendLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+		sb.AppendLine($"Total Authorization Rules: {combinedInfo.TotalRules}");
 		sb.AppendLine();
 
 		// Policy Validators Section
-		sb.AppendLine("## POLICY VALIDATORS");
+		sb.AppendLine("POLICY VALIDATORS");
 		sb.AppendLine("Section,PolicyName,ValidatorType,Order,IsAttributeBased,TargetAttribute,RuntimeTypes,Description");
 
 		foreach (var policy in combinedInfo.PolicyRules) {
@@ -159,7 +161,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine();
 
 		// SECTION 2: Authorization rules with improved structure for visualization
-		var rules = AuthorizationRuleProvider.Instance.GetAllRules();
+		var rules = AuthorizationModel.Instance.GetAuthorizationRules();
 		sb.AppendLine("## AUTHORIZATION RULES");
 		sb.AppendLine("Section,ResourceName,ValidatorName,PropertyPath,ValidationType,Message,Condition,IncludesRBAC,SortOrder");
 
@@ -327,22 +329,22 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("<h1>Authorization System Documentation</h1>");
 
 		// Get data for statistics
-		var combinedInfo = AuthorizationRuleProvider.Instance.GetCombinedAuthorizationInfo();
+		var combinedInfo = AuthorizationModel.Instance.GetAllRules();
 		var allRoles = this._roleRegistry.GetRegisteredRoles();
 
 		// Add executive summary with statistics
 		sb.AppendLine("<div class=\"stats-grid\">");
 		sb.AppendLine("  <div class=\"stat-card\">");
-		sb.AppendLine($"    <div class=\"stat-number\">{combinedInfo.TotalProtectionPoints}</div>");
-		sb.AppendLine("    <div class=\"stat-label\">Total Protection Points</div>");
+		sb.AppendLine($"    <div class=\"stat-number\">{combinedInfo.TotalRules}</div>");
+		sb.AppendLine("    <div class=\"stat-label\">Total Authorization Rules</div>");
 		sb.AppendLine("  </div>");
 		sb.AppendLine("  <div class=\"stat-card\">");
 		sb.AppendLine($"    <div class=\"stat-number\">{combinedInfo.ResourceRules.Count}</div>");
-		sb.AppendLine("    <div class=\"stat-label\">Resource Validators</div>");
+		sb.AppendLine("    <div class=\"stat-label\">Resource Rules</div>");
 		sb.AppendLine("  </div>");
 		sb.AppendLine("  <div class=\"stat-card\">");
 		sb.AppendLine($"    <div class=\"stat-number\">{combinedInfo.PolicyRules.Count}</div>");
-		sb.AppendLine("    <div class=\"stat-label\">Policy Validators</div>");
+		sb.AppendLine("    <div class=\"stat-label\">Policy Rules</div>");
 		sb.AppendLine("  </div>");
 		sb.AppendLine("  <div class=\"stat-card\">");
 		sb.AppendLine($"    <div class=\"stat-number\">{allRoles.Count}</div>");
@@ -395,7 +397,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("  <p>Complete view of all CQRS operations (IRequest<T>) across your domain, including both protected and anonymous resources.</p>");
 
 		// Get domain data from the unified provider
-		var htmlCatalog = AuthorizationRuleProvider.Instance.GetCatalog();
+		var htmlCatalog = AuthorizationModel.Instance.GetCatalog();
 
 		// Extract overall metrics
 		var totalDomainResources = htmlCatalog.Metrics.TotalResources;

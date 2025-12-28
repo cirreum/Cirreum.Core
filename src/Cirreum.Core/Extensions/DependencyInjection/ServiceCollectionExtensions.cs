@@ -1,7 +1,7 @@
 ﻿namespace Cirreum;
 
 using Cirreum.Authorization;
-using Cirreum.Authorization.Visualization;
+using Cirreum.Authorization.Documentation;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Extensions.Internal;
 using Cirreum.Presence;
