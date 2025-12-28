@@ -22,6 +22,8 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 
 		sb.AppendLine("# Authorization System Documentation");
 		sb.AppendLine();
+		sb.AppendLine($"**Generated**: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+		sb.AppendLine();
 
 		// Executive Summary
 		sb.AppendLine("## Executive Summary");
@@ -315,6 +317,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("    .stat-label { color: #6c757d; font-size: 0.9em; }");
 
 		sb.AppendLine("    h1, h2, h3 { color: #444; }");
+		sb.AppendLine("    .generated-timestamp { color: #666; font-size: 0.9em; margin-top: -10px; }");
 		sb.AppendLine("    .diagram { margin: 20px 0; overflow: auto; max-height: 800px; }");
 		sb.AppendLine("    .tabs { display: flex; margin-bottom: 10px; }");
 		sb.AppendLine("    .tab { padding: 8px 16px; cursor: pointer; border: 1px solid #ccc; margin-right: 4px; }");
@@ -327,6 +330,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("<body>");
 
 		sb.AppendLine("<h1>Authorization System Documentation</h1>");
+		sb.AppendLine($"<p class=\"generated-timestamp\"><strong>Generated:</strong> {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>");
 
 		// Get data for statistics
 		var combinedInfo = AuthorizationModel.Instance.GetAllRules();
