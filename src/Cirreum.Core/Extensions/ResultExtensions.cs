@@ -17,12 +17,22 @@ public static class ResultExtensions {
 	extension(Result) {
 
 		/// <summary>
+		/// Creates a failed result indicating that an entity with the specified key was not found.
+		/// </summary>
+		/// <typeparam name="T">The type of the expected result value.</typeparam>
+		/// <param name="key">The key of the entity that was not found. This value is used to identify the missing entity in the result.</param>
+		/// <returns>A failed <see cref="Result{T}"/> representing a not found error for the specified key.</returns>
+		public static Result<T> NotFound<T>(object key) {
+			return Result<T>.Fail(new NotFoundException(key));
+		}
+
+		/// <summary>
 		/// Creates a failed result indicating that one or more items with the specified keys were not found.
 		/// </summary>
 		/// <typeparam name="T">The type of the value that would have been returned if the item was found.</typeparam>
 		/// <param name="keys">One or more keys used to identify the items that were not found.</param>
 		/// <returns>A failed <see cref="Result{T}"/> containing a <see cref="NotFoundException"/> with the specified keys.</returns>
-		public static Result<T> NotFound<T>(params ReadOnlySpan<object?> keys) {
+		public static Result<T> NotFound<T>(object[] keys) {
 			return Result<T>.Fail(new NotFoundException(keys));
 		}
 
