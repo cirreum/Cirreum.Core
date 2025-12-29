@@ -22,7 +22,7 @@ public static class ResultExtensions {
 		/// <typeparam name="T">The type of the value that would have been returned if the item was found.</typeparam>
 		/// <param name="keys">One or more keys used to identify the items that were not found.</param>
 		/// <returns>A failed <see cref="Result{T}"/> containing a <see cref="NotFoundException"/> with the specified keys.</returns>
-		public static Result<T> NotFound<T>(params ReadOnlySpan<object> keys) {
+		public static Result<T> NotFound<T>(params ReadOnlySpan<object?> keys) {
 			return Result<T>.Fail(new NotFoundException(keys));
 		}
 
@@ -88,10 +88,29 @@ public static class ResultExtensions {
 		/// Creates a failed result indicating that validation failed with the specified validation failures.
 		/// </summary>
 		/// <typeparam name="T">The type of the value that would be returned on success.</typeparam>
+		/// <param name="failures">One or more validation failures that describe what failed validation.</param>
+		/// <returns>A failed <see cref="Result{T}"/> containing a <see cref="ValidationException"/> with the specified failures.</returns>
+		public static Result<T> NotValid<T>(params ReadOnlySpan<ValidationFailure> failures) {
+			return Result<T>.Fail(new ValidationException([.. failures]));
+		}
+
+		/// <summary>
+		/// Creates a failed result indicating that validation failed with the specified validation failures.
+		/// </summary>
+		/// <typeparam name="T">The type of the value that would be returned on success.</typeparam>
 		/// <param name="failures">The collection of validation failures that describe what failed validation.</param>
 		/// <returns>A failed <see cref="Result{T}"/> containing a <see cref="ValidationException"/> with the specified failures.</returns>
-		public static Result<T> NotValid<T>(params IEnumerable<ValidationFailure> failures) {
+		public static Result<T> NotValid<T>(IEnumerable<ValidationFailure> failures) {
 			return Result<T>.Fail(new ValidationException(failures));
+		}
+
+		/// <summary>
+		/// Creates a failed result indicating that validation failed with the specified validation failures.
+		/// </summary>
+		/// <param name="failures">One or more validation failures that describe what failed validation.</param>
+		/// <returns>A failed <see cref="Result"/> containing a <see cref="ValidationException"/> with the specified failures.</returns>
+		public static Result NotValid(params ReadOnlySpan<ValidationFailure> failures) {
+			return Result.Fail(new ValidationException([.. failures]));
 		}
 
 		/// <summary>
@@ -99,8 +118,19 @@ public static class ResultExtensions {
 		/// </summary>
 		/// <param name="failures">The collection of validation failures that describe what failed validation.</param>
 		/// <returns>A failed <see cref="Result"/> containing a <see cref="ValidationException"/> with the specified failures.</returns>
-		public static Result NotValid(params IEnumerable<ValidationFailure> failures) {
+		public static Result NotValid(IEnumerable<ValidationFailure> failures) {
 			return Result.Fail(new ValidationException(failures));
+		}
+
+		/// <summary>
+		/// Creates a failed result indicating that validation failed with the specified message and validation failures.
+		/// </summary>
+		/// <typeparam name="T">The type of the value that would be returned on success.</typeparam>
+		/// <param name="message">The error message describing the validation failure.</param>
+		/// <param name="failures">One or more validation failures that describe what failed validation.</param>
+		/// <returns>A failed <see cref="Result{T}"/> containing a <see cref="ValidationException"/> with the specified message and failures.</returns>
+		public static Result<T> NotValid<T>(string message, params ReadOnlySpan<ValidationFailure> failures) {
+			return Result<T>.Fail(new ValidationException(message, [.. failures]));
 		}
 
 		/// <summary>
@@ -110,8 +140,18 @@ public static class ResultExtensions {
 		/// <param name="message">The error message describing the validation failure.</param>
 		/// <param name="failures">The collection of validation failures that describe what failed validation.</param>
 		/// <returns>A failed <see cref="Result{T}"/> containing a <see cref="ValidationException"/> with the specified message and failures.</returns>
-		public static Result<T> NotValid<T>(string message, params IEnumerable<ValidationFailure> failures) {
+		public static Result<T> NotValid<T>(string message, IEnumerable<ValidationFailure> failures) {
 			return Result<T>.Fail(new ValidationException(message, failures));
+		}
+
+		/// <summary>
+		/// Creates a failed result indicating that validation failed with the specified message and validation failures.
+		/// </summary>
+		/// <param name="message">The error message describing the validation failure.</param>
+		/// <param name="failures">One or more validation failures that describe what failed validation.</param>
+		/// <returns>A failed <see cref="Result"/> containing a <see cref="ValidationException"/> with the specified message and failures.</returns>
+		public static Result NotValid(string message, params ReadOnlySpan<ValidationFailure> failures) {
+			return Result.Fail(new ValidationException(message, [.. failures]));
 		}
 
 		/// <summary>
@@ -120,7 +160,7 @@ public static class ResultExtensions {
 		/// <param name="message">The error message describing the validation failure.</param>
 		/// <param name="failures">The collection of validation failures that describe what failed validation.</param>
 		/// <returns>A failed <see cref="Result"/> containing a <see cref="ValidationException"/> with the specified message and failures.</returns>
-		public static Result NotValid(string message, params IEnumerable<ValidationFailure> failures) {
+		public static Result NotValid(string message, IEnumerable<ValidationFailure> failures) {
 			return Result.Fail(new ValidationException(message, failures));
 		}
 
