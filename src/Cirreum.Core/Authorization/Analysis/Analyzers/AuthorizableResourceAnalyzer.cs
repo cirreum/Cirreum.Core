@@ -27,15 +27,26 @@ public class AuthorizableResourceAnalyzer(
 				recommendation);
 		}
 
-		public static IssueDefinition ResourcesWithNoProtection(int count) {
-			var recommendation = count == 1
+		public static IssueDefinition ResourcesWithNoProtection(int count, bool hasGlobalPolicies) {
+			if (hasGlobalPolicies) {
+				var recommendation = count == 1
+					? "Verify this resource is covered by a registered global policy, or add an authorizer if dedicated protection is needed."
+					: "Verify these resources are covered by registered global policies, or add authorizers if dedicated protection is needed.";
+
+				return new(
+					$"Found {count} IAuthorizableResource type(s) without an authorizer or attribute-based policy (may be covered by global policies)",
+					recommendation);
+			}
+
+			var defaultRecommendation = count == 1
 				? "Add an authorizer or apply a policy attribute to protect this resource, or convert to anonymous if public access is intended."
 				: "Add an authorizer or apply a policy attribute to protect these resources, or convert to anonymous if public access is intended.";
 
 			return new(
 				$"Found {count} IAuthorizableResource type(s) without an authorizer or attribute-based policy protection",
-				recommendation);
+				defaultRecommendation);
 		}
+
 
 		public static IssueDefinition ResourcesWithOnlyPolicyProtection(int count) => new(
 			$"Found {count} IAuthorizableResource type(s) protected only by attribute-based policies (no dedicated authorizer)",
@@ -126,16 +137,19 @@ public class AuthorizableResourceAnalyzer(
 				.Where(r => !HasAttributeBasedPolicyProtection(r.ResourceType, policyValidators))
 				.ToList();
 
-			// WARNING: IAuthorizableResource without authorizer AND without policy = potential gap
+			// WARNING/INFO: IAuthorizableResource without authorizer AND without policy = potential gap
 			if (withoutPolicyProtection.Count > 0) {
-				var issue = Issues.ResourcesWithNoProtection(withoutPolicyProtection.Count);
+				var globalPolicyCount = policyValidators.Count(IsGlobalPolicy);
+				var issue = Issues.ResourcesWithNoProtection(withoutPolicyProtection.Count, globalPolicyCount > 0);
+
 				issues.Add(new AnalysisIssue(
 					Category: AnalyzerCategory,
-					Severity: IssueSeverity.Warning,
+					Severity: globalPolicyCount > 0 ? IssueSeverity.Info : IssueSeverity.Warning,
 					Description: issue.Description,
 					RelatedTypeNames: [.. withoutPolicyProtection.Select(r => r.ResourceType.FullName ?? r.ResourceType.Name)],
 					Recommendation: issue.Recommendation));
 			}
+
 
 			// INFO: IAuthorizableResource relying only on policies (valid but worth noting)
 			if (withPolicyProtection.Count > 0) {
@@ -214,6 +228,15 @@ public class AuthorizableResourceAnalyzer(
 		}
 	}
 
+	private static bool IsGlobalPolicy(IAuthorizationPolicyValidator policy) {
+		var baseType = policy.GetType().BaseType;
+		if (baseType?.IsGenericType == true &&
+			baseType.GetGenericTypeDefinition() == typeof(AttributeValidatorBase<>)) {
+			return false;
+		}
+		return true;
+	}
+
 	private static bool HasAttributeBasedPolicyProtection(Type resourceType, List<IAuthorizationPolicyValidator> policyValidators) {
 		return policyValidators.Any(pv => CouldPolicyApplyToResource(pv, resourceType));
 	}
@@ -230,8 +253,9 @@ public class AuthorizableResourceAnalyzer(
 			}
 		}
 
-		// For non-attribute policies, assume they might apply (conservative approach)
-		return true;
+		// Global policies are handled separately via IsGlobalPolicy
+		return false;
+
 	}
 
 }
