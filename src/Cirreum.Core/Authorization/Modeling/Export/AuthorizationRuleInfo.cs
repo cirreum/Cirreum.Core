@@ -11,6 +11,5 @@ public sealed record AuthorizationRuleInfo(
 	string AuthorizorTypeFullName,
 	string PropertyPath,
 	string ValidationLogic,
-	string Message,
-	string? Condition = null
+	string Message
 );

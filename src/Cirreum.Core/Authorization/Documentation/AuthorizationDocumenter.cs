@@ -101,7 +101,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		var allRoles = this._roleRegistry.GetRegisteredRoles();
 
 		sb.AppendLine("AUTHORIZATION SYSTEM EXPORT");
-		sb.AppendLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+		sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
 		sb.AppendLine($"Total Authorization Rules: {combinedInfo.TotalRules}");
 		sb.AppendLine();
 
@@ -186,7 +186,6 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 				$"{EscapeCsvField(rule.PropertyPath ?? "AuthorizationContext")}," +
 				$"{EscapeCsvField(validationType)}," +
 				$"{EscapeCsvField(rule.Message)}," +
-				$"{EscapeCsvField(rule.Condition ?? "")}," +
 				$"{(includesRBAC ? "True" : "False")}," +
 				$"{sortOrder}");
 		}
@@ -215,13 +214,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 					r.Message.Contains(role.ToString()));
 				if (explicitRules.Any()) {
 
-					// Get access conditions
-					var conditions = explicitRules
-						.Where(r => !string.IsNullOrEmpty(r.Condition))
-						.Select(r => r.Condition)
-						.Where(c => c != null);
-
-					var accessConditions = string.Join("; ", conditions);
+					var accessConditions = "";
 
 					sb.AppendLine(
 						$"ResourceRoleMatrix," +
@@ -373,24 +366,16 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("  <h3>Authorization Flow</h3>");
 		sb.AppendLine("  <div class=\"diagram\">");
 		sb.AppendLine("    <div class=\"mermaid\">");
-		sb.AppendLine("flowchart TD");
-		sb.AppendLine("    A[Request] --> B{Authenticated?}");
-		sb.AppendLine("    B -->|No| C[UnauthenticatedAccessException]");
-		sb.AppendLine("    B -->|Yes| D[Get User Roles]");
-		sb.AppendLine("    D --> E[Resolve Effective Roles]");
-		sb.AppendLine("    E --> F[Create Authorization Context]");
-		sb.AppendLine("    F --> G[Run Resource Validators]");
-		sb.AppendLine("    G --> H[Run Policy Validators]");
-		sb.AppendLine("    H --> I{All Validations Pass?}");
-		sb.AppendLine("    I -->|No| J[ForbiddenAccessException]");
-		sb.AppendLine("    I -->|Yes| K[Access Granted]");
+		sb.Append(AuthorizationFlowRenderer.ToMermaidDiagram());
 		sb.AppendLine("    ");
 		sb.AppendLine("    style A fill:#e1f5fe");
-		sb.AppendLine("    style K fill:#e8f5e8");
+		sb.AppendLine("    style O fill:#e8f5e8");
 		sb.AppendLine("    style C fill:#ffebee");
-		sb.AppendLine("    style J fill:#ffebee");
-		sb.AppendLine("    style G fill:#fff3e0");
-		sb.AppendLine("    style H fill:#f3e5f5");
+		sb.AppendLine("    style E fill:#ffebee");
+		sb.AppendLine("    style H fill:#ffebee");
+		sb.AppendLine("    style N fill:#ffebee");
+		sb.AppendLine("    style K fill:#fff3e0");
+		sb.AppendLine("    style L fill:#f3e5f5");
 		sb.AppendLine("    </div>");
 		sb.AppendLine("  </div>");
 		sb.AppendLine("</div>");
@@ -584,19 +569,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("  <h3>Role Hierarchy Diagram</h3>");
 		sb.AppendLine("  <div class=\"diagram\">");
 		sb.AppendLine("    <div class=\"mermaid\">");
-		sb.AppendLine("graph TD");
-
-		// Add role relationships for diagram
-		foreach (var role in allRoles) {
-			var roleId = role.ToString().Replace(":", "_");
-			var childRoles = this._roleRegistry.GetInheritedRoles(role);
-
-			foreach (var childRole in childRoles) {
-				var childRoleId = childRole.ToString().Replace(":", "_");
-				sb.AppendLine($"      {roleId}[\"{role}\"] --> {childRoleId}[\"{childRole}\"]");
-			}
-		}
-
+		sb.Append(RoleHierarchyRenderer.ToMermaidDiagram(this._roleRegistry));
 		sb.AppendLine("    </div>");
 		sb.AppendLine("  </div>");
 		sb.AppendLine("</div>");
@@ -639,10 +612,6 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 					sb.AppendLine($"        <strong>{rule.PropertyPath ?? "AuthorizationContext"}</strong>");
 					sb.AppendLine($"        <div>Validation: {rule.ValidationLogic}</div>");
 					sb.AppendLine($"        <div>Message: {rule.Message}</div>");
-
-					if (!string.IsNullOrEmpty(rule.Condition)) {
-						sb.AppendLine($"        <div>Condition: {rule.Condition}</div>");
-					}
 
 					// If rule mentions roles, display them
 					var relatedRoles = allRoles.Where(r => rule.ValidationLogic.Contains(r.ToString())).ToList();

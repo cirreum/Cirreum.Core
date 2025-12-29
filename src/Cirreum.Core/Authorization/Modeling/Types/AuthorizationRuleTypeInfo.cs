@@ -11,8 +11,7 @@ public sealed record AuthorizationRuleTypeInfo(
 	Type AuthorizorType,
 	string PropertyPath,
 	string ValidationLogic,
-	string Message,
-	string? Condition = null
+	string Message
 ) {
 	/// <summary>
 	/// Converts to the serializable AuthorizationRuleInfo type.
@@ -24,7 +23,6 @@ public sealed record AuthorizationRuleTypeInfo(
 		AuthorizorTypeFullName: this.AuthorizorType.FullName ?? this.AuthorizorType.Name,
 		PropertyPath: this.PropertyPath,
 		ValidationLogic: this.ValidationLogic,
-		Message: this.Message,
-		Condition: this.Condition
+		Message: this.Message
 	);
 }

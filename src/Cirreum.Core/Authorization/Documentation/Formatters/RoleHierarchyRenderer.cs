@@ -190,32 +190,6 @@ public static class RoleHierarchyRenderer {
 			}
 		}
 
-		//// Add styling
-		//sb.AppendLine();
-		//sb.AppendLine("    %% Styling");
-		//sb.AppendLine("    classDef default fill:#222,stroke:#333,stroke-width:2px;");
-		//sb.AppendLine("    classDef extent fill:#6f7f91,stroke:#999,stroke-width:3px;");
-		//sb.AppendLine("    classDef multi fill:#333,stroke:#666,stroke-width:2px;");
-		//sb.AppendLine("    classDef root fill:#000,stroke:#333,stroke-width:2px;");
-
-		//// Style extent roles (those that other roles inherit from, yet never inherit other roles)
-		//var bottomRoles = roles.Where(role => registry.GetInheritingRoles(role).Count == 0);
-		//foreach (var bottomRole in bottomRoles) {
-		//	sb.AppendLine($"    class {GetSafeNodeId(bottomRole.Name, bottomRole.Namespace)} extent;");
-		//}
-
-		//// Style roles that has 2 or more children
-		//var multiChildParentRoles = roles.Where(role => registry.GetInheritedRoles(role).Count > 1);
-		//foreach (var multiChildParentRole in multiChildParentRoles) {
-		//	sb.AppendLine($"    class {GetSafeNodeId(multiChildParentRole.Name, multiChildParentRole.Namespace)} multi;");
-		//}
-
-		//// Style root roles (those that other roles never inherit from, and optionally only inherit other roles)
-		//var topRoles = roles.Where(role => registry.GetInheritedRoles(role).Count == 0);
-		//foreach (var topRole in topRoles) {
-		//	sb.AppendLine($"    class {GetSafeNodeId(topRole.Name, topRole.Namespace)} root;");
-		//}
-
 		return sb.ToString();
 
 	}

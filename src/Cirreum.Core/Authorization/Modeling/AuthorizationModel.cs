@@ -396,8 +396,6 @@ public class AuthorizationModel() {
 
 				foreach (var propertyGroup in membersWithValidators) {
 					var propertyPath = propertyGroup.Key;
-					var propertyRules = descriptor.GetRulesForMember(propertyPath);
-					var condition = GetConditionDescription(propertyRules);
 
 					foreach (var (validator, options) in propertyGroup) {
 						if (validator is null) {
@@ -412,8 +410,7 @@ public class AuthorizationModel() {
 							validatorType,
 							propertyPath,
 							validationLogic,
-							message,
-							condition
+							message
 						));
 					}
 				}
@@ -426,8 +423,7 @@ public class AuthorizationModel() {
 							validatorType,
 							rule.PropertyName ?? "AuthorizationContext",
 							"Included Validator",
-							"References another validator",
-							null
+							"References another validator"
 						));
 
 						var ruleType = rule.GetType();
@@ -449,24 +445,6 @@ public class AuthorizationModel() {
 		}
 
 		return rules;
-	}
-
-	private static string? GetConditionDescription(IEnumerable<IValidationRule> rules) {
-		foreach (var rule in rules) {
-			var ruleType = rule.GetType();
-			var applyConditionProperty = ruleType.GetProperty("ApplyCondition");
-			var asyncApplyConditionProperty = ruleType.GetProperty("AsyncApplyCondition");
-
-			if (applyConditionProperty?.GetValue(rule) != null) {
-				return "Has When condition";
-			}
-
-			if (asyncApplyConditionProperty?.GetValue(rule) != null) {
-				return "Has async condition";
-			}
-		}
-
-		return null;
 	}
 
 	private static string GetValidationLogicDescription(IPropertyValidator validator) {
