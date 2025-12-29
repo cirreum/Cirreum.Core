@@ -63,8 +63,7 @@ public class AuthorizationRuleAnalyzer : IAuthorizationAnalyzerWithOptions {
 		}
 
 		// Check for resources with only role-based checks (informational)
-		if (options.IncludeInfoIssues) {
-			var resourcesWithOnlyRoleChecks = rulesByResource
+		var resourcesWithOnlyRoleChecks = rulesByResource
 				.Where(g => g.Key != typeof(MissingResource))
 				.Where(g => g.All(r =>
 					r.ValidationLogic.Contains("HasRole") ||
@@ -72,15 +71,14 @@ public class AuthorizationRuleAnalyzer : IAuthorizationAnalyzerWithOptions {
 					r.ValidationLogic.Contains("HasAllRoles")))
 				.ToList();
 
-			if (resourcesWithOnlyRoleChecks.Count != 0) {
-				var issue = Issues.ResourcesWithOnlyRoleChecks(resourcesWithOnlyRoleChecks.Count);
-				issues.Add(new AnalysisIssue(
-					Category: AnalyzerCategory,
-					Severity: IssueSeverity.Info,
-					Description: issue.Description,
-					RelatedTypeNames: [.. resourcesWithOnlyRoleChecks.Select(g => g.Key.FullName ?? g.Key.Name)],
-					Recommendation: issue.Recommendation));
-			}
+		if (resourcesWithOnlyRoleChecks.Count != 0) {
+			var issue = Issues.ResourcesWithOnlyRoleChecks(resourcesWithOnlyRoleChecks.Count);
+			issues.Add(new AnalysisIssue(
+				Category: AnalyzerCategory,
+				Severity: IssueSeverity.Info,
+				Description: issue.Description,
+				RelatedTypeNames: [.. resourcesWithOnlyRoleChecks.Select(g => g.Key.FullName ?? g.Key.Name)],
+				Recommendation: issue.Recommendation));
 		}
 
 		return AnalysisReport.ForCategory(AnalyzerCategory, issues, metrics);

@@ -10,11 +10,6 @@ public record AnalysisOptions {
 	public int MaxHierarchyDepth { get; init; } = 10;
 
 	/// <summary>
-	/// Whether to include informational issues in the analysis.
-	/// </summary>
-	public bool IncludeInfoIssues { get; init; } = true;
-
-	/// <summary>
 	/// Analyzer categories to exclude from analysis.
 	/// </summary>
 	public HashSet<string> ExcludedCategories { get; init; } = [];

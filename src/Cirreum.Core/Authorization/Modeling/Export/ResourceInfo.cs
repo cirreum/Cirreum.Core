@@ -9,6 +9,8 @@ public sealed record ResourceInfo(
 	string DomainBoundary,
 	string ResourceKind,
 	bool IsAnonymous,
+	bool IsAuditable,
+	bool IsCacheableQuery,
 	bool IsProtected,
 	bool RequiresAuthorization,
 	string? AuthorizerName,

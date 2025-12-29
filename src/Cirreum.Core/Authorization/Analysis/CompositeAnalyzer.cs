@@ -21,25 +21,14 @@ public class CompositeAnalyzer(IEnumerable<IAuthorizationAnalyzer> analyzers, An
 	/// performed asynchronously to avoid blocking the UI thread.</remarks>
 	/// <returns>An <see cref="AnalysisReport"/> representing the combined results of all analyzers. The report aggregates findings
 	/// from each analyzer; if no analyzers are configured, the report will be empty.</returns>
-	public async Task<AnalysisReport> AnalyzeAllAsync() {
+	public AnalysisReport AnalyzeAll() {
 		List<AnalysisReport> reports = [];
-		if (OperatingSystem.IsBrowser()) {
-			foreach (var analyzer in analyzers) {
-				await Task.Yield();
-				var report = analyzer switch {
-					IAuthorizationAnalyzerWithOptions withOptions => withOptions.Analyze(this._options),
-					_ => analyzer.Analyze()
-				};
-				reports.Add(report);
-			}
-		} else {
-			foreach (var analyzer in analyzers) {
-				var report = analyzer switch {
-					IAuthorizationAnalyzerWithOptions withOptions => withOptions.Analyze(this._options),
-					_ => analyzer.Analyze()
-				};
-				reports.Add(report);
-			}
+		foreach (var analyzer in analyzers) {
+			var report = analyzer switch {
+				IAuthorizationAnalyzerWithOptions withOptions => withOptions.Analyze(this._options),
+				_ => analyzer.Analyze()
+			};
+			reports.Add(report);
 		}
 		return AnalysisReport.Combine(reports);
 	}

@@ -130,6 +130,17 @@ Definitions that support Cirreum's architectural patterns:
 - Interceptors, pipelines, and execution flows
 - Metadata propagation and scoped request details
 
+| Interface | Auth | Audit | Cache | Use Case |
+|-----------|:----:|:-----:|:-----:|----------|
+| `IRequest<T>` | ✗ | ✗ | ✗ | Internal/anonymous |
+| `IAuthorizableRequest<T>` | ✓ | ✗ | ✗ | Protected, no logging |
+| `IAuditableRequest<T>` | ✗ | ✓ | ✗ | Logged, open access |
+| `ICacheableQuery<T>` | ✗ | ✗ | ✓ | Public cached lookups |
+| `IAuthorizableCacheableQuery<T>` | ✓ | ✗ | ✓ | Protected high-freq reads |
+| `IDomainQuery<T>` | ✓ | ✓ | ✗ | Sensitive reads |
+| `IDomainCommand<T>` | ✓ | ✓ | ✗ | State mutations |
+| `IDomainCacheableQuery<T>` | ✓ | ✓ | ✓ | Full coverage + cache |
+
 ### 4. Utilities & Helpers
 
 Common functionality implemented using a curated set of stable dependencies:

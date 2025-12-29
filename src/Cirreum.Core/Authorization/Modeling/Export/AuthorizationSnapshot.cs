@@ -33,6 +33,22 @@ public record AuthorizationSnapshot {
 	public required DateTime CapturedAtUtc { get; init; }
 
 	/// <summary>
+	/// The runtime environment where this snapshot was captured.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// This identifies whether the snapshot originated from a Server, SPA (Blazor WASM), 
+	/// Azure Function, or other supported runtime. Useful for comparing authorization 
+	/// configurations across different deployment targets.
+	/// </para>
+	/// <para>
+	/// For example, an admin dashboard might display side-by-side snapshots from both
+	/// the WASM client and server API to verify consistent authorization coverage.
+	/// </para>
+	/// </remarks>
+	public required DomainRuntimeType Runtime { get; init; }
+
+	/// <summary>
 	/// The complete domain catalog containing all resources organized by domain and kind.
 	/// </summary>
 	public required DomainCatalog Catalog { get; init; }
@@ -74,7 +90,7 @@ public record AuthorizationSnapshot {
 	/// <param name="serviceProvider">Service provider for resolving validators and analyzers.</param>
 	/// <param name="options">Optional analysis options. If null, defaults are used.</param>
 	/// <returns>A complete authorization snapshot.</returns>
-	public static async Task<AuthorizationSnapshot> CaptureAsync(
+	public static AuthorizationSnapshot Capture(
 		IAuthorizationRoleRegistry roleRegistry,
 		IServiceProvider serviceProvider,
 		AnalysisOptions? options = null) {
@@ -85,17 +101,17 @@ public record AuthorizationSnapshot {
 		// Run analysis
 		var analysisOptions = options ?? new AnalysisOptions {
 			MaxHierarchyDepth = 10,
-			IncludeInfoIssues = true,
 			ExcludedCategories = []
 		};
 
 		var analyzer = DefaultAnalyzerProvider.CreateAnalyzer(roleRegistry, serviceProvider, analysisOptions);
-		var analysisReport = await analyzer.AnalyzeAllAsync();
+		var analysisReport = analyzer.AnalyzeAll();
 
 		// Build role hierarchy info
 		var roleHierarchy = BuildRoleHierarchy(roleRegistry);
 
 		return new AuthorizationSnapshot {
+			Runtime = DomainContext.RuntimeType,
 			CapturedAtUtc = DateTime.UtcNow,
 			Catalog = AuthorizationModel.Instance.GetCatalog(),
 			AnalysisReport = analysisReport,
@@ -104,23 +120,6 @@ public record AuthorizationSnapshot {
 			AuthorizationFlowDiagram = AuthorizationFlowRenderer.ToMermaidDiagram(),
 			RoleHierarchyDiagram = RoleHierarchyRenderer.ToMermaidDiagram(roleRegistry)
 		};
-	}
-
-	/// <summary>
-	/// Creates a snapshot synchronously when async is not needed.
-	/// </summary>
-	/// <remarks>
-	/// This is a convenience method that blocks on the async operation.
-	/// Prefer <see cref="CaptureAsync"/> in async contexts.
-	/// </remarks>
-	public static AuthorizationSnapshot Capture(
-		IAuthorizationRoleRegistry roleRegistry,
-		IServiceProvider serviceProvider,
-		AnalysisOptions? options = null) {
-
-		return CaptureAsync(roleRegistry, serviceProvider, options)
-			.GetAwaiter()
-			.GetResult();
 	}
 
 	private static List<RoleHierarchyInfo> BuildRoleHierarchy(IAuthorizationRoleRegistry roleRegistry) {
@@ -135,8 +134,8 @@ public record AuthorizationSnapshot {
 			result.Add(new RoleHierarchyInfo(
 				RoleString: role.ToString(),
 				IsApplicationRole: role.IsApplicationRole,
-				ChildRoleStrings: childRoles.Select(r => r.ToString()).ToList(),
-				ParentRoleStrings: parentRoles.Select(r => r.ToString()).ToList(),
+				ChildRoleStrings: [.. childRoles.Select(r => r.ToString())],
+				ParentRoleStrings: [.. parentRoles.Select(r => r.ToString())],
 				InheritsFromCount: childRoles.Count,
 				InheritedByCount: parentRoles.Count,
 				HierarchyDepth: depth

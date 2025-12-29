@@ -112,6 +112,12 @@ public class AuthorizationModel() {
 			// IsAnonymous: not an IAuthorizableResource (doesn't participate in authorization)
 			var isAnonymous = !IsAuthorizableResource(resourceType);
 
+			// IsAuditable: is an IAuditableRequest (completed flows through pipeline, will emit an request completed notification)
+			var isAuditable = IsAuditableRequest(resourceType);
+
+			// IsCacheableQuery: is an ICacheableQuery (the query results are cached and returned to prevent re-query)
+			var isCacheableQuery = IsCacheableQuery(resourceType);
+
 			// RequiresAuthorization: is an IAuthorizableRequest (flows through pipeline, must have authorizer)
 			var requiresAuthorization = !isAnonymous && ImplementsAuthorizableRequest(resourceType);
 
@@ -120,6 +126,8 @@ public class AuthorizationModel() {
 				DomainBoundary: GetDomainBoundary(resourceType),
 				ResourceKind: GetResourceKind(resourceType),
 				IsAnonymous: isAnonymous,
+				IsAuditable: isAuditable,
+				IsCacheableQuery: isCacheableQuery,
 				IsProtected: authorizorType != null,
 				RequiresAuthorization: requiresAuthorization,
 				AuthorizerType: authorizorType,
@@ -304,6 +312,26 @@ public class AuthorizationModel() {
 	private static bool IsAuthorizableResource(Type type) {
 		var interfaces = type.GetInterfaces();
 		return interfaces.Any(i => i.Name == nameof(IAuthorizableResource));
+	}
+
+	/// <summary>
+	/// Determines whether the specified type implements the IAuditableRequestBase interface.
+	/// </summary>
+	/// <param name="type">The type to examine for implementation of the IAuditableRequestBase interface.</param>
+	/// <returns>true if the specified type implements IAuditableRequestBase; otherwise, false.</returns>
+	private static bool IsAuditableRequest(Type type) {
+		var interfaces = type.GetInterfaces();
+		return interfaces.Any(i => i.Name == nameof(IAuditableRequestBase));
+	}
+
+	/// <summary>
+	/// Determines whether the specified type implements the ICacheableQuery interface.
+	/// </summary>
+	/// <param name="type">The type to examine for implementation of the ICacheableQuery interface.</param>
+	/// <returns>true if the specified type implements ICacheableQuery; otherwise, false.</returns>
+	private static bool IsCacheableQuery(Type type) {
+		var interfaces = type.GetInterfaces();
+		return interfaces.Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICacheableQuery<>));
 	}
 
 	/// <summary>

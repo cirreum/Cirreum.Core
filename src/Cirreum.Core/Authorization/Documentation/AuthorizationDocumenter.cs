@@ -16,13 +16,14 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		AuthorizationModel.Instance.Initialize(services);
 	}
 
-	public async Task<string> GenerateMarkdown() {
+	public string GenerateMarkdown() {
 		var sb = new StringBuilder();
 		var combinedInfo = AuthorizationModel.Instance.GetAllRules();
 
 		sb.AppendLine("# Authorization System Documentation");
 		sb.AppendLine();
 		sb.AppendLine($"**Generated**: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+		sb.AppendLine($"**Runtime**: {DomainContext.RuntimeType}");
 		sb.AppendLine();
 
 		// Executive Summary
@@ -89,19 +90,20 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine();
 
 		// Enhanced Analysis Results
-		var analysisReport = await this.GetAnalysisReportAsync();
+		var analysisReport = this.GetAnalysisReport();
 		sb.Append(analysisReport.ToMarkdown());
 
 		return sb.ToString();
 	}
 
-	public async Task<string> GenerateCsv() {
+	public string GenerateCsv() {
 		var sb = new StringBuilder();
 		var combinedInfo = AuthorizationModel.Instance.GetAllRules();
 		var allRoles = this._roleRegistry.GetRegisteredRoles();
 
 		sb.AppendLine("AUTHORIZATION SYSTEM EXPORT");
 		sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+		sb.AppendLine($"Runtime: {DomainContext.RuntimeType}");
 		sb.AppendLine($"Total Authorization Rules: {combinedInfo.TotalRules}");
 		sb.AppendLine();
 
@@ -229,7 +231,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine();
 
 		// SECTION 5: Security analysis with improved structure
-		var analysisReport = await this.GetAnalysisReportAsync();
+		var analysisReport = this.GetAnalysisReport();
 		sb.AppendLine("## SECURITY ANALYSIS");
 		sb.AppendLine("Section,Category,Severity,Description,RelatedObjects,ImpactedResources,ImpactedRoles");
 
@@ -274,7 +276,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		return field;
 	}
 
-	public async Task<string> RenderHtmlPage() {
+	public string RenderHtmlPage() {
 		var sb = new StringBuilder();
 
 		sb.AppendLine("<!DOCTYPE html>");
@@ -323,7 +325,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("<body>");
 
 		sb.AppendLine("<h1>Authorization System Documentation</h1>");
-		sb.AppendLine($"<p class=\"generated-timestamp\"><strong>Generated:</strong> {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>");
+		sb.AppendLine($"<p class=\"generated-timestamp\"><strong>Generated:</strong> {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC | <strong>Runtime:</strong> {DomainContext.RuntimeType}</p>");
 
 		// Get data for statistics
 		var combinedInfo = AuthorizationModel.Instance.GetAllRules();
@@ -331,6 +333,10 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 
 		// Add executive summary with statistics
 		sb.AppendLine("<div class=\"stats-grid\">");
+		sb.AppendLine("  <div class=\"stat-card\">");
+		sb.AppendLine($"    <div class=\"stat-number\" style=\"font-size: 1.2em; color: #6c757d;\">{DomainContext.RuntimeType}</div>");
+		sb.AppendLine("    <div class=\"stat-label\">Runtime</div>");
+		sb.AppendLine("  </div>");
 		sb.AppendLine("  <div class=\"stat-card\">");
 		sb.AppendLine($"    <div class=\"stat-number\">{combinedInfo.TotalRules}</div>");
 		sb.AppendLine("    <div class=\"stat-label\">Total Authorization Rules</div>");
@@ -422,7 +428,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		// Domain breakdown details are available through the Anonymous Resource analyzer issues and analysis
 
 		// Domain architecture issues - get from full analysis report
-		var analysisReportForDomain = await this.GetAnalysisReportAsync();
+		var analysisReportForDomain = this.GetAnalysisReport();
 		var domainIssues = analysisReportForDomain.Issues.Where(i => i.Category == "Anonymous Resources").ToList();
 		if (domainIssues.Count != 0) {
 			sb.AppendLine("  <h3>Architecture Recommendations</h3>");
@@ -633,7 +639,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 		sb.AppendLine("<div id=\"analysis\" class=\"tab-content\">");
 		sb.AppendLine("  <h2>Security Analysis</h2>");
 
-		var analysisReport = await this.GetAnalysisReportAsync();
+		var analysisReport = this.GetAnalysisReport();
 
 		// Overall Status
 		sb.AppendLine("  <div class=\"resource\">");
@@ -805,9 +811,9 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 
 	}
 
-	private async Task<AnalysisReport> GetAnalysisReportAsync() {
+	private AnalysisReport GetAnalysisReport() {
 		var analyzer = DefaultAnalyzerProvider.CreateAnalyzer(this._roleRegistry, this._services);
-		return await analyzer.AnalyzeAllAsync();
+		return analyzer.AnalyzeAll();
 	}
 
 }
