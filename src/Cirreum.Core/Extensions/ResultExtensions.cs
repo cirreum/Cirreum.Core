@@ -17,6 +17,40 @@ public static class ResultExtensions {
 	extension(Result) {
 
 		/// <summary>
+		/// Creates a <see cref="Result{T}"/> representing a successful result if the specified value is not null, or a
+		/// failure result with a <see cref="NotFoundException"/> if it is null.
+		/// </summary>
+		/// <remarks>Use this method for entity lookups where a null response indicates the entity was not found.
+		/// This is typically used when the result will eventually map to an HTTP 404 response.</remarks>
+		/// <typeparam name="T">The type of the value to wrap in the result.</typeparam>
+		/// <param name="valueOrNull">The value to wrap in the result. If null, the result will indicate a not found error.</param>
+		/// <param name="key">The key used to look up the entity, included in the <see cref="NotFoundException"/> if the value is null.</param>
+		/// <returns>A <see cref="Result{T}"/> containing the value if it is not null; otherwise, a failure result with a
+		/// <see cref="NotFoundException"/> referencing the specified key.</returns>
+		public static Result<T> FromLookup<T>(T? valueOrNull, object key) {
+			return valueOrNull is not null
+				? Result.From(valueOrNull)
+				: Result<T>.Fail(new NotFoundException(key));
+		}
+
+		/// <summary>
+		/// Creates a <see cref="Result{T}"/> representing a successful result if the specified value is not null, or a
+		/// failure result with the specified exception if it is null.
+		/// </summary>
+		/// <remarks>Use this method when you need to convert a nullable value into a result with a custom exception type.
+		/// For entity lookups that should return a <see cref="NotFoundException"/>, prefer <see cref="FromLookup{T}"/> instead.</remarks>
+		/// <typeparam name="T">The type of the value to wrap in the result.</typeparam>
+		/// <param name="valueOrNull">The value to wrap in the result. If null, the result will contain the specified exception.</param>
+		/// <param name="exception">The exception to include in the failure result if the value is null.</param>
+		/// <returns>A <see cref="Result{T}"/> containing the value if it is not null; otherwise, a failure result with the
+		/// specified exception.</returns>
+		public static Result<T> FromNullable<T>(T? valueOrNull, Exception exception) {
+			return valueOrNull is not null
+				? Result.From(valueOrNull)
+				: Result<T>.Fail(exception);
+		}
+
+		/// <summary>
 		/// Creates a failed result indicating that an entity with the specified key was not found.
 		/// </summary>
 		/// <typeparam name="T">The type of the expected result value.</typeparam>
