@@ -16,6 +16,8 @@ public static class ResultExtensions {
 
 	extension(Result) {
 
+		// ============================ NULLABLE ================================
+
 		/// <summary>
 		/// Creates a <see cref="Result{T}"/> representing a successful result if the specified value is not null, or a
 		/// failure result with a <see cref="NotFoundException"/> if it is null.
@@ -50,6 +52,9 @@ public static class ResultExtensions {
 				: Result<T>.Fail(exception);
 		}
 
+
+		// ============================ NOT FOUND ================================
+
 		/// <summary>
 		/// Creates a failed result indicating that an entity with the specified key was not found.
 		/// </summary>
@@ -71,6 +76,27 @@ public static class ResultExtensions {
 		}
 
 		/// <summary>
+		/// Creates a failed result indicating that an entity with the specified key was not found.
+		/// </summary>
+		/// <param name="key">The key of the entity that was not found. This value is used to identify the missing entity in the result.</param>
+		/// <returns>A failed <see cref="Result"/> representing a not found error for the specified key.</returns>
+		public static Result NotFound(object key) {
+			return Result.Fail(new NotFoundException(key));
+		}
+
+		/// <summary>
+		/// Creates a failed result indicating that one or more items with the specified keys were not found.
+		/// </summary>
+		/// <param name="keys">One or more keys used to identify the items that were not found.</param>
+		/// <returns>A failed <see cref="Result"/> containing a <see cref="NotFoundException"/> with the specified keys.</returns>
+		public static Result NotFound(object[] keys) {
+			return Result.Fail(new NotFoundException(keys));
+		}
+
+
+		// ============================ ALREADY EXISTS ================================
+
+		/// <summary>
 		/// Creates a failed result indicating that an entity already exists, using the specified error message.
 		/// </summary>
 		/// <typeparam name="T">The type of the value associated with the result.</typeparam>
@@ -79,6 +105,18 @@ public static class ResultExtensions {
 		public static Result<T> AlreadyExist<T>(string message) {
 			return Result<T>.Fail(new AlreadyExistsException(message));
 		}
+
+		/// <summary>
+		/// Creates a failed result indicating that an entity already exists, using the specified error message.
+		/// </summary>
+		/// <param name="message">The error message describing the reason the entity is considered to already exist.</param>
+		/// <returns>A failed <see cref="Result"/> containing an <see cref="AlreadyExistsException"/> with the specified message.</returns>
+		public static Result AlreadyExist(string message) {
+			return Result.Fail(new AlreadyExistsException(message));
+		}
+
+
+		// ============================ BAD REQUEST ================================
 
 		/// <summary>
 		/// Creates a failed result that represents a bad request error with the specified message.
@@ -99,6 +137,9 @@ public static class ResultExtensions {
 			return Result.Fail(new BadRequestException(message));
 		}
 
+
+		// ============================ CONFLICT ================================
+
 		/// <summary>
 		/// Creates a failed result indicating a conflict with the current state of the resource.
 		/// </summary>
@@ -108,6 +149,18 @@ public static class ResultExtensions {
 		public static Result<T> Conflict<T>(string message) {
 			return Result<T>.Fail(new ConflictException(message));
 		}
+
+		/// <summary>
+		/// Creates a failed result indicating a conflict with the current state of the resource.
+		/// </summary>
+		/// <param name="message">The error message describing the conflict.</param>
+		/// <returns>A failed <see cref="Result"/> containing a <see cref="ConflictException"/> with the specified message.</returns>
+		public static Result Conflict(string message) {
+			return Result.Fail(new ConflictException(message));
+		}
+
+
+		// ============================ NOT VALID ================================
 
 		/// <summary>
 		/// Creates a failed result indicating that validation failed with the specified message.
