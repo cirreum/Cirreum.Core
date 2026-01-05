@@ -8,7 +8,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Cirreum.Result" Version="1.0.9" />
+		<PackageReference Include="Cirreum.Result" Version="1.0.10" />
 		<PackageReference Include="Cirreum.Exceptions" Version="1.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Telemetry.Abstractions" Version="10.1.0" />
 		<PackageReference Include="OpenTelemetry.Api" Version="1.14.0" />
