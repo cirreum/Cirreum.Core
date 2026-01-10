@@ -4,6 +4,14 @@ namespace Cirreum.Authorization.Analysis;
 /// Configuration options for authorization analysis.
 /// </summary>
 public record AnalysisOptions {
+
+	/// <summary>
+	/// Creates an empty analysis options instance with default values.
+	/// </summary>
+	public AnalysisOptions() {
+
+	}
+
 	/// <summary>
 	/// Maximum recommended role hierarchy depth.
 	/// </summary>

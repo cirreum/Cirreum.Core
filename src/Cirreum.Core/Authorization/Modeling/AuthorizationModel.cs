@@ -16,7 +16,7 @@ using System.Reflection;
 /// <summary>
 /// Provides access to all domain resources and their authorization information.
 /// This is the single source of truth for resource discovery and authorization rules.
-/// Scans ALL IRequest types (both protected and anonymous).
+/// Scans all IDomainResource types (both protected and anonymous).
 /// </summary>
 public class AuthorizationModel() {
 

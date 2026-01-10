@@ -1,4 +1,6 @@
-﻿namespace Cirreum.Authorization.Analysis;
+﻿using System.Text.Json.Serialization;
+
+namespace Cirreum.Authorization.Analysis;
 
 /// <summary>
 /// Represents a complete analysis report containing issues, metrics, and analyzed categories.
@@ -6,10 +8,12 @@
 public record AnalysisReport {
 
 	/// <summary>
-	/// private constructor, use <see cref="ForCategory(string, List{AnalysisIssue}?, Dictionary{string, int}?)"/>
-	/// or <see cref="Combine(List{AnalysisReport})"/>
+	/// Creates an empty analysis report. For programmatic creation, prefer using
+	/// <see cref="ForCategory(string, List{AnalysisIssue}?, Dictionary{string, int}?)"/>
+	/// or <see cref="Combine(List{AnalysisReport})"/>.
 	/// </summary>
-	private AnalysisReport() {
+	[JsonConstructor]
+	public AnalysisReport() {
 
 	}
 
