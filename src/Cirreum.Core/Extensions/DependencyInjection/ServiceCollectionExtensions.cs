@@ -55,7 +55,7 @@ public static class ServiceCollectionExtensions {
 	/// <param name="services">The current <see cref="IServiceCollection"/> to register with.</param>
 	public static void AddDomainContextInitilizer(
 		this IServiceCollection services) {
-		services.TryAddScoped<IDomainContextInitializer, DomainContextInitializer>();
+		services.TryAddSingleton<IDomainContextInitializer, DomainContextInitializer>();
 	}
 
 
