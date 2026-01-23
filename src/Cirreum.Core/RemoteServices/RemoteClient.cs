@@ -15,6 +15,22 @@ using System.Text.Json.Serialization;
 /// Base class for API clients that provides common functionality for HTTP operations and
 /// returns a <see cref="Result"/> or <see cref="Result{T}"/> for full railway programming.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Can be used anywhere you would use <see cref="HttpClient"/> directly, with built-in
+/// telemetry, error handling, and consistent Result-based returns.
+/// </para>
+/// <para>
+/// Also works well with a command/query handler pattern where derived classes implement
+/// methods that act as handlers against HTTP endpoints rather than repositories or services.
+/// </para>
+/// <para>
+/// Retry support is available via <see cref="WithRetryAsync{T}"/> but is opt-in per operation.
+/// </para>
+/// <para>
+/// For complete control, the underlying <see cref="Client"/> is accessible to derived classes.
+/// </para>
+/// </remarks>
 public abstract class RemoteClient {
 
 
@@ -47,7 +63,7 @@ public abstract class RemoteClient {
 	/// <summary>
 	/// The current instance's Type Name
 	/// </summary>
-	private readonly string typeName;
+	protected string TypeName { get; }
 
 	/// <summary>
 	/// DI Constructor.
@@ -73,7 +89,7 @@ public abstract class RemoteClient {
 		IDomainEnvironment domainEnvironment,
 		ActivitySource? activitySource,
 		JsonSerializerOptions? jsonOptions = null) {
-		this.typeName = this.GetType().Name;
+		this.TypeName = this.GetType().Name;
 		this.Client = client;
 		this.Logger = logger;
 		this.DomainEnvironment = domainEnvironment;
@@ -93,7 +109,7 @@ public abstract class RemoteClient {
 	/// </summary>
 	protected virtual void SetUserAgent() {
 		var clientVersion = this.GetType().GetTypeInfo().Assembly.GetName().Version?.ToString() ?? "v0";
-		this.UserAgent = $"{this.typeName}/{clientVersion}/{this.DomainEnvironment.RuntimeType}";
+		this.UserAgent = $"{this.TypeName}/{clientVersion}/{this.DomainEnvironment.RuntimeType}";
 		this.Client.DefaultRequestHeaders.UserAgent.TryParseAdd(this.UserAgent);
 	}
 
@@ -220,6 +236,31 @@ public abstract class RemoteClient {
 	}
 
 	/// <summary>
+	/// Sends a GET request and deserializes the JSON response to type <typeparamref name="T"/>
+	/// and wraps the result in a <see cref="ResponseWithHeaders{T}"/> to include the response
+	/// and content headers.
+	/// </summary>
+	/// <typeparam name="T">The type to deserialize the response to.</typeparam>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>The deserialized response with headers.</returns>
+	protected Task<Result<ResponseWithHeaders<T>>> GetWithHeadersAsync<T>(
+		string endpoint,
+		CancellationToken cancellationToken = default) {
+		return this.ProcessWithTelemetryAsync(
+			HttpMethod.Get.Method,
+			endpoint,
+			async (response, ct) => {
+				var data = await response.Content.ReadFromJsonAsync<T>(this.JsonOptions, ct);
+				return data is null
+					? null
+					: new ResponseWithHeaders<T>(data, response.Headers, response.Content.Headers);
+			},
+			this.Client.GetAsync(endpoint, cancellationToken),
+			cancellationToken);
+	}
+
+	/// <summary>
 	/// Sends a POST request with JSON content and deserializes the JSON response to type <typeparamref name="T"/>.
 	/// </summary>
 	/// <typeparam name="T">The type to deserialize the response to.</typeparam>
@@ -267,6 +308,67 @@ public abstract class RemoteClient {
 			this.Client.SendAsync(request, cancellationToken),
 			cancellationToken);
 
+	}
+
+	/// <summary>
+	/// Sends a POST request with JSON content and deserializes the JSON response to type <typeparamref name="T"/>
+	/// and wraps the result in a <see cref="ResponseWithHeaders{T}"/> to include the response
+	/// and content headers.
+	/// </summary>
+	/// <typeparam name="T">The type to deserialize the response to.</typeparam>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="content">The object to serialize as JSON content, or null for no body.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>The deserialized response with headers.</returns>
+	protected Task<Result<ResponseWithHeaders<T>>> PostWithHeadersAsync<T>(
+		string endpoint,
+		object? content = null,
+		CancellationToken cancellationToken = default) {
+		var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+		if (content is not null) {
+			request.Content = JsonContent.Create(content, options: this.JsonOptions);
+		}
+		return this.ProcessWithTelemetryAsync(
+			HttpMethod.Post.Method,
+			endpoint,
+			async (response, ct) => {
+				var data = await response.Content.ReadFromJsonAsync<T>(this.JsonOptions, ct);
+				return data is null
+					? null
+					: new ResponseWithHeaders<T>(data, response.Headers, response.Content.Headers);
+			},
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
+	}
+
+	/// <summary>
+	/// Sends a POST request with <see cref="HttpContent"/> and deserializes the JSON response to type <typeparamref name="T"/>
+	/// and wraps the result in a <see cref="ResponseWithHeaders{T}"/> to include the response
+	/// and content headers.
+	/// </summary>
+	/// <typeparam name="T">The type to deserialize the response to.</typeparam>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="content">The HTTP content to send, or null for no body.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>The deserialized response with headers.</returns>
+	protected Task<Result<ResponseWithHeaders<T>>> PostWithHeadersAsync<T>(
+		string endpoint,
+		HttpContent? content = null,
+		CancellationToken cancellationToken = default) {
+		var request = new HttpRequestMessage(HttpMethod.Post, endpoint) {
+			Content = content
+		};
+		return this.ProcessWithTelemetryAsync(
+			HttpMethod.Post.Method,
+			endpoint,
+			async (response, ct) => {
+				var data = await response.Content.ReadFromJsonAsync<T>(this.JsonOptions, ct);
+				return data is null
+					? null
+					: new ResponseWithHeaders<T>(data, response.Headers, response.Content.Headers);
+			},
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
 	}
 
 	/// <summary>
@@ -789,13 +891,16 @@ public abstract class RemoteClient {
 	#region Raw Response Operations
 
 	/// <summary>
-	/// Sends a GET request and returns the raw HttpResponseMessage.
-	/// Consumer is responsible for disposing the response.
+	/// Sends a GET request and returns the raw HttpResponseMessage for custom processing.
 	/// </summary>
 	/// <param name="endpoint">The API endpoint to call.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
-	/// <returns>The raw HttpResponseMessage, or null if the request failed.</returns>
-	protected async Task<HttpResponseMessage?> GetRawAsync(
+	/// <returns>The HttpResponseMessage after standard error handling (401/403 throw, non-success throws ApiException).</returns>
+	/// <remarks>
+	/// Use this when you need direct access to response headers, status codes, or want to 
+	/// process the response content yourself. Consumer is responsible for disposing the response.
+	/// </remarks>
+	protected async Task<HttpResponseMessage> GetRawAsync(
 		string endpoint,
 		CancellationToken cancellationToken = default) {
 		return await this.ProcessResponseAsync(this.Client.GetAsync(endpoint, cancellationToken));
@@ -809,7 +914,7 @@ public abstract class RemoteClient {
 	/// <param name="content">The object to serialize as JSON content, or null for no body.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The raw HttpResponseMessage, or null if the request failed.</returns>
-	protected async Task<HttpResponseMessage?> PostRawAsync(
+	protected async Task<HttpResponseMessage> PostRawAsync(
 		string endpoint,
 		object? content = null,
 		CancellationToken cancellationToken = default) {
@@ -828,7 +933,7 @@ public abstract class RemoteClient {
 	/// <param name="content">The HTTP content to send.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The raw HttpResponseMessage, or null if the request failed.</returns>
-	protected async Task<HttpResponseMessage?> PostRawAsync(
+	protected async Task<HttpResponseMessage> PostRawAsync(
 		string endpoint,
 		HttpContent content,
 		CancellationToken cancellationToken = default) {
@@ -846,7 +951,7 @@ public abstract class RemoteClient {
 	/// <param name="content">The object to serialize as JSON content.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The raw HttpResponseMessage, or null if the request failed.</returns>
-	protected async Task<HttpResponseMessage?> PutRawAsync(
+	protected async Task<HttpResponseMessage> PutRawAsync(
 		string endpoint,
 		object content,
 		CancellationToken cancellationToken = default) {
@@ -864,7 +969,7 @@ public abstract class RemoteClient {
 	/// <param name="content">The object to serialize as JSON content.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The raw HttpResponseMessage, or null if the request failed.</returns>
-	protected async Task<HttpResponseMessage?> PatchRawAsync(
+	protected async Task<HttpResponseMessage> PatchRawAsync(
 		string endpoint,
 		object content,
 		CancellationToken cancellationToken = default) {
@@ -881,10 +986,28 @@ public abstract class RemoteClient {
 	/// <param name="endpoint">The API endpoint to call.</param>
 	/// <param name="cancellationToken">Cancellation token for the operation.</param>
 	/// <returns>The raw HttpResponseMessage, or null if the request failed.</returns>
-	protected async Task<HttpResponseMessage?> DeleteRawAsync(
+	protected async Task<HttpResponseMessage> DeleteRawAsync(
 		string endpoint,
 		CancellationToken cancellationToken = default) {
 		return await this.ProcessResponseAsync(this.Client.DeleteAsync(endpoint, cancellationToken));
+	}
+
+	#endregion
+
+	#region HEAD Operations
+
+	/// <summary>
+	/// Sends a HEAD request to check resource existence without downloading the body.
+	/// </summary>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>A Result indicating success/failure.</returns>
+	protected Task<Result> ResourceExistsAsync(string endpoint, CancellationToken cancellationToken = default) {
+		var request = new HttpRequestMessage(HttpMethod.Head, endpoint);
+		return this.ProcessWithTelemetryAsync(
+			HttpMethod.Head.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken));
 	}
 
 	#endregion
@@ -900,19 +1023,19 @@ public abstract class RemoteClient {
 		Func<HttpResponseMessage, CancellationToken, Task<T?>> contentProcessor,
 		Task<HttpResponseMessage> action,
 		CancellationToken cancellationToken) {
-		using var activity = RemoteClientTelemetry.StartActivity(method, endpoint, this.typeName);
+		using var activity = RemoteClientTelemetry.StartActivity(method, endpoint, this.TypeName);
 		var startTimestamp = Timing.Start();
 
 		try {
 
 			var response = await this.ProcessResponseAsync(action);
 
-			// ERROR
+			// ERROR (technically should never be null)
 			if (response is null) {
 				var nullElapsed = Timing.GetElapsedMilliseconds(startTimestamp);
 				var error = new InvalidOperationException("Response was null");
 				RemoteClientTelemetry.SetActivityError(activity, error);
-				RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, null, nullElapsed, error, this.Logger);
+				RemoteClientTelemetry.RecordFailure(method, endpoint, this.TypeName, null, nullElapsed, error, this.Logger);
 				return Result<T>.Fail(error);
 			}
 
@@ -923,13 +1046,13 @@ public abstract class RemoteClient {
 			if (data is null) {
 				var error = new InvalidOperationException("Content processing returned null");
 				RemoteClientTelemetry.SetActivityError(activity, error, (int)response.StatusCode);
-				RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, (int)response.StatusCode, elapsed, error, this.Logger);
+				RemoteClientTelemetry.RecordFailure(method, endpoint, this.TypeName, (int)response.StatusCode, elapsed, error, this.Logger);
 				return Result<T>.Fail(error);
 			}
 
 			// SUCCESS
 			RemoteClientTelemetry.SetActivitySuccess(activity, (int)response.StatusCode);
-			RemoteClientTelemetry.RecordSuccess(method, endpoint, this.typeName, (int)response.StatusCode, elapsed, this.Logger);
+			RemoteClientTelemetry.RecordSuccess(method, endpoint, this.TypeName, (int)response.StatusCode, elapsed, this.Logger);
 			return Result<T>.Success(data);
 
 		} catch (Exception fex) when (fex.IsFatal()) {
@@ -940,7 +1063,7 @@ public abstract class RemoteClient {
 				edi,
 				method,
 				endpoint,
-				this.typeName,
+				this.TypeName,
 				startTimestamp,
 				activity);
 
@@ -956,23 +1079,24 @@ public abstract class RemoteClient {
 		string method,
 		string endpoint,
 		Task<HttpResponseMessage> action) {
-		using var activity = RemoteClientTelemetry.StartActivity(method, endpoint, this.typeName);
+		using var activity = RemoteClientTelemetry.StartActivity(method, endpoint, this.TypeName);
 		var startTimestamp = Timing.Start();
 
 		try {
 			var response = await this.ProcessResponseAsync(action);
 			var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
 
+			// ERROR (technically should never be null)
 			if (response is null) {
 				var error = new InvalidOperationException("Response was null");
 				RemoteClientTelemetry.SetActivityError(activity, error);
-				RemoteClientTelemetry.RecordFailure(method, endpoint, this.typeName, null, elapsed, error, this.Logger);
+				RemoteClientTelemetry.RecordFailure(method, endpoint, this.TypeName, null, elapsed, error, this.Logger);
 				return Result.Fail(error);
 			}
 
 			// SUCCESS - no content to process
 			RemoteClientTelemetry.SetActivitySuccess(activity, (int)response.StatusCode);
-			RemoteClientTelemetry.RecordSuccess(method, endpoint, this.typeName, (int)response.StatusCode, elapsed, this.Logger);
+			RemoteClientTelemetry.RecordSuccess(method, endpoint, this.TypeName, (int)response.StatusCode, elapsed, this.Logger);
 			return Result.Success;
 
 		} catch (Exception fex) when (fex.IsFatal()) {
@@ -983,7 +1107,7 @@ public abstract class RemoteClient {
 				edi,
 				method,
 				endpoint,
-				this.typeName,
+				this.TypeName,
 				startTimestamp,
 				activity);
 
@@ -1007,19 +1131,19 @@ public abstract class RemoteClient {
 				RemoteClientTelemetry.SetActivityError(activity, uae, 401);
 				RemoteClientTelemetry.RecordFailure(method, endpoint, typeName, 401, elapsed, uae, this.Logger);
 				edi.Throw(); // never returns
-				return uae;
+				throw new UnreachableException(); // compiler satisfaction + intent
 
 			case ForbiddenAccessException fae:
 				RemoteClientTelemetry.SetActivityError(activity, fae, 403);
 				RemoteClientTelemetry.RecordFailure(method, endpoint, typeName, 403, elapsed, fae, this.Logger);
 				edi.Throw(); // never returns
-				return fae;
+				throw new UnreachableException(); // compiler satisfaction + intent
 
 			case OperationCanceledException oce:
 				RemoteClientTelemetry.SetActivityCanceled(activity, oce);
 				RemoteClientTelemetry.RecordCanceled(method, endpoint, typeName, elapsed, oce, this.Logger);
 				edi.Throw(); // never returns
-				return oce;
+				throw new UnreachableException(); // compiler satisfaction + intent
 
 			case HttpRequestException hre:
 				RemoteClientTelemetry.SetActivityError(activity, hre, (int?)hre.StatusCode);
@@ -1142,7 +1266,7 @@ public abstract class RemoteClient {
 	/// </summary>
 	/// <param name="action">The HTTP request task to process.</param>
 	/// <returns>The HTTP response message if successful, or null if an error occurred.</returns>
-	private async Task<HttpResponseMessage?> ProcessResponseAsync(Task<HttpResponseMessage> action) {
+	private async Task<HttpResponseMessage> ProcessResponseAsync(Task<HttpResponseMessage> action) {
 		var response = await action;
 		if (response.IsSuccessStatusCode) {
 			var contentType = response.Content.Headers.ContentType?.MediaType;
