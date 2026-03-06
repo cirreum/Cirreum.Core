@@ -8,7 +8,6 @@ using Cirreum.Conductor;
 using FluentValidation;
 using FluentValidation.Internal;
 using FluentValidation.Validators;
-using Humanizer;
 using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
 using System.Reflection;
@@ -514,7 +513,43 @@ public class AuthorizationModel() {
 			return "Custom Predicate";
 		}
 
-		return (validator.Name ?? validator.GetType().Name.Replace("Validator", "")).Humanize();
+		return ToDisplayName((validator.Name ?? validator.GetType().Name.Replace("Validator", "")));
+	}
+
+	private static string ToDisplayName(string name) {
+		if (string.IsNullOrWhiteSpace(name)) {
+			return name;
+		}
+
+		// Insert space before uppercase letters that follow lowercase letters
+		// or before uppercase letters followed by lowercase (handles acronyms)
+		var sb = new System.Text.StringBuilder(name.Length + 10);
+		for (var i = 0; i < name.Length; i++) {
+			var current = name[i];
+			var previous = i > 0 ? name[i - 1] : '\0';
+			var next = i < name.Length - 1 ? name[i + 1] : '\0';
+
+			// Insert space before uppercase if:
+			// - preceded by a lowercase letter (camelCase boundary)
+			// - preceded by uppercase AND followed by lowercase (acronym end: "HTMLParser" → "HTML Parser")
+			// - preceded by a digit
+			if (i > 0 && char.IsUpper(current)) {
+				if (char.IsLower(previous) ||
+					char.IsDigit(previous) ||
+					(char.IsUpper(previous) && char.IsLower(next))) {
+					sb.Append(' ');
+				}
+			}
+
+			// Insert space before digit sequences that follow letters
+			if (i > 0 && char.IsDigit(current) && char.IsLetter(previous)) {
+				sb.Append(' ');
+			}
+
+			sb.Append(i == 0 ? char.ToUpper(current) : char.ToLower(current));
+		}
+
+		return sb.ToString();
 	}
 
 	#endregion
