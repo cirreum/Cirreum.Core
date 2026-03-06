@@ -372,6 +372,24 @@ public abstract class RemoteClient {
 	}
 
 	/// <summary>
+	/// Sends a PUT request with no body and deserializes the JSON response to type <typeparamref name="T"/>.
+	/// </summary>
+	/// <typeparam name="T">The type to deserialize the response to.</typeparam>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>The deserialized response object, or default if the request failed.</returns>
+	protected Task<Result<T>> PutAsync<T>(
+		string endpoint,
+		CancellationToken cancellationToken = default) {
+		var request = new HttpRequestMessage(HttpMethod.Put, endpoint);
+		return this.ProcessJsonAsResultAsync<T>(
+			HttpMethod.Put.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
+	}
+
+	/// <summary>
 	/// Sends a PUT request with JSON content and deserializes the JSON response to type <typeparamref name="T"/>.
 	/// </summary>
 	/// <typeparam name="T">The type to deserialize the response to.</typeparam>
@@ -393,6 +411,24 @@ public abstract class RemoteClient {
 			this.Client.SendAsync(request, cancellationToken),
 			cancellationToken);
 
+	}
+
+	/// <summary>
+	/// Sends a PATCH request with no body and deserializes the JSON response to type <typeparamref name="T"/>.
+	/// </summary>
+	/// <typeparam name="T">The type to deserialize the response to.</typeparam>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>The deserialized response object, or default if the request failed.</returns>
+	protected Task<Result<T>> PatchAsync<T>(
+		string endpoint,
+		CancellationToken cancellationToken = default) {
+		var request = new HttpRequestMessage(HttpMethod.Patch, endpoint);
+		return this.ProcessJsonAsResultAsync<T>(
+			HttpMethod.Patch.Method,
+			endpoint,
+			this.Client.SendAsync(request, cancellationToken),
+			cancellationToken);
 	}
 
 	/// <summary>
@@ -842,6 +878,19 @@ public abstract class RemoteClient {
 	}
 
 	/// <summary>
+	/// Sends a PUT request with no body and no response content processing.
+	/// </summary>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>A task that represents the asynchronous operation.</returns>
+	protected Task<Result> PutAsync(
+		string endpoint,
+		CancellationToken cancellationToken = default) {
+		var request = new HttpRequestMessage(HttpMethod.Put, endpoint);
+		return this.ProcessWithTelemetryAsync(HttpMethod.Put.Method, endpoint, this.Client.SendAsync(request, cancellationToken));
+	}
+
+	/// <summary>
 	/// Sends a PUT request with JSON content and no response content processing.
 	/// </summary>
 	/// <param name="endpoint">The API endpoint to call.</param>
@@ -856,6 +905,19 @@ public abstract class RemoteClient {
 			Content = JsonContent.Create(content, options: this.JsonOptions)
 		};
 		return this.ProcessWithTelemetryAsync(HttpMethod.Put.Method, endpoint, this.Client.SendAsync(request, cancellationToken));
+	}
+
+	/// <summary>
+	/// Sends a PATCH request with no body and no response content processing.
+	/// </summary>
+	/// <param name="endpoint">The API endpoint to call.</param>
+	/// <param name="cancellationToken">Cancellation token for the operation.</param>
+	/// <returns>A task that represents the asynchronous operation.</returns>
+	protected Task<Result> PatchAsync(
+		string endpoint,
+		CancellationToken cancellationToken = default) {
+		var request = new HttpRequestMessage(HttpMethod.Patch, endpoint);
+		return this.ProcessWithTelemetryAsync(HttpMethod.Patch.Method, endpoint, this.Client.SendAsync(request, cancellationToken));
 	}
 
 	/// <summary>
