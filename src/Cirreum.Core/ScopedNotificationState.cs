@@ -1,15 +1,42 @@
 ﻿namespace Cirreum;
 
 /// <summary>
-/// Abstract base class for state that provides notification scoping functionality.
+/// Abstract base class for state that provides notification scoping and batching functionality.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Inherit from this class to get automatic notification batching capabilities.
-/// Alternatively, implement <see cref="IScopedNotificationState"/> directly if you need custom notification behavior.
+/// Alternatively, implement <see cref="IScopedNotificationState"/> directly if you need
+/// custom notification behavior.
+/// </para>
+/// <para>
+/// <strong>Choosing between sync and async scopes:</strong>
+/// </para>
+/// <list type="bullet">
+///   <item>
+///     Use <see cref="CreateNotificationScope"/> when your state change notification is synchronous —
+///     for example, notifying JS interop or lightweight in-memory UI subscribers via
+///     <c>stateManager.NotifySubscribers</c>.
+///   </item>
+///   <item>
+///     Use <see cref="CreateNotificationScopeAsync"/> when your state change notification involves
+///     awaitable work — for example, notifying async subscribers via
+///     <c>stateManager.NotifySubscribersAsync</c>.
+///   </item>
+/// </list>
+/// <para>
+/// Both scope types support batching: if multiple scopes are nested, <see cref="OnStateHasChanged"/>
+/// or <see cref="OnStateHasChangedAsync"/> is only invoked when the outermost scope completes,
+/// ensuring a single notification per batch of state mutations.
+/// </para>
 /// </remarks>
 public abstract class ScopedNotificationState : IScopedNotificationState {
 
 	private int _scopeCount;
+
+	// -------------------------------------------------------------------------
+	// Scope Factory
+	// -------------------------------------------------------------------------
 
 	/// <inheritdoc/>
 	public IDisposable CreateNotificationScope() {
@@ -20,26 +47,32 @@ public abstract class ScopedNotificationState : IScopedNotificationState {
 	/// <inheritdoc/>
 	public IAsyncDisposable CreateNotificationScopeAsync() {
 		this.StartNewScope();
-		return new NotificationScope(this.EndScopeAndTryNotify);
+		return new AsyncNotificationScope(this.EndScopeAndTryNotifyAsync);
 	}
 
+	// -------------------------------------------------------------------------
+	// Overridable Notification Hooks
+	// -------------------------------------------------------------------------
+
 	/// <summary>
-	/// Called when state changes and all notification scopes have completed.
+	/// Called synchronously when state changes and all notification scopes have completed.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Override this method in concrete implementations to provide state-specific notification logic.
-	/// Typically, implementations should call <c>stateManager.NotifySubscribers&lt;TStateInterface&gt;(this)</c>
-	/// to notify all subscribers of the state change.
+	/// Override this method to provide state-specific sync notification logic. Typically,
+	/// implementations call <c>stateManager.NotifySubscribers&lt;TStateInterface&gt;(this)</c>
+	/// to notify sync subscribers — for example, JS interop or lightweight in-memory UI state.
 	/// </para>
 	/// <para>
-	/// This method is called by <see cref="NotifyStateChanged"/> when no notification scopes are active,
-	/// ensuring that notifications are properly batched and only sent when appropriate.
+	/// This method is called by <see cref="NotifyStateChanged"/> and by the sync
+	/// <see cref="CreateNotificationScope"/> path when the outermost scope completes.
+	/// </para>
+	/// <para>
+	/// For async notification work, override <see cref="OnStateHasChangedAsync"/> instead.
 	/// </para>
 	/// </remarks>
 	/// <example>
 	/// <code>
-	/// // from a concrete state implementation
 	/// protected override void OnStateHasChanged() {
 	///     stateManager.NotifySubscribers&lt;IMyState&gt;(this);
 	/// }
@@ -48,50 +81,120 @@ public abstract class ScopedNotificationState : IScopedNotificationState {
 	protected abstract void OnStateHasChanged();
 
 	/// <summary>
-	/// Triggers state change notifications if no notification scopes are currently active.
+	/// Called asynchronously when state changes and all notification scopes have completed.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// This method is typically called internally by state mutation operations to signal that
-	/// the state has changed. It respects notification scoping by suppressing notifications
-	/// when <see cref="CreateNotificationScope"/> has created active scopes.
+	/// Override this method to provide state-specific async notification logic. Typically,
+	/// implementations call <c>await stateManager.NotifySubscribersAsync&lt;TStateInterface&gt;(this)</c>
+	/// to notify async subscribers — for example, persistence, browser storage, navigation,
+	/// or app user state hydration.
 	/// </para>
 	/// <para>
-	/// When no scopes are active (scope count is zero), this method calls <see cref="OnStateHasChanged"/>
-	/// to allow the concrete implementation to perform the appropriate notification logic.
-	/// This pattern enables batching of multiple state changes into a single notification.
+	/// This method is called by <see cref="NotifyStateChangedAsync"/> and by the async
+	/// <see cref="CreateNotificationScopeAsync"/> path when the outermost scope completes.
 	/// </para>
+	/// <para>
+	/// The default implementation is a no-op. Override only when async notification is needed.
+	/// For sync notification work, override <see cref="OnStateHasChanged"/> instead.
+	/// </para>
+	/// </remarks>
+	/// <example>
+	/// <code>
+	/// protected override async Task OnStateHasChangedAsync() {
+	///     await stateManager.NotifySubscribersAsync&lt;IMyState&gt;(this);
+	/// }
+	/// </code>
+	/// </example>
+	protected virtual Task OnStateHasChangedAsync() => Task.CompletedTask;
+
+	// -------------------------------------------------------------------------
+	// Protected Notify Triggers
+	// -------------------------------------------------------------------------
+
+	/// <summary>
+	/// Synchronously triggers state change notification if no notification scopes are active.
+	/// </summary>
+	/// <remarks>
+	/// Call this from state mutation methods to signal that the state has changed.
+	/// When active scopes exist, notification is suppressed until the outermost scope completes,
+	/// batching multiple mutations into a single notification.
 	/// </remarks>
 	protected virtual void NotifyStateChanged() {
 		if (this._scopeCount > 0) {
 			return;
 		}
-
 		this.OnStateHasChanged();
 	}
 
-	private void StartNewScope() => this._scopeCount++;
+	/// <summary>
+	/// Asynchronously triggers state change notification if no notification scopes are active.
+	/// </summary>
+	/// <remarks>
+	/// Call this from async state mutation methods to signal that the state has changed.
+	/// When active scopes exist, notification is suppressed until the outermost scope completes,
+	/// batching multiple mutations into a single notification.
+	/// </remarks>
+	protected virtual async Task NotifyStateChangedAsync() {
+		if (this._scopeCount > 0) {
+			return;
+		}
+		await this.OnStateHasChangedAsync();
+	}
+
+	// -------------------------------------------------------------------------
+	// Internal Scope Tracking
+	// -------------------------------------------------------------------------
+
+	private void StartNewScope() => Interlocked.Increment(ref this._scopeCount);
+
 	private void EndScopeAndTryNotify() {
-		this._scopeCount--;
-		if (this._scopeCount == 0) {
+		var count = Interlocked.Decrement(ref this._scopeCount);
+		if (count == 0) {
 			this.OnStateHasChanged();
-		} else if (this._scopeCount < 0) {
+		} else if (count < 0) {
 			throw new InvalidOperationException("Notification scope ended without a matching start.");
 		}
 	}
-	private sealed class NotificationScope(Action endBatch) : IDisposable, IAsyncDisposable {
+
+	private async Task EndScopeAndTryNotifyAsync() {
+		var count = Interlocked.Decrement(ref this._scopeCount);
+		if (count == 0) {
+			await this.OnStateHasChangedAsync();
+		} else if (count < 0) {
+			throw new InvalidOperationException("Notification scope ended without a matching start.");
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Scope Tokens
+	// -------------------------------------------------------------------------
+
+	/// <summary>
+	/// Synchronous notification scope token. Calls the end-scope action on dispose.
+	/// </summary>
+	private sealed class NotificationScope(Action endScope) : IDisposable {
 		private bool _isDisposed;
 
 		public void Dispose() {
 			if (!this._isDisposed) {
 				this._isDisposed = true;
-				endBatch();
+				endScope();
 			}
 		}
+	}
 
-		public ValueTask DisposeAsync() {
-			this.Dispose();
-			return ValueTask.CompletedTask;
+	/// <summary>
+	/// Asynchronous notification scope token. Calls the async end-scope action on dispose.
+	/// </summary>
+	private sealed class AsyncNotificationScope(Func<Task> endScope) : IAsyncDisposable {
+		private bool _isDisposed;
+
+		public async ValueTask DisposeAsync() {
+			if (!this._isDisposed) {
+				this._isDisposed = true;
+				await endScope();
+			}
 		}
 	}
 
