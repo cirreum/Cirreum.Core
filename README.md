@@ -64,6 +64,35 @@ Flexible, policy-based authorization with support for both RBAC and ABAC pattern
 - Built-in Authorization visualizers and documenters
 - Flexible AuthN/AuthZ with support for OIDC/MSAL
 
+### 📡 State Management
+
+A dual-path state notification system designed for Blazor WASM's unique runtime characteristics:
+
+- `IApplicationState` — marker for all state types
+- `IAsyncApplicationState` — marker for state types that notify asynchronously; enforced at compile time via generic type constraints on `IStateManager`
+- `IStateManager` — central orchestrator for state retrieval, subscription, and notification
+- `IScopedNotificationState` — batched notification with nested scope support
+- `ScopedNotificationState` — base class providing sync and async notification hooks
+
+**Two notification paths — not interchangeable:**
+
+In Blazor WASM, JavaScript runs on the same thread as .NET, enabling direct synchronous JS interop with zero task scheduling overhead. Collapsing to a single async path would eliminate this performance characteristic.
+
+```csharp
+// Sync — JS interop, in-memory UI state, theme, page state
+stateManager.Subscribe<IThemeState>(state => jsModule.ApplyTheme(state.Current));
+stateManager.NotifySubscribers<IThemeState>();
+
+// Async — persistence, navigation, app user hydration
+// Requires IAsyncApplicationState — enforced at compile time
+stateManager.SubscribeAsync<IUserState>(async state =>
+{
+    await storage.SetAsync("userId", state.Id);
+    navigation.NavigateTo(state.IsNewUser ? Routes.Onboard : Routes.Dashboard);
+});
+await stateManager.NotifySubscribersAsync<IUserState>();
+```
+
 ### 🚀 Messaging & CQRS (Cirreum Conductor)
 
 A high-performance mediator implementation with comprehensive pipeline support for command/query separation:
@@ -258,6 +287,7 @@ Cirreum.Core/
 │   ├── Authorization/        # IAuthorizationEvaluator, IAuthorizableResource
 │   ├── Identity/             # IUserState, IUserStateAccessor
 │   ├── Messaging/            # Request/response contracts
+│   ├── State/                # IApplicationState, IAsyncApplicationState, IStateManager
 │   └── Environment/          # Runtime and environment abstractions
 ├── Contexts/
 │   ├── OperationContext.cs   # Canonical operational context
@@ -265,7 +295,7 @@ Cirreum.Core/
 │   └── AuthorizationContext.cs # Authorization decision context
 ├── Primitives/
 │   ├── Identifiers/          # Operation IDs, correlation IDs
-│   ├── Markers/              # Interface markers and tags
+│   ├── Markers/              # Interface markers — IApplicationState, IAsyncApplicationState
 │   └── Metadata/             # Context metadata carriers
 ├── Patterns/
 │   ├── Validators/           # Base validator implementations
