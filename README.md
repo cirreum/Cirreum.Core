@@ -190,7 +190,6 @@ Cirreum.Core is intentionally lightweight, but not dependency-free. It includes 
 - `Microsoft.Extensions.Configuration.Json` - Configuration management
 - `Microsoft.Extensions.Configuration.Binder` - Configuration binding
 - `FluentValidation` - Validation and Authorization rules
-- `Humanizer.Core` - Human-readable transformations
 - `SmartFormat` - String formatting
 - `CsvHelper` - CSV processing
 
