@@ -1,10 +1,14 @@
 ﻿namespace Cirreum;
 
 /// <summary>
-/// Marker interface that application domain users must implement 
-/// to participate in the authorization system.
+/// Implemented by application-layer User entities that are persisted
+/// independently of the identity provider, enabling the authorization
+/// system to enforce application-specific access rules.
 /// </summary>
 public interface IApplicationUser {
-	// Marker interface - no required members
-	// Applications define their own domain user structure
+	/// <summary>
+	/// Gets a value indicating whether this user is active.
+	/// A disabled user is treated as anonymous regardless of their IdP identity.
+	/// </summary>
+	bool IsEnabled { get; }
 }

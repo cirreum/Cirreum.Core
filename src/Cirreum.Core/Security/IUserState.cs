@@ -161,4 +161,10 @@ public interface IUserState : IUserSession {
 	/// </example>
 	T? GetApplicationUser<T>() where T : class, IApplicationUser;
 
+	/// <summary>
+	/// Gets a value indicating whether the application state and the user are ready
+	/// and permitted to use the application.
+	/// </summary>
+	bool IsReady { get; }
+
 }
