@@ -1,4 +1,4 @@
-﻿namespace Cirreum;
+﻿namespace Cirreum.State;
 
 using System.Text;
 

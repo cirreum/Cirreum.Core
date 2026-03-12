@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// An <see cref="IPersistableStateContainer "/> object intended to be persisted to local storage via an 
 /// <see cref="ILocalStatePersistence"/> service.

@@ -1,5 +1,7 @@
 ﻿namespace Cirreum.Security;
 
+using Cirreum.State;
+
 /// <summary>
 /// Defines the contract for managing user session state and activity tracking.
 /// Provides functionality to monitor session duration, track user activity, 

@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// Marker interface extending <see cref="IStatePersistence"/> for local state persistence.
 /// </summary>

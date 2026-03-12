@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// Marker interface for state types that notify subscribers asynchronously.
 /// </summary>

@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// Defines an encryption implementation for protecting state container values.
 /// </summary>

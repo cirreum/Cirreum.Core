@@ -1,6 +1,6 @@
 ﻿namespace Cirreum.Presence;
 
-using Cirreum;
+using Cirreum.State;
 
 public interface IUserPresenceState : IScopedNotificationState {
 	/// <summary>

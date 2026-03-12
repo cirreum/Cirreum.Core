@@ -1,4 +1,4 @@
-﻿namespace Cirreum;
+﻿namespace Cirreum.State;
 
 /// <summary>
 /// Defines the methods to save or restore state from storage.

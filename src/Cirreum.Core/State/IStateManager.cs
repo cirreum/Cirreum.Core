@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// Central orchestrator for application state management, providing state
 /// retrieval, subscription, and notification capabilities.

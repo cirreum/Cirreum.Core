@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// Provides a registry for encryption algorithm kind identifiers to prevent conflicts and enable discovery.
 /// </summary>

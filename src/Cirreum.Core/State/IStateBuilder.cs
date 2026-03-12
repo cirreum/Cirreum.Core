@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// Builder interface for registering state sections with the dependency injection container.
 /// </summary>
@@ -59,6 +58,45 @@ public interface IStateBuilder {
 	/// </example>
 	IStateBuilder RegisterState<TImplementation>()
 		where TImplementation : class, IApplicationState;
+
+	/// <summary>
+	/// Registers a remote state implementation with the dependency injection container.
+	/// </summary>
+	/// <typeparam name="TInterface">The interface type for the remote state. Must implement <see cref="IRemoteState"/>.</typeparam>
+	/// <typeparam name="TImplementation">The implementation type for the remote state.</typeparam>
+	/// <returns>The state builder for method chaining.</returns>
+	/// <remarks>
+	/// <para>
+	/// Remote state provides in-memory caching for domain data fetched from backend services.
+	/// The state is registered as a scoped service and integrated with the State notification
+	/// system via <see cref="IApplicationState"/>.
+	/// </para>
+	/// <para>
+	/// If the implementation type also implements <see cref="IInitializable"/>
+	/// (typically via <see cref="IInitializableRemoteState"/>), it is explicitly
+	/// registered as an <see cref="IInitializable"/> scoped service, making it
+	/// discoverable by the <see cref="IInitializationOrchestrator"/>. These states
+	/// are initialized during Phase 2 of application startup, ordered by
+	/// <see cref="IInitializable.Order"/>, and only when
+	/// <see cref="IInitializable.ShouldInitialize"/> returns <see langword="true"/>.
+	/// Note that Phase 1 (authentication, user loading, profile enrichment) always
+	/// completes before any Phase 2 initializable runs.
+	/// </para>
+	/// </remarks>
+	/// <example>
+	/// <code>
+	/// builder.AddClientState(state => state
+	///     .RegisterState&lt;INavMenuState, NavMenuState&gt;()
+	///     .RegisterRemoteState&lt;IEventsState, EventsState&gt;()
+	///     .RegisterRemoteState&lt;IProductsState, ProductsState&gt;()
+	/// );
+	/// </code>
+	/// </example>
+	/// <seealso cref="IRemoteState"/>
+	/// <seealso cref="IInitializableRemoteState"/>
+	public IStateBuilder RegisterRemoteState<TInterface, TImplementation>()
+		where TInterface : class, IRemoteState
+		where TImplementation : class, TInterface;
 
 	/// <summary>
 	/// Registers an encryption implementation for state containers.

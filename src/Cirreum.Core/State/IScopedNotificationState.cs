@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// Provides batched state change notifications with scoping capabilities.
 /// </summary>

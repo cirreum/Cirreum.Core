@@ -16,6 +16,17 @@ public interface IUserState : IUserSession {
 	bool IsAuthenticated { get; }
 
 	/// <summary>
+	/// Gets a value indicating whether the user authentication processing completed
+	/// and all user related state is settled. Consumers can safely read properties
+	/// without encountering stale or partial data.
+	/// </summary>
+	/// <remarks>
+	/// This is only relative to an authenticated user. For an anonymous user, this value
+	/// is typically <see langword="false"/> or not applicable.
+	/// </remarks>
+	bool IsAuthenticationComplete { get; }
+
+	/// <summary>
 	/// The application user id. Typically from the 'sub' claim.
 	/// </summary>
 	/// <remarks>
@@ -160,11 +171,5 @@ public interface IUserState : IUserSession {
 	/// </code>
 	/// </example>
 	T? GetApplicationUser<T>() where T : class, IApplicationUser;
-
-	/// <summary>
-	/// Gets a value indicating whether the application state and the user are ready
-	/// and permitted to use the application.
-	/// </summary>
-	bool IsReady { get; }
 
 }

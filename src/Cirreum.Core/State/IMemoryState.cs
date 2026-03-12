@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// An <see cref="IStateContainer"/> object intended to store state in-memory,
 /// exposing dynamic properties via <see cref="IStateValueHandle{T}"/> instances.

@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// Represents theme-related state for the current scope, including:
 /// <list type="bullet">

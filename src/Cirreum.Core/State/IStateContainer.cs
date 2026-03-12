@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// Provides a key-value storage abstraction for state management with automatic change notifications.
 /// </summary>

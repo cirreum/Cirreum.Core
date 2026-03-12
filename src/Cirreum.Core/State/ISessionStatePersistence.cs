@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// Marker interface extending <see cref="IStatePersistence"/> for session state persistence.
 /// </summary>

@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// An <see cref="IPersistableStateContainer "/> object intended to be persisted to session storage via an 
 /// <see cref="ISessionStatePersistence"/> service.

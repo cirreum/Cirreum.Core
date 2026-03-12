@@ -1,5 +1,4 @@
-﻿namespace Cirreum;
-
+﻿namespace Cirreum.State;
 /// <summary>
 /// Abstract base class for state that provides notification scoping and batching functionality.
 /// </summary>

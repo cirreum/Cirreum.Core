@@ -21,12 +21,8 @@ public abstract class UserStateBase : IUserState {
 	/// <inheritdoc/>
 	public bool IsAuthenticated => this._isAuthenticated;
 
-	/// <summary>
-	/// Gets a value indicating whether the user state pipeline has completed
-	/// and all state is settled. Consumers can safely read properties without
-	/// encountering stale or partial data.
-	/// </summary>
-	public abstract bool IsReady { get; }
+	/// <inheritdoc/>
+	public abstract bool IsAuthenticationComplete { get; }
 
 	/// <inheritdoc/>
 	public string Id => this._profile.Id;
