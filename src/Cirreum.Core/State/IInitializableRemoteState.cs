@@ -12,7 +12,7 @@
 /// This interface combines <see cref="IRemoteState"/> (for data loading and state management)
 /// with <see cref="IInitializable"/> (for ordered startup initialization with progress tracking).
 /// The <see cref="IInitializable.InitializeAsync"/> implementation delegates to
-/// <see cref="IRemoteState.LoadAsync"/>.
+/// <see cref="IRemoteState.LoadAsync(CancellationToken)"/>.
 /// </para>
 /// </remarks>
 /// <seealso cref="IInitializationOrchestrator"/>

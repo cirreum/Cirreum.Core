@@ -1,4 +1,5 @@
 ﻿namespace Cirreum.State;
+
 /// <summary>
 /// Defines the core contract for a remote state object that manages in-memory domain data
 /// fetched from backend services.
@@ -54,11 +55,23 @@ public interface IRemoteState : IApplicationState {
 	/// <summary>
 	/// Loads data if not already loaded or loading.
 	/// </summary>
-	Task LoadAsync(CancellationToken cancellationToken = default);
+	Task LoadAsync();
+
+	/// <summary>
+	/// Loads data if not already loaded or loading.
+	/// </summary>
+	/// <param name="cancellationToken">A token to cancel the operation.</param>
+	Task LoadAsync(CancellationToken cancellationToken);
 
 	/// <summary>
 	/// Refreshes data if not already loading or refreshing.
 	/// </summary>
-	Task RefreshAsync(CancellationToken cancellationToken = default);
+	Task RefreshAsync();
+
+	/// <summary>
+	/// Refreshes data if not already loading or refreshing.
+	/// </summary>
+	/// <param name="cancellationToken">A token to cancel the operation.</param>
+	Task RefreshAsync(CancellationToken cancellationToken);
 
 }
