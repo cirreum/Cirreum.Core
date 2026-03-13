@@ -66,32 +66,53 @@ Flexible, policy-based authorization with support for both RBAC and ABAC pattern
 
 ### 📡 State Management
 
-A dual-path state notification system designed for Blazor WASM's unique runtime characteristics:
+A synchronous state notification system designed for Blazor WASM's single-threaded runtime:
 
-- `IApplicationState` — marker for all state types
-- `IAsyncApplicationState` — marker for state types that notify asynchronously; enforced at compile time via generic type constraints on `IStateManager`
+**Core Infrastructure**
+- `IApplicationState` — marker interface for all state types
 - `IStateManager` — central orchestrator for state retrieval, subscription, and notification
 - `IScopedNotificationState` — batched notification with nested scope support
-- `ScopedNotificationState` — base class providing sync and async notification hooks
-
-**Two notification paths — not interchangeable:**
-
-In Blazor WASM, JavaScript runs on the same thread as .NET, enabling direct synchronous JS interop with zero task scheduling overhead. Collapsing to a single async path would eliminate this performance characteristic.
+- `ScopedNotificationState` — base class with thread-safe scope counting via `Interlocked`
 
 ```csharp
-// Sync — JS interop, in-memory UI state, theme, page state
+// Subscribe and notify
 stateManager.Subscribe<IThemeState>(state => jsModule.ApplyTheme(state.Current));
 stateManager.NotifySubscribers<IThemeState>();
 
-// Async — persistence, navigation, app user hydration
-// Requires IAsyncApplicationState — enforced at compile time
-stateManager.SubscribeAsync<IUserState>(async state =>
-{
-    await storage.SetAsync("userId", state.Id);
-    navigation.NavigateTo(state.IsNewUser ? Routes.Onboard : Routes.Dashboard);
-});
-await stateManager.NotifySubscribersAsync<IUserState>();
+// Batch multiple mutations into a single notification
+using var scope = state.CreateNotificationScope();
+state.SetA(a);
+state.SetB(b);
+// single notification fires when scope disposes
 ```
+
+**Built-in State Contracts**
+- `IPageState` — page title composition (prefix, suffix, separator) and PWA detection
+- `IThemeState` — theme mode (`light`/`dark`/`auto`), applied mode, and palette selection
+- `INotificationState` — in-app notification management with read/dismiss semantics
+- `IInitializationState` — startup progress tracking with task counting and error collection
+
+**State Containers**
+- `IStateContainer` → `IPersistableStateContainer` — key-value storage with typed handles and serialization
+- `ISessionState` / `ILocalState` / `IMemoryState` — browser session, local, and in-memory storage markers
+- `IStateValueHandle<T>` — typed handle for individual state values with change notification
+- `IStateContainerEncryption` — pluggable encryption/obfuscation for persisted values
+
+**Remote State**
+- `IRemoteState` — domain data fetched from APIs and cached in memory with `IsLoaded`/`IsLoading`/`IsRefreshing` lifecycle
+- `IInitializableRemoteState` — remote state that participates in startup initialization
+
+**Initialization Pipeline**
+- `IInitializationOrchestrator` — coordinates two-phase startup (auth → app services)
+- `IInitializable` — contract for services that participate in ordered, conditional startup initialization
+
+**Identity & Session**
+- `IUserState` — current user context (auth status, claims, profile, application user binding)
+- `IUserSession` — session tracking with activity timestamps and expiration
+- `IApplicationUser` — application-layer user entity independent of identity provider
+
+**Registration**
+- `IStateBuilder` — fluent builder for DI registration of state types, remote state, and encryption
 
 ### 🚀 Messaging & CQRS (Cirreum Conductor)
 
@@ -126,8 +147,7 @@ A high-performance mediator implementation with comprehensive pipeline support f
 Battle-tested building blocks:
 
 - High-precision timing with `StartTimestamp`
-- Environment and runtime context
-- Identity and user state abstractions
+- Environment and runtime context abstractions
 - Correlation and operation tracking
 
 ## Responsibilities
@@ -176,7 +196,6 @@ Common functionality implemented using a curated set of stable dependencies:
 
 - **SmartFormat** for formatting and templating
 - **FluentValidation** for rule-based validation
-- **Humanizer** for readable string and value transformations
 - **CsvHelper** for import/export workflows
 
 ## Dependencies
@@ -284,9 +303,9 @@ public class MyValidator : IAuthorizationValidator<MyResource>
 Cirreum.Core/
 ├── Abstractions/
 │   ├── Authorization/        # IAuthorizationEvaluator, IAuthorizableResource
-│   ├── Identity/             # IUserState, IUserStateAccessor
+│   ├── Identity/             # IUserState, IUserSession, IApplicationUser
 │   ├── Messaging/            # Request/response contracts
-│   ├── State/                # IApplicationState, IAsyncApplicationState, IStateManager
+│   ├── State/                # State management contracts (see below)
 │   └── Environment/          # Runtime and environment abstractions
 ├── Contexts/
 │   ├── OperationContext.cs   # Canonical operational context
@@ -294,7 +313,7 @@ Cirreum.Core/
 │   └── AuthorizationContext.cs # Authorization decision context
 ├── Primitives/
 │   ├── Identifiers/          # Operation IDs, correlation IDs
-│   ├── Markers/              # Interface markers — IApplicationState, IAsyncApplicationState
+│   ├── Markers/              # Interface markers
 │   └── Metadata/             # Context metadata carriers
 ├── Patterns/
 │   ├── Validators/           # Base validator implementations

@@ -39,7 +39,6 @@
 ///     public List&lt;CartItem&gt; Items { get; set; } = new();
 ///     
 ///     public IDisposable CreateNotificationScope() { /* implementation */ }
-///     public IAsyncDisposable CreateNotificationScopeAsync() { /* implementation */ }
 /// }
 /// 
 /// // Generic constraint usage

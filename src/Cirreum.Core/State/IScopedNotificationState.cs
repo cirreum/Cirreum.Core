@@ -28,14 +28,6 @@
 ///     userState.LastModified = DateTime.Now;
 ///     // Single notification sent here when scope disposes
 /// }
-/// 
-/// // Async version for async operations
-/// await using (myState.CreateNotificationScopeAsync())
-/// {
-///     await userState.LoadProfileAsync();
-///     await userState.UpdatePreferencesAsync();
-///     // Single notification sent here when scope disposes
-/// }
 /// </code>
 /// </example>
 public interface IScopedNotificationState : IApplicationState {
@@ -53,8 +45,7 @@ public interface IScopedNotificationState : IApplicationState {
 	/// ensuring that complex, multi-layered state operations are treated as atomic units.
 	/// </para>
 	/// <para>
-	/// Use this method when all state operations within the scope are synchronous.
-	/// For scenarios involving async operations, prefer <see cref="CreateNotificationScopeAsync"/>.
+	/// Use this method to batch multiple state changes into a single notification event.
 	/// </para>
 	/// </remarks>
 	/// <example>
@@ -69,36 +60,5 @@ public interface IScopedNotificationState : IApplicationState {
 	/// </code>
 	/// </example>
 	IDisposable CreateNotificationScope();
-
-	/// <summary>
-	/// Creates an asynchronous scope that batches and delays state change notifications until the scope is disposed.
-	/// </summary>
-	/// <returns>
-	/// An <see cref="IAsyncDisposable"/> scope that will trigger batched notifications when disposed asynchronously.
-	/// </returns>
-	/// <remarks>
-	/// <para>
-	/// Multiple state changes within the scope will be consolidated into a single notification event.
-	/// Nested scopes are supported - notifications are only sent when the outermost scope is disposed,
-	/// ensuring that complex, multi-layered state operations are treated as atomic units.
-	/// </para>
-	/// <para>
-	/// Use this method when the scope contains asynchronous operations or when the notification
-	/// process itself may involve async work (such as persistence operations).
-	/// </para>
-	/// </remarks>
-	/// <example>
-	/// <code>
-	/// await using (myState.CreateNotificationScopeAsync())
-	/// {
-	///     // Mix of sync and async state changes
-	///     myState.Property1 = newValue1;
-	///     await myState.LoadDataAsync();
-	///     myState.Property2 = newValue2;
-	///     // Only one notification triggered when using block exits
-	/// }
-	/// </code>
-	/// </example>
-	IAsyncDisposable CreateNotificationScopeAsync();
 
 }
