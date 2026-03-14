@@ -7,16 +7,21 @@ using Cirreum.Security;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Services implementing this interface are discovered and initialized by the
-/// <see cref="IInitializationOrchestrator"/> during application startup. They integrate
-/// with <see cref="IInitializationState"/> to provide progress updates for splash screens
-/// or loading indicators.
+/// Services implementing this interface are discovered and executed by the
+/// <see cref="IInitializationOrchestrator"/> during application startup.
+/// </para>
+/// <para>
+/// Initializables contribute to the overall startup workflow while reporting
+/// user-facing status through <see cref="IActivityState"/>. This allows the
+/// application to present splash screens, loading overlays, or progress indicators
+/// while initialization work is being performed.
 /// </para>
 /// <para>
 /// The <see cref="DisplayName"/> and <see cref="InitializationMessage"/> properties
-/// provide user-friendly status updates, while <see cref="Order"/> controls the
-/// initialization sequence. The <see cref="ShouldInitialize"/> method allows services
-/// to opt out of initialization based on runtime conditions.
+/// provide user-friendly metadata for status reporting, while <see cref="Order"/>
+/// controls execution order. <see cref="ShouldInitialize"/> allows an
+/// implementation to opt out of the current initialization cycle based on
+/// runtime conditions such as authentication state or user context.
 /// </para>
 /// </remarks>
 /// <example>
@@ -38,43 +43,54 @@ using Cirreum.Security;
 /// }
 /// </code>
 /// </example>
-/// <seealso cref="IInitializationState"/>
+/// <seealso cref="IActivityState"/>
 /// <seealso cref="IInitializationOrchestrator"/>
 public interface IInitializable {
 
 	/// <summary>
-	/// Gets the display name of this initializable service.
+	/// Gets the display name of this initializer.
 	/// </summary>
+	/// <remarks>
+	/// This value is intended for user-facing and diagnostic scenarios, such as
+	/// activity reporting and error logging.
+	/// </remarks>
 	string DisplayName { get; }
 
 	/// <summary>
-	/// Gets the message that describes the initialization process.
+	/// Gets the default message that describes the initialization work being performed.
 	/// </summary>
+	/// <remarks>
+	/// The orchestrator may use this value as the initial activity status before
+	/// invoking <see cref="InitializeAsync"/>.
+	/// </remarks>
 	/// <example>"Loading Events..."</example>
 	string InitializationMessage { get; }
 
 	/// <summary>
-	/// Gets the order in which this service is initialized relative to others.
-	/// Lower values execute first. Default convention is 1000.
+	/// Gets the order in which this initializer executes relative to others.
 	/// </summary>
+	/// <remarks>
+	/// Lower values execute first. The default convention is 1000.
+	/// </remarks>
 	int Order { get; }
 
 	/// <summary>
-	/// Determines whether this service should participate in the current
+	/// Determines whether this initializer should participate in the current
 	/// initialization cycle.
 	/// </summary>
 	/// <param name="userState">
-	/// The current user state, enabling conditional initialization based on
-	/// authentication or user context.
+	/// The current user state, allowing the initializer to make decisions based on
+	/// authentication or other user context.
 	/// </param>
 	/// <returns>
-	/// <see langword="true"/> if the service should initialize;
-	/// <see langword="false"/> to skip initialization.
+	/// <see langword="true"/> if this initializer should run for the current cycle;
+	/// otherwise, <see langword="false"/>.
 	/// </returns>
 	/// <remarks>
-	/// Use this to conditionally opt out of initialization based on runtime state.
-	/// For example, a service that requires authentication can return <see langword="false"/>
-	/// when <see cref="IUserState.IsAuthenticated"/> is <see langword="false"/>.
+	/// Use this method to conditionally opt out of initialization at runtime.
+	/// For example, an initializer that requires an authenticated user can return
+	/// <see langword="false"/> when <see cref="IUserState.IsAuthenticated"/> is
+	/// <see langword="false"/>.
 	/// </remarks>
 	bool ShouldInitialize(IUserState userState);
 
@@ -82,15 +98,19 @@ public interface IInitializable {
 	/// Performs the initialization work for this service.
 	/// </summary>
 	/// <param name="updateStatus">
-	/// A callback to update the splash screen status message during initialization.
-	/// Call this to provide granular progress within a long-running task
-	/// (e.g., <c>updateStatus("Loading page 2 of 5...")</c>). The orchestrator
-	/// sets the initial status from <see cref="InitializationMessage"/> before
-	/// calling this method, so calling <paramref name="updateStatus"/> is optional.
+	/// A callback that updates the current activity status message.
+	/// Implementations may call this to report finer-grained progress within
+	/// a long-running initialization step, such as
+	/// <c>updateStatus("Loading page 2 of 5...")</c>.
+	/// The orchestrator should set the initial status from
+	/// <see cref="InitializationMessage"/> before invoking this method, so
+	/// calling <paramref name="updateStatus"/> is optional.
 	/// </param>
 	/// <param name="cancellationToken">
 	/// A token to monitor for cancellation requests.
 	/// </param>
+	/// <returns>
+	/// A task that represents the asynchronous initialization operation.
+	/// </returns>
 	Task InitializeAsync(Action<string> updateStatus, CancellationToken cancellationToken = default);
-
 }

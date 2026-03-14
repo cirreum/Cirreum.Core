@@ -1,64 +1,55 @@
 ﻿namespace Cirreum.State;
+
 /// <summary>
-/// Provides batched state change notifications with scoping capabilities.
+/// Provides scoped control over state change notifications.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This interface enables efficient state management by allowing multiple state changes 
-/// to be batched into a single notification event. This is particularly useful in scenarios where:
+/// This interface allows state implementations to suppress state change notifications
+/// while a notification scope is active. It is useful when multiple related state
+/// mutations occur together and intermediate notifications should be deferred.
 /// </para>
-/// <list type="bullet">
-/// <item><description>Multiple related state properties are updated together</description></item>
-/// <item><description>You want to prevent excessive UI re-renders in response frameworks like Blazor</description></item>
-/// <item><description>Complex state operations need to be treated as atomic units</description></item>
-/// <item><description>Performance optimization is needed when many rapid state changes occur</description></item>
-/// </list>
 /// <para>
-/// The scoping mechanism supports nested operations, ensuring that notifications are only 
-/// triggered when the outermost scope completes, similar to transaction boundaries in databases.
+/// Notification scopes may be nested. Implementations should treat the outermost
+/// scope boundary as the point at which deferred notification behavior is resolved.
 /// </para>
 /// </remarks>
 /// <example>
 /// <code>
-/// // Batch multiple state changes into a single notification
 /// using (myState.CreateNotificationScope())
 /// {
 ///     userState.Name = "John Doe";
 ///     userState.Email = "john@example.com";
 ///     userState.LastModified = DateTime.Now;
-///     // Single notification sent here when scope disposes
 /// }
 /// </code>
 /// </example>
 public interface IScopedNotificationState : IApplicationState {
 
 	/// <summary>
-	/// Creates a synchronous scope that batches and delays state change notifications until the scope is disposed.
+	/// Creates a notification scope that defers notification behavior until the scope is disposed.
 	/// </summary>
 	/// <returns>
-	/// An <see cref="IDisposable"/> scope that will trigger batched notifications when disposed.
+	/// An <see cref="IDisposable"/> that represents the active notification scope.
 	/// </returns>
 	/// <remarks>
 	/// <para>
-	/// Multiple state changes within the scope will be consolidated into a single notification event.
-	/// Nested scopes are supported - notifications are only sent when the outermost scope is disposed,
-	/// ensuring that complex, multi-layered state operations are treated as atomic units.
+	/// While a notification scope is active, state change notifications may be suppressed
+	/// or deferred by the implementation.
 	/// </para>
 	/// <para>
-	/// Use this method to batch multiple state changes into a single notification event.
+	/// Notification scopes may be nested. Implementations should resolve deferred
+	/// notification behavior when the outermost scope completes.
 	/// </para>
 	/// </remarks>
 	/// <example>
 	/// <code>
 	/// using (myState.CreateNotificationScope())
 	/// {
-	///     // Multiple state changes here
 	///     myState.Property1 = newValue1;
 	///     myState.Property2 = newValue2;
-	///     // Only one notification triggered when using block exits
 	/// }
 	/// </code>
 	/// </example>
 	IDisposable CreateNotificationScope();
-
 }

@@ -24,7 +24,7 @@ public abstract class ScopedNotificationState : IScopedNotificationState {
 	/// <inheritdoc/>
 	public IDisposable CreateNotificationScope() {
 		this.StartNewScope();
-		return new NotificationScope(this.EndScopeAndTryNotify);
+		return new NotificationScope(this.EndScopeAndAttemptNotify);
 	}
 
 	// -------------------------------------------------------------------------
@@ -32,17 +32,18 @@ public abstract class ScopedNotificationState : IScopedNotificationState {
 	// -------------------------------------------------------------------------
 
 	/// <summary>
-	/// Called when state changes and all notification scopes have completed.
+	/// Invoked after the state has changed and notifications should be dispatched.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Override this method to provide state-specific notification logic. Typically,
-	/// implementations call <c>stateManager.NotifySubscribers&lt;TStateInterface&gt;(this)</c>
-	/// to notify subscribers — for example, JS interop or lightweight in-memory UI state.
+	/// Override this method to implement state-specific notification logic. Implementations
+	/// typically call <c>stateManager.NotifySubscribers&lt;TStateInterface&gt;(this)</c>
+	/// to notify subscribers such as UI components or other state observers.
 	/// </para>
 	/// <para>
-	/// This method is called by <see cref="NotifyStateChanged"/> and by
-	/// <see cref="CreateNotificationScope"/> when the outermost scope completes.
+	/// This method is invoked by <see cref="NotifyStateChanged"/> when no notification
+	/// scopes are active. It is also invoked by <see cref="CreateNotificationScope"/>
+	/// when the outermost notification scope completes.
 	/// </para>
 	/// </remarks>
 	/// <example>
@@ -59,12 +60,14 @@ public abstract class ScopedNotificationState : IScopedNotificationState {
 	// -------------------------------------------------------------------------
 
 	/// <summary>
-	/// Triggers state change notification if no notification scopes are active.
+	/// Triggers a state change notification.
 	/// </summary>
 	/// <remarks>
-	/// Call this from state mutation methods to signal that the state has changed.
-	/// When active scopes exist, notification is suppressed until the outermost scope completes,
-	/// batching multiple mutations into a single notification.
+	/// This method should be called from state mutation methods to signal that the
+	/// state has changed.
+	/// <para>
+	/// If one or more notification scopes are active, the notification is suppressed.
+	/// </para>
 	/// </remarks>
 	protected virtual void NotifyStateChanged() {
 		if (this._scopeCount > 0) {
@@ -79,7 +82,7 @@ public abstract class ScopedNotificationState : IScopedNotificationState {
 
 	private void StartNewScope() => Interlocked.Increment(ref this._scopeCount);
 
-	private void EndScopeAndTryNotify() {
+	private void EndScopeAndAttemptNotify() {
 		var count = Interlocked.Decrement(ref this._scopeCount);
 		if (count == 0) {
 			this.OnStateHasChanged();

@@ -3,7 +3,7 @@
 /// <summary>
 /// Orchestrates application initialization, coordinating all registered
 /// <see cref="IInitializable"/> services and reporting progress through
-/// <see cref="IInitializationState"/>.
+/// <see cref="IActivityState"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -26,20 +26,21 @@
 ///     <description>
 ///       <strong>Phase 2 — App-registered:</strong> All <see cref="IInitializable"/>
 ///       services that return <see langword="true"/> from <see cref="IInitializable.ShouldInitialize"/>,
-///       executed in <see cref="IInitializable.Order"/> sequence.
+///       executed in ascending <see cref="IInitializable.Order"/> order.
 ///     </description>
 ///   </item>
 /// </list>
 /// <para>
-/// The <see cref="Start"/> method synchronously sets <see cref="IInitializationState.IsInitializing"/>
-/// to <see langword="true"/> before returning, ensuring that no rendering gap exists where
-/// the application could briefly appear ready before initialization begins.
+/// The <see cref="Start"/> method should synchronously begin tracked activity
+/// before returning so that <see cref="IActivityState.IsActive"/> becomes
+/// <see langword="true"/> immediately. This prevents a rendering gap where the
+/// application could briefly appear ready before initialization begins.
 /// </para>
 /// </remarks>
 public interface IInitializationOrchestrator {
 
 	/// <summary>
-	/// Gets a value indicating whether initialization has been triggered.
+	/// Gets a value indicating whether initialization has started.
 	/// </summary>
 	bool HasStarted { get; }
 
@@ -57,11 +58,12 @@ public interface IInitializationOrchestrator {
 	/// started has no effect.
 	/// </para>
 	/// <para>
-	/// The method synchronously marks initialization as started (setting
-	/// <see cref="IInitializationState.IsInitializing"/> to <see langword="true"/>)
-	/// and then begins the asynchronous initialization work. This ensures that
-	/// callers can check <see cref="IInitializationState.IsInitializing"/> immediately
-	/// after calling <see cref="Start"/> without a race condition.
+	/// The <see cref="Start"/> method should synchronously begin tracked activity
+	/// before returning so that <see cref="IActivityState.IsActive"/> becomes
+	/// <see langword="true"/> immediately. This prevents a rendering gap where the
+	/// application could briefly appear ready before initialization work begins.
+	/// Implementations typically accomplish this by starting an initial
+	/// indeterminate task prior to launching the asynchronous initialization pipeline.
 	/// </para>
 	/// </remarks>
 	void Start();
