@@ -16,13 +16,22 @@ public interface IUserState : IUserSession {
 	bool IsAuthenticated { get; }
 
 	/// <summary>
-	/// Gets a value indicating whether the user authentication processing completed
-	/// and all user related state is settled. Consumers can safely read properties
-	/// without encountering stale or partial data.
+	/// Gets a value indicating whether authentication state has been fully resolved —
+	/// either an authenticated identity has been established or the user has been
+	/// confirmed as anonymous. Consumers can safely read identity-related properties
+	/// such as <see cref="IsAuthenticated"/> and <see cref="Principal"/>.
 	/// </summary>
 	/// <remarks>
-	/// This is only relative to an authenticated user. For an anonymous user, this value
-	/// is typically <see langword="false"/> or not applicable.
+	/// <para>
+	/// <c>ApplicationUser</c> and full <c>UserProfile</c> enrichment properties may
+	/// still be unresolved at this point.
+	/// </para>
+	/// <para>
+	/// This becomes <see langword="true"/> on the first call to either
+	/// <c>SetAuthenticatedPrincipal</c> or <c>SetAnonymous</c> — whichever occurs first.
+	/// For no-auth applications, this is set to <see langword="true"/> immediately
+	/// during startup before any component initializes.
+	/// </para>
 	/// </remarks>
 	bool IsAuthenticationComplete { get; }
 
