@@ -31,10 +31,8 @@
 ///   </item>
 /// </list>
 /// <para>
-/// The <see cref="Start"/> method should synchronously begin tracked activity
-/// before returning so that <see cref="IActivityState.IsActive"/> becomes
-/// <see langword="true"/> immediately. This prevents a rendering gap where the
-/// application could briefly appear ready before initialization begins.
+/// Initialization errors should be tracked by <see cref="IActivityState"/> and can be
+/// interrogated there after <see cref="HasCompleted"/> is <see langword="true"/>.
 /// </para>
 /// </remarks>
 public interface IInitializationOrchestrator {
@@ -50,22 +48,32 @@ public interface IInitializationOrchestrator {
 	bool HasCompleted { get; }
 
 	/// <summary>
-	/// Triggers the initialization pipeline.
+	/// Triggers the initialization pipeline asynchronously.
 	/// </summary>
+	/// <param name="cancellationToken">
+	/// A <see cref="CancellationToken"/> that can be used to cancel the initialization
+	/// pipeline. Typically provided by the calling component's lifetime scope so that
+	/// in-progress initialization is cancelled if the component is disposed.
+	/// </param>
 	/// <remarks>
 	/// <para>
 	/// This method is idempotent — calling it after initialization has already
 	/// started has no effect.
 	/// </para>
 	/// <para>
-	/// The <see cref="Start"/> method should synchronously begin tracked activity
-	/// before returning so that <see cref="IActivityState.IsActive"/> becomes
-	/// <see langword="true"/> immediately. This prevents a rendering gap where the
-	/// application could briefly appear ready before initialization work begins.
-	/// Implementations typically accomplish this by starting an initial
-	/// indeterminate task prior to launching the asynchronous initialization pipeline.
+	/// The caller is responsible for ensuring <see cref="IActivityState"/> reflects
+	/// active work before calling <see cref="Start"/> so that splash screens and
+	/// loading indicators are visible immediately. In <c>AppRouteView</c>, this is
+	/// accomplished by calling <see cref="IActivityState.StartTask"/> in
+	/// <c>OnInitialized</c> before the orchestrator is started.
+	/// </para>
+	/// <para>
+	/// The pipeline runs asynchronously — <see cref="Start"/> returns immediately
+	/// after launching the background work. Observe <see cref="HasCompleted"/> or
+	/// subscribe to <see cref="IActivityState"/> changes to detect when
+	/// initialization finishes.
 	/// </para>
 	/// </remarks>
-	void Start();
+	void Start(CancellationToken cancellationToken = default);
 
 }
