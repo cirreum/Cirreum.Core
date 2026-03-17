@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Read(//c/Cirreum/Core/Cirreum.AuthorizationProvider/**)",
+      "Bash(rm src/Cirreum.AuthorizationProvider/IRoleResolver.cs)"
     ]
   }
 }
