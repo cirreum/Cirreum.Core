@@ -219,16 +219,6 @@ public sealed class UserProfile {
 		this.TimeFormat = Thread.CurrentThread.CurrentUICulture.DateTimeFormat.ShortTimePattern;
 		this.CreatedAt = DateTimeOffset.Now;
 
-		// TODO: decide if we need this here
-		//		if (principal != AnonymousUser.Shared && principal.Identity is ClaimsIdentity identity) {
-		//#if DEBUG
-		//			const bool captureUnknownClaims = true;
-		//#else
-		//			const bool captureUnknownClaims = false;
-		//#endif
-		//			ClaimsUserProfileEnricher.EnrichProfile(this, identity, captureUnknownClaims: captureUnknownClaims);
-		//		}
-
 		// optional/common/default:
 		this.PreferredUserName ??= principal.FindFirst("preferred_username")?.Value;
 		this.Oid ??= ClaimsHelper.ResolveOid(principal);
