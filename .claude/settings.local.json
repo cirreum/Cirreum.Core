@@ -3,7 +3,27 @@
     "allow": [
       "Bash(dotnet build:*)",
       "Read(//c/Cirreum/Core/Cirreum.AuthorizationProvider/**)",
-      "Bash(rm src/Cirreum.AuthorizationProvider/IRoleResolver.cs)"
+      "Bash(rm src/Cirreum.AuthorizationProvider/IRoleResolver.cs)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Cirreum\\\\Runtime\" \" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(dotnet restore:*)",
+      "Bash(nuget locals:*)",
+      "Bash(dotnet nuget:*)",
+      "Bash(dotnet list:*)",
+      "Bash(find '/c/Cirreum/Runtime Extensions/Cirreum.Runtime.Authorization' -type f -name *.cs)",
+      "Bash(find /c/Cirreum -type d -name *Auth*)",
+      "Bash(xargs wc:*)",
+      "Bash(Get-ChildItem -Recurse)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Cirreum\\\\Runtime\" -Directory)",
+      "Bash(Sort-Object Name)",
+      "Bash(find C:/Cirreum -name *.cs -type f)",
+      "Bash(xargs grep:*)",
+      "Bash(find 'C:/Cirreum/Runtime Extensions' -name *.cs -type f)",
+      "Bash(find 'C:/Cirreum/Runtime Extensions/Cirreum.Runtime.Wasm.Msal' -name *.cs -type f)",
+      "Bash(find C:/Cirreum -type d -name *Oidc* -o -type d -name *OIDC*)",
+      "Bash(Select-Object -Last 15)",
+      "Bash(gh run:*)",
+      "Bash(gh release:*)"
     ]
   }
 }
