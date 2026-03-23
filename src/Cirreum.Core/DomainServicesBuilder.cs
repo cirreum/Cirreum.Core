@@ -70,4 +70,58 @@ public class DomainServicesBuilder {
 		return this.AddAssembly(type.Assembly);
 	}
 
+	/// <summary>
+	/// Adds the assemblies containing the specified types to the collection of assemblies to be scanned.
+	/// </summary>
+	/// <returns>The <see cref="DomainServicesBuilder"/> instance for method chaining.</returns>
+	public DomainServicesBuilder AddAssembliesContaining<T1, T2>() {
+		this.AddAssembly(typeof(T1).Assembly);
+		return this.AddAssembly(typeof(T2).Assembly);
+	}
+
+	/// <summary>
+	/// Adds the assemblies containing the specified types to the collection of assemblies to be scanned.
+	/// </summary>
+	/// <returns>The <see cref="DomainServicesBuilder"/> instance for method chaining.</returns>
+	public DomainServicesBuilder AddAssembliesContaining<T1, T2, T3>() {
+		this.AddAssembly(typeof(T1).Assembly);
+		this.AddAssembly(typeof(T2).Assembly);
+		return this.AddAssembly(typeof(T3).Assembly);
+	}
+
+	/// <summary>
+	/// Adds the assemblies containing the specified types to the collection of assemblies to be scanned.
+	/// </summary>
+	/// <returns>The <see cref="DomainServicesBuilder"/> instance for method chaining.</returns>
+	public DomainServicesBuilder AddAssembliesContaining<T1, T2, T3, T4>() {
+		this.AddAssembly(typeof(T1).Assembly);
+		this.AddAssembly(typeof(T2).Assembly);
+		this.AddAssembly(typeof(T3).Assembly);
+		return this.AddAssembly(typeof(T4).Assembly);
+	}
+
+	/// <summary>
+	/// Adds the assemblies containing the specified types to the collection of assemblies to be scanned.
+	/// </summary>
+	/// <returns>The <see cref="DomainServicesBuilder"/> instance for method chaining.</returns>
+	public DomainServicesBuilder AddAssembliesContaining<T1, T2, T3, T4, T5>() {
+		this.AddAssembly(typeof(T1).Assembly);
+		this.AddAssembly(typeof(T2).Assembly);
+		this.AddAssembly(typeof(T3).Assembly);
+		this.AddAssembly(typeof(T4).Assembly);
+		return this.AddAssembly(typeof(T5).Assembly);
+	}
+
+	/// <summary>
+	/// Adds the assemblies containing the specified types to the collection of assemblies to be scanned.
+	/// </summary>
+	/// <param name="types">The types whose containing assemblies should be added.</param>
+	/// <returns>The <see cref="DomainServicesBuilder"/> instance for method chaining.</returns>
+	public DomainServicesBuilder AddAssembliesContaining(params Type[] types) {
+		foreach (var type in types) {
+			this.AddAssemblyContaining(type);
+		}
+		return this;
+	}
+
 }
