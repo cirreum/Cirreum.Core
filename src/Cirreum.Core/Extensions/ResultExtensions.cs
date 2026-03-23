@@ -53,6 +53,28 @@ public static class ResultExtensions {
 		}
 
 
+		// ============================ FORBIDDEN ================================
+
+		/// <summary>
+		/// Creates a failed result indicating the action requested for an entity is forbidden.
+		/// </summary>
+		/// <typeparam name="T">The type of the expected result value.</typeparam>
+		/// <param name="reason">The error message describing the reason the action is forbidden. Cannot be null.</param>
+		/// <returns>A failed <see cref="Result{T}"/> representing a forbidden access error.</returns>
+		public static Result<T> Forbidden<T>(string reason) {
+			return Result<T>.Fail(new ForbiddenAccessException(reason));
+		}
+
+		/// <summary>
+		/// Creates a failed result indicating the action requested for an entity is forbidden.
+		/// </summary>
+		/// <param name="reason">The error message describing the reason the action is forbidden. Cannot be null.</param>
+		/// <returns>A failed <see cref="Result"/> representing a forbidden access error.</returns>
+		public static Result Forbidden(string reason) {
+			return Result.Fail(new ForbiddenAccessException(reason));
+		}
+
+
 		// ============================ NOT FOUND ================================
 
 		/// <summary>
