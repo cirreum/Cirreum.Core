@@ -23,7 +23,10 @@
       "Bash(find C:/Cirreum -type d -name *Oidc* -o -type d -name *OIDC*)",
       "Bash(Select-Object -Last 15)",
       "Bash(gh run:*)",
-      "Bash(gh release:*)"
+      "Bash(gh release:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
