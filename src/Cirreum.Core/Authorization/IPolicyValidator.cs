@@ -17,7 +17,7 @@ using FluentValidation.Results;
 /// application runtime environments.
 /// </para>
 /// </remarks>
-public interface IAuthorizationPolicyValidator {
+public interface IPolicyValidator {
 
 	/// <summary>
 	/// Gets the unique name that identifies this authorization policy.

@@ -72,6 +72,13 @@ public interface IUserState : IUserSession {
 	IdentityProviderType Provider { get; }
 
 	/// <summary>
+	/// The resolved <see cref="Security.AccessScope"/> for this caller. Defaults to
+	/// <see cref="AccessScope.None"/> when no <see cref="IAccessScopeResolver"/>
+	/// has stamped a value.
+	/// </summary>
+	AccessScope AccessScope => AccessScope.None;
+
+	/// <summary>
 	/// Gets the configured Authentication Library Type.
 	/// </summary>
 	/// <value>

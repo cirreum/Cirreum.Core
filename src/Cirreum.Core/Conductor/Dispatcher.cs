@@ -36,7 +36,6 @@ sealed class Dispatcher(
 		return wrapper.HandleAsync(
 			request,
 			serviceProvider,
-			publisher,
 			cancellationToken);
 	}
 
@@ -59,7 +58,6 @@ sealed class Dispatcher(
 		return wrapper.HandleAsync(
 			request,
 			serviceProvider,
-			publisher,
 			cancellationToken);
 	}
 

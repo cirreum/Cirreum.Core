@@ -16,7 +16,7 @@ using System.Reflection;
 /// specific validation logic.
 /// </remarks>
 public abstract class AttributeValidatorBase<TAttribute>
-	: IAuthorizationPolicyValidator where TAttribute : Attribute {
+	: IPolicyValidator where TAttribute : Attribute {
 
 	// Cache attributes per resource type to avoid repeated reflection
 	private static readonly ConcurrentDictionary<Type, TAttribute?> _attributeCache = new();

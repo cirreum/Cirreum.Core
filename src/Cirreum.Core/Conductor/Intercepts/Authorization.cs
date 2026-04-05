@@ -5,8 +5,9 @@ using Cirreum.Conductor;
 
 /// <summary>
 /// Intercept behavior that enforces authorization rules for any <see cref="IAuthorizableRequestBase"/>
-/// implementations. See <see cref="IAuthorizableRequest"/> and <see cref="IAuthorizableRequest{TResponse}"/>
-/// for interface that should be implemented directly.
+/// implementations. See <see cref="IAuthorizableCommand"/>, <see cref="IAuthorizableCommand{TResponse}"/>,
+/// <see cref="IAuthorizableQuery{TResponse}"/>, and their owner-scoped variants for the interfaces
+/// that should be implemented directly.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,7 +21,7 @@ using Cirreum.Conductor;
 /// </para>
 /// </remarks>
 sealed class Authorization<TRequest, TResponse>(
-	IAuthorizationEvaluator authorizor
+	IAuthorizationEvaluator authorizer
 ) : IIntercept<TRequest, TResponse>
 	where TRequest : IAuthorizableRequestBase {
 
@@ -29,7 +30,7 @@ sealed class Authorization<TRequest, TResponse>(
 		RequestHandlerDelegate<TRequest, TResponse> next,
 		CancellationToken cancellationToken) {
 
-		var authResult = await authorizor
+		var authResult = await authorizer
 			.Evaluate(
 				context.Request,
 				context.Operation,

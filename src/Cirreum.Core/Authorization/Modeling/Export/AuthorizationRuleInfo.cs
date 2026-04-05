@@ -7,8 +7,8 @@ namespace Cirreum.Authorization.Modeling.Export;
 public sealed record AuthorizationRuleInfo(
 	string ResourceTypeName,
 	string ResourceTypeFullName,
-	string AuthorizorTypeName,
-	string AuthorizorTypeFullName,
+	string AuthorizerTypeName,
+	string AuthorizerTypeFullName,
 	string PropertyPath,
 	string ValidationLogic,
 	string Message

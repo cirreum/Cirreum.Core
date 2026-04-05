@@ -184,7 +184,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 			sb.AppendLine(
 				$"AuthRule," +
 				$"{EscapeCsvField(rule.ResourceType.Name)}," +
-				$"{EscapeCsvField(rule.AuthorizorType.Name)}," +
+				$"{EscapeCsvField(rule.AuthorizerType.Name)}," +
 				$"{EscapeCsvField(rule.PropertyPath ?? "AuthorizationContext")}," +
 				$"{EscapeCsvField(validationType)}," +
 				$"{EscapeCsvField(rule.Message)}," +
@@ -606,7 +606,7 @@ public class AuthorizationDocumenter : IAuthorizationDocumenter {
 
 			// Group by validator
 			var validatorGroups = resourceGroup
-				.GroupBy(r => r.AuthorizorType)
+				.GroupBy(r => r.AuthorizerType)
 				.OrderBy(g => g.Key.Name);
 
 			foreach (var validatorGroup in validatorGroups) {

@@ -8,7 +8,7 @@ using Cirreum.Authorization.Modeling.Export;
 /// </summary>
 public sealed record AuthorizationRuleTypeInfo(
 	Type ResourceType,
-	Type AuthorizorType,
+	Type AuthorizerType,
 	string PropertyPath,
 	string ValidationLogic,
 	string Message
@@ -19,8 +19,8 @@ public sealed record AuthorizationRuleTypeInfo(
 	public AuthorizationRuleInfo ToRuleInfo() => new(
 		ResourceTypeName: this.ResourceType.Name,
 		ResourceTypeFullName: this.ResourceType.FullName ?? this.ResourceType.Name,
-		AuthorizorTypeName: this.AuthorizorType.Name,
-		AuthorizorTypeFullName: this.AuthorizorType.FullName ?? this.AuthorizorType.Name,
+		AuthorizerTypeName: this.AuthorizerType.Name,
+		AuthorizerTypeFullName: this.AuthorizerType.FullName ?? this.AuthorizerType.Name,
 		PropertyPath: this.PropertyPath,
 		ValidationLogic: this.ValidationLogic,
 		Message: this.Message

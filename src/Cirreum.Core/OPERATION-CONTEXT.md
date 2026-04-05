@@ -17,6 +17,7 @@
 │                                                                                           │
 │ Convenience Properties (defined ONCE):                                                    │
 │ • UserId, UserName, TenantId, Provider, IsAuthenticated                                   │
+│ • AccessScope (None / Global / Tenant — resolved by IAccessScopeResolver)                 │
 │ • Profile, HasEnrichedProfile                                                             │
 │ • Elapsed (TimeSpan - computed on demand)                                                 │
 │ • ElapsedMilliseconds (double - computed on demand)                                       │
@@ -71,13 +72,24 @@
               ┌──────────────────────────────────────────────────────────────────────┐
               │                       Shared Implementation                          │
               ├──────────────────────────────────────────────────────────────────────┤
-              │ 1. Validate resource type                                            │
-              │ 2. Get validators                                                    │
-              │ 3. Check authentication                                              │
-              │ 4. Get & resolve roles                                               │
-              │ 5. Build AuthorizationContext (ONCE - canonical)                     │
-              │ 6. Run validators                                                    │
-              │ 7. Return Result                                                     │
+              │ 1. Check authentication (→ Unauthenticated on fail)                  │
+              │ 2. Assert runtime type == compile-time TResource                     │
+              │ 3. Resolve evaluators from DI (scope, resource, policy arrays)       │
+              │ 4. Early-exit if all arrays empty and no owner-gate applies          │
+              │ 5. Resolve roles → GetEffectiveRoles (inheritance expanded ONCE)     │
+              │ 6. Build AuthorizationContext<T> (ONCE – canonical)                  │
+              │                                                                      │
+              │ 7. Stage 1 – Scope: first-failure short-circuit                      │
+              │      Step 0: OwnerScopeEvaluator (if applicable)                     │
+              │      Step 1: IScopeEvaluator[] in registration order                 │
+              │ 8. Stage 2 – Resource: one ResourceAuthorizerBase<T>                 │
+              │      FluentValidation rules aggregate within the authorizer;         │
+              │      short-circuits to Stage 3 on any failure                        │
+              │ 9. Stage 3 – Policy: IPolicyValidator[] filtered by                  │
+              │      SupportedRuntimeTypes + AppliesTo, sorted by Order;             │
+              │      aggregates within stage                                         │
+              │                                                                      │
+              │ 10. Return Result.Success / Result.Fail(Forbidden)                   │
               └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -85,15 +97,18 @@
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                      Dispatcher                                             │
+│                              RequestHandlerWrapperImpl<T>                                   │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 1. Get UserState from IUserStateAccessor                                                    │
-│ 2. Capture StartTimestamp (high-precision timing)                                           │
-│ 3. Create OperationContext                                                                  │
-│    └─> Environment, RuntimeType, Timestamp, StartTimestamp,                                 │
-│        UserState, OperationId, CorrelationId                                                │
-│ 4. Create RequestContext<TRequest>                                                          │
-│    └─> Composes OperationContext + Request + RequestType                                    │
+│ 1. Start Activity (if telemetry listening) + capture StartTimestamp                         │
+│ 2. Resolve handler + intercepts from DI                                                     │
+│ 3. If no intercepts: invoke handler directly (BYPASS — rare)                                │
+│ 4. Otherwise (TYPICAL):                                                                     │
+│      a. GetUser() from IUserStateAccessor (cached)                                          │
+│      b. RequestContext<T>.Create(...)                                                       │
+│         └─> Internally constructs OperationContext                                          │
+│             (Environment, RuntimeType, Timestamp, StartTimestamp,                           │
+│              UserState, OperationId, CorrelationId)                                         │
+│      c. Walk pipeline via PipelineCursor (single delegate alloc)                            │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
                                          │
                                          ▼
@@ -130,7 +145,7 @@
                            ▼
               ┌────────────────────────────────────────────────────────────────────┐
               │                           OperationContext                         │
-              │                 (Created ONCE in Dispatcher)                       │
+              │        (Created ONCE in RequestHandlerWrapperImpl<T>)              │
               │ • Environment                                                      │
               │ • RuntimeType                                                      │
               │ • Timestamp (DateTimeOffset)                                       │
@@ -151,7 +166,8 @@
          │ Delegates timing:                │   │ Delegates user context:          │
          │ • StartTimestamp                 │   │ • UserId, UserName, TenantId     │
          │ • ElapsedDuration (→ Elapsed)    │   │ • Provider, IsAuthenticated      │
-         │ • RequestId (→ OperationId)      │   │ • Profile, HasEnrichedProfile    │
+         │ • RequestId (→ OperationId)      │   │ • AccessScope                    │
+         │                                  │   │ • Profile, HasEnrichedProfile    │
          └──────────────────────────────────┘   └──────────────────────────────────┘
 ```
 
@@ -160,20 +176,22 @@
 ### ✅ Single Creation
 
 ```text
-OperationContext created ONCE in Dispatcher
+OperationContext created ONCE by RequestContext.Create (in the wrapper)
     ├─> Composed into RequestContext
-    └─> Composed into AuthorizationContext
+    └─> Composed into AuthorizationContext (later, inside the evaluator)
 ```
 
 ### ✅ Zero Rebuilding
 
 ```text
-1. Dispatcher creates OperationContext with StartTimestamp
-2. RequestContext composes it
-3. Authorization intercept extracts context.Operation
-4. Evaluator reuses it (no GetUser() call!)
-5. AuthorizationContext composes it
-6. Validators use canonical context
+1. RequestHandlerWrapperImpl<T> calls GetUser() then RequestContext.Create,
+   which internally builds the canonical OperationContext with StartTimestamp
+2. RequestContext<T> composes it
+3. Pipeline cursor hands RequestContext to each intercept
+4. Authorization intercept extracts context.Operation
+5. Evaluator reuses it — no second GetUser() call
+6. AuthorizationContext<T> composes it (Operation + EffectiveRoles + Resource)
+7. Every stage's validators see the same canonical context
 ```
 
 ### ✅ Clear Ownership
@@ -229,6 +247,7 @@ Benefits:
 - `UserName` → `UserState.Name`
 - `TenantId` → `UserState.Profile.Organization.OrganizationId`
 - `Provider` → `UserState.Provider`
+- `AccessScope` → `UserState.AccessScope` (see [Access Scope](#access-scope))
 - `IsAuthenticated` → `UserState.IsAuthenticated`
 - `Profile` → `UserState.Profile`
 - `HasEnrichedProfile` → `UserState.Profile.IsEnriched`
@@ -252,6 +271,7 @@ Benefits:
 - `UserName` → `Operation.UserName`
 - `TenantId` → `Operation.TenantId`
 - `Provider` → `Operation.Provider`
+- `AccessScope` → `Operation.AccessScope`
 - `IsAuthenticated` → `Operation.IsAuthenticated`
 - `Profile` → `Operation.Profile`
 - `HasEnrichedProfile` → `Operation.HasEnrichedProfile`
@@ -259,6 +279,39 @@ Benefits:
 - `RuntimeType` → `Operation.RuntimeType`
 - `Timestamp` → `Operation.Timestamp`
 - All helper methods delegate to Operation
+
+## Access Scope
+
+`AccessScope` is the coarse authorization dimension indicating *which IdP scheme*
+authenticated the caller. It's stamped onto `IUserState` by
+`IAccessScopeResolver` during user enrichment and surfaces on every context.
+
+| Value | Meaning |
+|---|---|
+| `None` | Anonymous caller, or no `IAccessScopeResolver` is registered |
+| `Global` | Authenticated via the configured `PrimaryScheme` — typically operator staff acting across tenants |
+| `Tenant` | Authenticated via a customer/tenant scheme (Entra External ID, BYOID, per-customer OIDC, API keys, signed requests) |
+
+### Where It's Used
+
+- **Owner-scope gate (Stage 1 Step 0).** The default `OwnerScopeEvaluator`
+  uses `AccessScope` to decide whether the caller is *required* to match
+  the resource's `OwnerId`, or is a cross-tenant operator who can bypass
+  owner-match (e.g., `Global` callers performing admin-level operations).
+- **Scope evaluators (Stage 1 Step 1).** Custom `IScopeEvaluator`
+  implementations can short-circuit on `AccessScope` to enforce
+  tenant-only or global-only routes.
+- **Resource authorizers (Stage 2).** A single
+  `ResourceAuthorizerBase<T>` may branch on `context.AccessScope` to
+  apply different rule sets per scope.
+- **Policy validators (Stage 3).** Kill-switches and time-window policies
+  often apply only to `Tenant` callers, bypassed for `Global`.
+
+### Customization
+
+Consumers replace the default resolver by registering their own
+`IAccessScopeResolver` *before* `AddAuthorization` runs (TryAdd pattern).
+See `IAccessScopeResolver` for an example implementation.
 
 ## Design Principles
 

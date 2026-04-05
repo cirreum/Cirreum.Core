@@ -17,6 +17,7 @@ public abstract class UserStateBase : IUserState {
 	private IApplicationUser? _applicationUser;
 	private bool _applicationUserLoaded;
 	private Type? _applicationUserType; // Track the actual type
+	private AccessScope _accessScope = AccessScope.None;
 
 	/// <inheritdoc/>
 	public bool IsAuthenticated => this._isAuthenticated;
@@ -35,6 +36,15 @@ public abstract class UserStateBase : IUserState {
 
 	/// <inheritdoc/>
 	public AuthenticationLibraryType AuthenticationType => this._authenticationType;
+
+	/// <inheritdoc/>
+	public AccessScope AccessScope => this._accessScope;
+
+	/// <summary>
+	/// Sets the access scope for the current instance.
+	/// </summary>
+	/// <param name="scope">The access scope to assign to the instance. Determines the permissions or visibility level applied.</param>
+	protected virtual void SetAccessScope(AccessScope scope) => this._accessScope = scope;
 
 
 	// UserProfile

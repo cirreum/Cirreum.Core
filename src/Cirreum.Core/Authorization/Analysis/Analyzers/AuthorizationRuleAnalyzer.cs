@@ -42,15 +42,15 @@ public class AuthorizationRuleAnalyzer : IAuthorizationAnalyzerWithOptions {
 		var rulesWithMissingResource = rules.Where(r => r.ResourceType == typeof(MissingResource)).ToList();
 
 		// Capture metrics for this analyzer
-		metrics[$"{MetricCategories.AuthorizationRules}AuthorizerCount"] = rules.Select(r => r.AuthorizorType).Distinct().Count();
+		metrics[$"{MetricCategories.AuthorizationRules}AuthorizerCount"] = rules.Select(r => r.AuthorizerType).Distinct().Count();
 		metrics[$"{MetricCategories.AuthorizationRules}ResourceCount"] = rulesByResource.Count(g => g.Key != typeof(MissingResource));
-		metrics[$"{MetricCategories.AuthorizationRules}OrphanedAuthorizerCount"] = rulesWithMissingResource.Select(r => r.AuthorizorType).Distinct().Count();
+		metrics[$"{MetricCategories.AuthorizationRules}OrphanedAuthorizerCount"] = rulesWithMissingResource.Select(r => r.AuthorizerType).Distinct().Count();
 		metrics[$"{MetricCategories.AuthorizationRules}RuleCount"] = rules.Count;
 
 		// Check for authorizers with a missing/orphaned resource (critical error)
 		if (rulesWithMissingResource.Count > 0) {
 			var orphanedAuthorizers = rulesWithMissingResource
-				.Select(r => r.AuthorizorType)
+				.Select(r => r.AuthorizerType)
 				.Distinct()
 				.ToList();
 			var issue = Issues.OrphanedAuthorizers(orphanedAuthorizers.Count);

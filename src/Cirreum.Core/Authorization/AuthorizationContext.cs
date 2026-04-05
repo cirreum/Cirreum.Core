@@ -33,6 +33,7 @@ public sealed record AuthorizationContext<TResource>(
 	public string UserName => this.Operation.UserName;
 	public string? TenantId => this.Operation.TenantId;
 	public IdentityProviderType Provider => this.Operation.Provider;
+	public AccessScope AccessScope => this.Operation.AccessScope;
 	public bool IsAuthenticated => this.Operation.IsAuthenticated;
 	public UserProfile Profile => this.Operation.Profile;
 	public bool HasEnrichedProfile => this.Operation.HasEnrichedProfile;

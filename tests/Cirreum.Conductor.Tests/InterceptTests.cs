@@ -82,16 +82,9 @@ public class InterceptTests {
 			=> throw new InvalidOperationException("boom");
 	}
 
-	// IAuditableRequest<string>
-	public sealed class AuditableRequest : IAuditableRequest<string> { }
-	public sealed class AuditableRequestHandler : IRequestHandler<AuditableRequest, string> {
-		public Task<Result<string>> HandleAsync(AuditableRequest r, CancellationToken ct)
-			=> Task.FromResult(Result<string>.Success("Audit me!"));
-	}
-
 	// For Authorization tests
 	public record AuthorizableTestRequest(string UserId)
-		: IAuthorizableRequest<string>;
+		: IAuthorizableQuery<string>;
 	public class AuthorizableTestHandler : IRequestHandler<AuthorizableTestRequest, string> {
 		public Task<Result<string>> HandleAsync(
 			AuthorizableTestRequest request,
@@ -118,10 +111,9 @@ public class InterceptTests {
 		}
 	}
 
-	// For IDomainQuery<string> tests which includes:
-	// IAuditableRequest and IAuthorizableRequest
+	// Authorizable query composite (replaces obsolete IDomainQuery<T>)
 	public record DomainTestRequest(string UserId)
-		: IDomainQuery<string>;
+		: IAuthorizableQuery<string>;
 	public class DomainTestHandler : IRequestHandler<DomainTestRequest, string> {
 		public Task<Result<string>> HandleAsync(
 			DomainTestRequest request,
@@ -130,10 +122,9 @@ public class InterceptTests {
 		}
 	}
 
-	// For IDomainCacheableQuery<string> tests which includes:
-	// IAuditableRequest and IAuthorizableRequest and ICacheableQuery
+	// Cacheable authorizable query composite (replaces obsolete IDomainCacheableQuery<T>)
 	public record DomainCacheableTestRequest(string UserId)
-		: IDomainCacheableQuery<string> {
+		: IAuthorizableCacheableQuery<string> {
 		public string CacheKey => nameof(DomainCacheableTestRequest);
 	}
 
@@ -236,21 +227,6 @@ public class InterceptTests {
 			RequestHandlerDelegate<VoidTestRequest, Unit> next,
 			CancellationToken cancellationToken) => Task.FromResult(Result<Unit>.Fail(new("nope")));
 	}
-
-
-	public sealed class AuditableEcho(string text) : IAuditableRequest<string> {
-		public string Text { get; } = text;
-	}
-
-	public sealed class AuditableEchoHandler :
-		IRequestHandler<AuditableEcho, string> {
-		public Task<Result<string>> HandleAsync(
-			AuditableEcho request,
-			CancellationToken cancellationToken) {
-			return Task.FromResult(Result<string>.Success(request.Text));
-		}
-	}
-
 
 
 	[TestInitialize]
@@ -686,12 +662,6 @@ public class InterceptTests {
 		Assert.IsInstanceOfType<Validation<ErrRequest, Unit>>(baseIntercepts[0], "First should be Validation");
 		Assert.IsInstanceOfType<HandlerPerformance<ErrRequest, Unit>>(baseIntercepts[1], "Second should be HandlerPerformance");
 
-		// Assert - AuditableRequest: Validation + HandlerPerformance only
-		var auditableIntercepts = sp.GetServices<IIntercept<AuditableRequest, string>>().ToList();
-		Assert.HasCount(2, auditableIntercepts);
-		Assert.IsInstanceOfType<Validation<AuditableRequest, string>>(auditableIntercepts[0], "First should be Validation");
-		Assert.IsInstanceOfType<HandlerPerformance<AuditableRequest, string>>(auditableIntercepts[1], "Second should be HandlerPerformance");
-
 		// Assert - CacheableTestQuery: Validation + HandlerPerformance + QueryCaching
 		var cacheableQueryIntercepts = sp.GetServices<IIntercept<CacheableTestQuery, string>>().ToList();
 		Assert.HasCount(3, cacheableQueryIntercepts);
@@ -712,8 +682,6 @@ public class InterceptTests {
 		Assert.IsInstanceOfType<Validation<DomainTestRequest, string>>(domainIntercepts[0], "First should be Validation");
 		Assert.IsInstanceOfType<Authorization<DomainTestRequest, string>>(domainIntercepts[1], "Second should be Authorization");
 		Assert.IsInstanceOfType<HandlerPerformance<DomainTestRequest, string>>(domainIntercepts[2], "Third should be HandlerPerformance");
-		// Plus, should implement IAuditableRequest<string>
-		Assert.IsInstanceOfType<IAuditableRequest<string>>(new DomainTestRequest("x"));
 
 		// Assert - DomainCacheableTestRequest: All four intercepts
 		var cacheableDomainIntercepts = sp.GetServices<IIntercept<DomainCacheableTestRequest, string>>().ToList();
@@ -722,8 +690,6 @@ public class InterceptTests {
 		Assert.IsInstanceOfType<Authorization<DomainCacheableTestRequest, string>>(cacheableDomainIntercepts[1], "Second should be Authorization");
 		Assert.IsInstanceOfType<HandlerPerformance<DomainCacheableTestRequest, string>>(cacheableDomainIntercepts[2], "Third should be HandlerPerformance");
 		Assert.IsInstanceOfType<QueryCaching<DomainCacheableTestRequest, string>>(cacheableDomainIntercepts[3], "Fourth should be QueryCaching");
-		// Plus, should implement IAuditableRequest<string>
-		Assert.IsInstanceOfType<IAuditableRequest<string>>(new DomainCacheableTestRequest("x"));
 	}
 
 	[TestMethod]
@@ -821,77 +787,6 @@ public class InterceptTests {
 			"QueryCaching should resolve for ICacheableQuery");
 		Assert.IsInstanceOfType<QueryCaching<CacheableTestQuery, string>>(intercept);
 
-	}
-
-	[TestMethod]
-	public async Task AuditableRequest_Success_PublishesAuditNotification() {
-
-		// Arrange
-		var services = Shared.ArrangeServices(services => {
-			services.AddConductor(builder => {
-				builder
-					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-					.AddOpenIntercept(typeof(LoggingIntercept<,>));
-			}, o => o.WithSetting(Shared.SequentialSettings));
-			services.AddTransient<IRequestHandler<AuditableEcho, string>, AuditableEchoHandler>();
-		});
-
-		var provider = services.BuildServiceProvider();
-		var dispatcher = provider.GetRequiredService<IDispatcher>();
-
-		// Act
-		EmptyTransportPublisher.Messages.Clear();
-		var result = await dispatcher.DispatchAsync(new AuditableEcho("hi"), this.TestContext.CancellationToken);
-
-		// Assert
-		Assert.IsTrue(result.IsSuccess);
-		await Task.Delay(100, this.TestContext.CancellationToken); // Allow async notification to be published
-		Assert.HasCount(1, EmptyTransportPublisher.Messages);
-
-		var notification = EmptyTransportPublisher.Messages.Single();
-		Assert.IsInstanceOfType<RequestCompletedNotification>(notification);
-
-		var completed = (RequestCompletedNotification)notification;
-		Assert.AreEqual(typeof(AuditableEcho).Name, completed.RequestType);
-		Assert.AreEqual("SUCCESS", completed.Outcome);
-	}
-
-	[TestMethod]
-	public async Task AuditableRequest_Fatal_Still_PublishesAuditNotification() {
-
-		// Arrange
-		var services = Shared.ArrangeServices(services => {
-			services.AddConductor(builder => {
-				builder
-					.RegisterFromAssemblies(typeof(InterceptTests).Assembly)
-					.AddOpenIntercept(typeof(FatalIntercept<,>));
-			}, o => o.WithSetting(Shared.SequentialSettings));
-			services.AddTransient<IRequestHandler<AuditableEcho, string>, AuditableEchoHandler>();
-		});
-
-		var provider = services.BuildServiceProvider();
-		var dispatcher = provider.GetRequiredService<IDispatcher>();
-
-		// Act
-		var successfullyThrew = false;
-		try {
-			EmptyTransportPublisher.Messages.Clear();
-			var result = await dispatcher.DispatchAsync(new AuditableEcho("hi"), this.TestContext.CancellationToken);
-		} catch (OutOfMemoryException) {
-			successfullyThrew = true;
-		}
-
-		// Assert
-		Assert.IsTrue(successfullyThrew, "Expected OutOfMemoryException to be thrown");
-		await Task.Delay(100, this.TestContext.CancellationToken); // Allow async notification to be published
-		Assert.HasCount(1, EmptyTransportPublisher.Messages);
-
-		var notification = EmptyTransportPublisher.Messages.Single();
-		Assert.IsInstanceOfType<RequestCompletedNotification>(notification);
-
-		var completed = (RequestCompletedNotification)notification;
-		Assert.AreEqual(typeof(AuditableEcho).Name, completed.RequestType);
-		Assert.AreEqual("FAILURE", completed.Outcome);
 	}
 
 	public TestContext TestContext { get; set; } = null!;

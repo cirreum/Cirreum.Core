@@ -22,13 +22,28 @@ public static class ServiceCollectionExtensions {
 
 
 	/// <summary>
-	/// Tries to add the default built-in implementation of the 
+	/// Tries to add the default built-in implementation of the
 	/// <see cref="IAuthorizationEvaluator"/> service if one is not already registered.
 	/// </summary>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
 	public static void AddDefaultAuthorizationEvaluator(
 		this IServiceCollection services) {
 		services.TryAddScoped<IAuthorizationEvaluator, DefaultAuthorizationEvaluator>();
+	}
+
+
+	/// <summary>
+	/// Tries to add the default built-in <see cref="OwnerScopeEvaluatorBase"/>
+	/// implementation — the Stage 1 Step 0 owner-scope gate that enforces OwnerId
+	/// presence, matching, and enrichment for
+	/// <see cref="IAuthorizableOwnerScopedResource"/> resources. Call this when the
+	/// application's <see cref="IApplicationUser"/> participates in owner scoping
+	/// (i.e. implements <see cref="IOwnedApplicationUser"/>).
+	/// </summary>
+	/// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
+	public static void AddDefaultOwnerScopeEvaluator(
+		this IServiceCollection services) {
+		services.TryAddTransient<OwnerScopeEvaluatorBase, DefaultOwnerScopeEvaluator>();
 	}
 
 
@@ -143,7 +158,7 @@ public static class ServiceCollectionExtensions {
 				"Domain services have already been registered. " +
 				"Call AddDomainServices only once per service collection.");
 		}
-		services.AddKeyedSingleton<object>(DomainServicesRegisteredKey, new object());
+		services.AddKeyedSingleton(DomainServicesRegisteredKey, new object());
 
 
 		//
@@ -187,8 +202,9 @@ public static class ServiceCollectionExtensions {
 	static IServiceCollection AddFluentValidationAndAuthorization(this IServiceCollection services, params Assembly?[] assemblies) {
 
 		var validatorOpenGenericType = typeof(IValidator<>);
-		var resourceAuthorizorType = typeof(IAuthorizationResourceValidator<>);
-		var policyAuthorizorType = typeof(IAuthorizationPolicyValidator);
+		var scopeEvaluatorType = typeof(IScopeEvaluator);
+		var resourceAuthorizerType = typeof(IResourceAuthorizer<>);
+		var policyAuthorizerType = typeof(IPolicyValidator);
 
 		var availableTypes = assemblies
 			.Where(a => a is not null)
@@ -197,10 +213,10 @@ public static class ServiceCollectionExtensions {
 
 
 		// Normal Domain Validators
-		// Excludes resource authorizors - they implement IValidator<T> too, but are registered separately
+		// Excludes resource authorizers - they implement IValidator<T> too, but are registered separately
 		var normalValidators = from type in availableTypes
 							   where type.IsConcreteClass() &&
-									 !type.ImplementsGenericInterface(resourceAuthorizorType)
+									 !type.ImplementsGenericInterface(resourceAuthorizerType)
 							   let matchingInterface = type.GetFirstMatchingGenericInterface(validatorOpenGenericType)
 							   where matchingInterface != null
 							   select (matchingInterface, type);
@@ -220,36 +236,53 @@ public static class ServiceCollectionExtensions {
 
 		}
 
-		// Resource Authorizors
-		var resourceAuthorizors = from type in availableTypes
-								  where type.IsConcreteClass()
-								  let matchingInterface = type.GetFirstMatchingGenericInterface(resourceAuthorizorType)
-								  where matchingInterface != null
-								  select (matchingInterface, type);
+		// Scope Evaluators (Stage 1 Step 1)
+		var scopeEvaluators = from type in availableTypes
+							  where type.IsConcreteClass() &&
+									type.IsAssignableTo(scopeEvaluatorType)
+							  select type;
 
-		// Register each concrete Authorizor
-		foreach (var (authorizorInterface, authorizorType) in resourceAuthorizors) {
+		foreach (var evaluator in scopeEvaluators) {
 			services.TryAddEnumerable(new ServiceDescriptor(
-				serviceType: authorizorInterface,
-				implementationType: authorizorType,
+				serviceType: scopeEvaluatorType,
+				implementationType: evaluator,
 				lifetime: ServiceLifetime.Transient
 			));
 
 			// Service => Service registration
-			services.AddTransient(authorizorType, authorizorType);
+			services.AddTransient(evaluator, evaluator);
+		}
+
+		// Resource Authorizers
+		var resourceAuthorizers = from type in availableTypes
+								  where type.IsConcreteClass()
+								  let matchingInterface = type.GetFirstMatchingGenericInterface(resourceAuthorizerType)
+								  where matchingInterface != null
+								  select (matchingInterface, type);
+
+		// Register each concrete Authorizer
+		foreach (var (authorizerInterface, authorizerType) in resourceAuthorizers) {
+			services.TryAddEnumerable(new ServiceDescriptor(
+				serviceType: authorizerInterface,
+				implementationType: authorizerType,
+				lifetime: ServiceLifetime.Transient
+			));
+
+			// Service => Service registration
+			services.AddTransient(authorizerType, authorizerType);
 
 		}
 
-		// Policy Authorizors
+		// Policy Authorizers
 		var policyAuthValidators = from type in availableTypes
 								   where type.IsConcreteClass() &&
-										 type.IsAssignableTo(policyAuthorizorType)
+										 type.IsAssignableTo(policyAuthorizerType)
 								   select type;
 
-		// Register each concrete Authorizor
+		// Register each concrete Authorizer
 		foreach (var validator in policyAuthValidators) {
 			services.TryAddEnumerable(new ServiceDescriptor(
-				serviceType: policyAuthorizorType,
+				serviceType: policyAuthorizerType,
 				implementationType: validator,
 				lifetime: ServiceLifetime.Transient
 			));

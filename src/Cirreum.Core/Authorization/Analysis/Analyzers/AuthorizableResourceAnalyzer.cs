@@ -23,7 +23,7 @@ public class AuthorizableResourceAnalyzer(
 				: "Critical: These requests will fail authorization. Create an authorizer for each resource or mark them as anonymous if public access is intended.";
 
 			return new(
-				$"Found {count} resource(s) that implement IAuthorizableRequest but have no authorizer defined",
+				$"Found {count} resource(s) that implement IAuthorizableRequestBase but have no authorizer defined",
 				recommendation);
 		}
 
@@ -83,7 +83,7 @@ public class AuthorizableResourceAnalyzer(
 		var authorizableResources = AuthorizationModel.Instance.GetAuthorizableResources();
 		var protectedResources = authorizableResources.Where(r => r.IsProtected).ToList();
 		var unprotectedResources = authorizableResources.Where(r => !r.IsProtected).ToList();
-		var policyValidators = services.GetServices<IAuthorizationPolicyValidator>().ToList();
+		var policyValidators = services.GetServices<IPolicyValidator>().ToList();
 
 		// Metrics
 		metrics[$"{MetricCategories.AuthorizableResources}ResourceCount"] = authorizableResources.Count;
@@ -105,7 +105,7 @@ public class AuthorizableResourceAnalyzer(
 	private static void AnalyzeUnprotectedResources(
 		List<AnalysisIssue> issues,
 		List<ResourceTypeInfo> unprotectedResources,
-		List<IAuthorizationPolicyValidator> policyValidators) {
+		List<IPolicyValidator> policyValidators) {
 
 		if (unprotectedResources.Count == 0) {
 			return;
@@ -115,7 +115,7 @@ public class AuthorizableResourceAnalyzer(
 		var requestResources = unprotectedResources.Where(r => r.RequiresAuthorization).ToList();
 		var nonRequestResources = unprotectedResources.Where(r => !r.RequiresAuthorization).ToList();
 
-		// CRITICAL: IAuthorizableRequest without authorizer = security gap in the pipeline
+		// CRITICAL: IAuthorizableRequestBase without authorizer = security gap in the pipeline
 		if (requestResources.Count > 0) {
 			var issue = Issues.RequestsWithNoAuthorizer(requestResources.Count);
 			issues.Add(new AnalysisIssue(
@@ -169,7 +169,7 @@ public class AuthorizableResourceAnalyzer(
 	private static void AnalyzeRoleOnlyResources(
 		List<AnalysisIssue> issues,
 		List<ResourceTypeInfo> protectedResources,
-		List<IAuthorizationPolicyValidator> policyValidators) {
+		List<IPolicyValidator> policyValidators) {
 
 		// Resources with only role-based checks and no policy coverage
 		var resourcesWithOnlyRoleChecks = protectedResources
@@ -192,7 +192,7 @@ public class AuthorizableResourceAnalyzer(
 	private static void AnalyzeAuthorizationBalance(
 		List<AnalysisIssue> issues,
 		List<ResourceTypeInfo> protectedResources,
-		List<IAuthorizationPolicyValidator> policyValidators) {
+		List<IPolicyValidator> policyValidators) {
 
 		var policyCount = policyValidators.Count;
 
@@ -228,7 +228,7 @@ public class AuthorizableResourceAnalyzer(
 		}
 	}
 
-	private static bool IsGlobalPolicy(IAuthorizationPolicyValidator policy) {
+	private static bool IsGlobalPolicy(IPolicyValidator policy) {
 		var baseType = policy.GetType().BaseType;
 		if (baseType?.IsGenericType == true &&
 			baseType.GetGenericTypeDefinition() == typeof(AttributeValidatorBase<>)) {
@@ -237,11 +237,11 @@ public class AuthorizableResourceAnalyzer(
 		return true;
 	}
 
-	private static bool HasAttributeBasedPolicyProtection(Type resourceType, List<IAuthorizationPolicyValidator> policyValidators) {
+	private static bool HasAttributeBasedPolicyProtection(Type resourceType, List<IPolicyValidator> policyValidators) {
 		return policyValidators.Any(pv => CouldPolicyApplyToResource(pv, resourceType));
 	}
 
-	private static bool CouldPolicyApplyToResource(IAuthorizationPolicyValidator policy, Type resourceType) {
+	private static bool CouldPolicyApplyToResource(IPolicyValidator policy, Type resourceType) {
 		var baseType = policy.GetType().BaseType;
 		if (baseType?.IsGenericType == true &&
 			baseType.GetGenericTypeDefinition() == typeof(AttributeValidatorBase<>)) {

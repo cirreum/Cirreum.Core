@@ -59,7 +59,7 @@ public class PolicyValidatorAnalyzer(
 		var issues = new List<AnalysisIssue>();
 		var metrics = new Dictionary<string, int>();
 
-		var policyValidators = services.GetServices<IAuthorizationPolicyValidator>().ToList();
+		var policyValidators = services.GetServices<IPolicyValidator>().ToList();
 		var domainEnvironment = services.GetRequiredService<IDomainEnvironment>();
 
 		// Basic metrics
@@ -90,7 +90,7 @@ public class PolicyValidatorAnalyzer(
 	/// <summary>
 	/// Helper method to safely check if a policy is attribute-based
 	/// </summary>
-	private static bool IsAttributeBasedPolicy(IAuthorizationPolicyValidator policy) {
+	private static bool IsAttributeBasedPolicy(IPolicyValidator policy) {
 		var baseType = policy.GetType().BaseType;
 		return baseType?.IsGenericType == true &&
 			   baseType.GetGenericTypeDefinition() == typeof(AttributeValidatorBase<>);
@@ -99,7 +99,7 @@ public class PolicyValidatorAnalyzer(
 	/// <summary>
 	/// Helper method to safely get the attribute type from an attribute-based policy
 	/// </summary>
-	private static Type? GetAttributeType(IAuthorizationPolicyValidator policy) {
+	private static Type? GetAttributeType(IPolicyValidator policy) {
 		var baseType = policy.GetType().BaseType;
 		if (baseType?.IsGenericType == true &&
 			baseType.GetGenericTypeDefinition() == typeof(AttributeValidatorBase<>)) {
@@ -110,7 +110,7 @@ public class PolicyValidatorAnalyzer(
 		return null;
 	}
 
-	private static List<AnalysisIssue> AnalyzePolicyOrdering(List<IAuthorizationPolicyValidator> policyValidators) {
+	private static List<AnalysisIssue> AnalyzePolicyOrdering(List<IPolicyValidator> policyValidators) {
 		var issues = new List<AnalysisIssue>();
 
 		// Check for duplicate order values
@@ -143,7 +143,7 @@ public class PolicyValidatorAnalyzer(
 	}
 
 	private static List<AnalysisIssue> AnalyzeRuntimeTypeCoverage(
-		List<IAuthorizationPolicyValidator> policyValidators,
+		List<IPolicyValidator> policyValidators,
 		DomainRuntimeType currentRuntimeType) {
 		var issues = new List<AnalysisIssue>();
 
@@ -193,14 +193,14 @@ public class PolicyValidatorAnalyzer(
 		return issues;
 	}
 
-	private static List<AnalysisIssue> AnalyzePolicyOverlap(List<IAuthorizationPolicyValidator> policyValidators) {
+	private static List<AnalysisIssue> AnalyzePolicyOverlap(List<IPolicyValidator> policyValidators) {
 		var issues = new List<AnalysisIssue>();
 
 		// Analyze attribute-based policies that might conflict
 		var attributePolicies = policyValidators.Where(IsAttributeBasedPolicy).ToList();
 
 		// Check for multiple policies targeting the same attribute type
-		var attributeTypes = new Dictionary<Type, List<IAuthorizationPolicyValidator>>();
+		var attributeTypes = new Dictionary<Type, List<IPolicyValidator>>();
 		foreach (var policy in attributePolicies) {
 			var attributeType = GetAttributeType(policy);
 			if (attributeType != null) {
@@ -226,7 +226,7 @@ public class PolicyValidatorAnalyzer(
 		return issues;
 	}
 
-	private static List<AnalysisIssue> AnalyzeAttributeUsage(List<IAuthorizationPolicyValidator> policyValidators) {
+	private static List<AnalysisIssue> AnalyzeAttributeUsage(List<IPolicyValidator> policyValidators) {
 
 		var issues = new List<AnalysisIssue>();
 

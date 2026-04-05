@@ -29,6 +29,11 @@ public static class CirreumTelemetry {
 		/// Activity source for remote service client operations (HTTP, gRPC).
 		/// </summary>
 		public const string RemoteServicesClient = "Cirreum.RemoteServices.Client";
+
+		/// <summary>
+		/// Activity source for authorization pipeline operations (scope, resource, policy stages).
+		/// </summary>
+		public const string Authorization = "Cirreum.Authorization";
 	}
 
 	/// <summary>
@@ -54,6 +59,11 @@ public static class CirreumTelemetry {
 		/// Meter for remote service client metrics (request counts, durations, status codes).
 		/// </summary>
 		public const string RemoteServicesClient = "Cirreum.RemoteServices.Client";
+
+		/// <summary>
+		/// Meter for authorization pipeline metrics (decision counts, stage durations).
+		/// </summary>
+		public const string Authorization = "Cirreum.Authorization";
 	}
 
 }

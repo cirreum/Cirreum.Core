@@ -31,6 +31,7 @@ public sealed record OperationContext(
 	public string UserName => this.UserState.Name;
 	public string? TenantId => this.UserState.Profile.Organization.OrganizationId;
 	public IdentityProviderType Provider => this.UserState.Provider;
+	public AccessScope AccessScope => this.UserState.AccessScope;
 	public bool IsAuthenticated => this.UserState.IsAuthenticated;
 	public UserProfile Profile => this.UserState.Profile;
 	public bool HasEnrichedProfile => this.UserState.Profile.IsEnriched;

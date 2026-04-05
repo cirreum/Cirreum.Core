@@ -20,7 +20,7 @@ public class DomainServicesBuilder {
 	/// <para>
 	/// <strong>Assembly Loading:</strong> By referencing types through the builder methods,
 	/// we ensure that assemblies are loaded into the current AppDomain. This is essential because
-	/// reflection-based scanning (used by MediatR, FluentValidation, and other discovery mechanisms)
+	/// reflection-based scanning (used by Conductor, FluentValidation, and other discovery mechanisms)
 	/// can only find types in assemblies that are already loaded.
 	/// </para>
 	/// <para>

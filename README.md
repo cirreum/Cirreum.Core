@@ -38,7 +38,7 @@ A composable context system that provides single-source-of-truth operational con
 - **AuthorizationContext** - Authorization decisions with effective roles
 
 ```csharp
-// Created once in the dispatcher
+// Created once in RequestHandlerWrapperImpl<T> (typical path)
 var operation = OperationContext.Create(
     userState, operationId, correlationId, startTimestamp);
 
@@ -46,23 +46,29 @@ var operation = OperationContext.Create(
 var requestContext = new RequestContext<TRequest>(
     operation, request, requestType);
 
-// Composed into authorization context
+// Composed into authorization context (inside the evaluator)
 var authContext = new AuthorizationContext<TResource>(
     operation, effectiveRoles, resource);
 ```
 
-[See detailed context documentation](docs/OPERATION-CONTEXT.md)
+[See detailed context documentation](src/Cirreum.Core/OPERATION-CONTEXT.md)
 
 ### 🔐 Authorization Abstractions
 
-Flexible, policy-based authorization with support for both RBAC and ABAC patterns:
+Flexible, policy-based authorization with support for RBAC, ABAC, and ReBAC patterns:
 
-- `IAuthorizationEvaluator` - Pluggable authorization evaluation
+- **RBAC** — roles with inheritance via `IAuthorizationRoleRegistry` and `EffectiveRoles`
+- **ABAC** — attribute checks over user, resource, and ambient context inside `ResourceAuthorizerBase<T>` FluentValidation rules
+- **ReBAC** — owner→resource and tenant→resource relationships enforced by `OwnerScopeEvaluatorBase` (Stage 1 Step 0) and custom `IScopeEvaluator` implementations (Stage 1 Step 1)
+
+- `IAuthorizationEvaluator` - Pluggable, three-stage authorization evaluator (Scope → Resource → Policy)
 - `IAuthorizableResource` - Resources that can be authorized
-- `IAuthorizationValidator` - Custom authorization logic
-- Role resolution with inheritance support
-- Built-in Authorization visualizers and documenters
-- Flexible AuthN/AuthZ with support for OIDC/MSAL
+- `ResourceAuthorizerBase<TResource>` - FluentValidation-backed resource authorizer (one per resource type)
+- `IScopeEvaluator` / `OwnerScopeEvaluatorBase` - Stage 1 scope gates (tenant, owner, access-scope)
+- `IPolicyValidator` - Stage 3 cross-cutting policy validators (hours, quotas, kill-switches)
+- `AccessScope` (None / Global / Tenant) - Coarse authorization dimension resolved by `IAccessScopeResolver`
+- Role resolution with inheritance support via `IAuthorizationRoleRegistry`
+- Flexible AuthN/AuthZ with support for OIDC/MSAL/BYOID
 
 ### 📡 State Management
 
@@ -127,20 +133,20 @@ A high-performance mediator implementation with comprehensive pipeline support f
 
 **Request Abstractions**
 - `IRequest` / `IRequest<TResponse>` - Base request contracts
-- `IDomainCommand` / `IDomainCommand<TResponse>` - Commands with auditing and authorization
-- `IDomainQuery<TResponse>` - Queries with auditing and authorization
-- `IDomainCacheableQuery<TResponse>` - Cacheable queries with automatic cache management
+- `IAuthorizableCommand` / `IAuthorizableCommand<TResponse>` - Authorized write operations
+- `IAuthorizableQuery<TResponse>` - Authorized read operations
+- `IAuthorizableCacheableQuery<TResponse>` - Authorized, cacheable read operations
+- `IAuthorizableOwnerScopedCommand` / `IAuthorizableOwnerScopedQuery<TResponse>` / `IAuthorizableOwnerScopedCacheableQuery<TResponse>` - Owner-scoped variants that opt into the Stage 1 owner gate
+- `ICacheableQuery<TResponse>` - Query result caching with sliding/absolute expiration + cache tags
 
-**Built-in Intercepts**
+**Built-in Intercepts** (outermost → innermost, wrapping the handler)
 - **Validation** - FluentValidation integration
-- **Authorization** - Resource and policy-based authorization
-- **Performance Monitoring** - Request timing and metrics
-- **Query Caching** - Automatic result caching with configurable providers
+- **Authorization** - Three-stage Scope / Resource / Policy pipeline
+- **HandlerPerformance** - Request timing and metrics
+- **QueryCaching** - Automatic result caching with configurable providers
 
-**Extension Interfaces**
-- `IAuditableRequest` / `IAuditableRequest<T>` - Automatic audit trail generation
-- `IAuthorizableRequest` / `IAuthorizableRequest<T>` - Authorization evaluation
-- `ICacheableQuery<T>` - Query result caching with sliding/absolute expiration
+**Discriminator**
+- `IAuthorizableRequestBase` - Single pipeline discriminator for authorization; inherits `IAuthorizableResource` so every request is its own authorizable resource (no wrapping required)
 
 ### 🏗️ Primitives & Utilities
 
@@ -175,20 +181,20 @@ Foundational building blocks including:
 Definitions that support Cirreum's architectural patterns:
 
 - CQRS-style request and response contracts
-- ABAC/RBAC authorization with role inheritance
+- RBAC / ABAC / ReBAC authorization with role inheritance and owner/tenant relationships
 - Interceptors, pipelines, and execution flows
 - Metadata propagation and scoped request details
 
-| Interface | Auth | Audit | Cache | Use Case |
-|-----------|:----:|:-----:|:-----:|----------|
-| `IRequest<T>` | ✗ | ✗ | ✗ | Internal/anonymous |
-| `IAuthorizableRequest<T>` | ✓ | ✗ | ✗ | Protected, no logging |
-| `IAuditableRequest<T>` | ✗ | ✓ | ✗ | Logged, open access |
-| `ICacheableQuery<T>` | ✗ | ✗ | ✓ | Public cached lookups |
-| `IAuthorizableCacheableQuery<T>` | ✓ | ✗ | ✓ | Protected high-freq reads |
-| `IDomainQuery<T>` | ✓ | ✓ | ✗ | Sensitive reads |
-| `IDomainCommand<T>` | ✓ | ✓ | ✗ | State mutations |
-| `IDomainCacheableQuery<T>` | ✓ | ✓ | ✓ | Full coverage + cache |
+| Interface | Auth | Cache | Owner-Gated | Use Case |
+|-----------|:----:|:-----:|:-----------:|----------|
+| `IRequest` / `IRequest<T>` | ✗ | ✗ | ✗ | Internal / anonymous |
+| `ICacheableQuery<T>` | ✗ | ✓ | ✗ | Public cached lookups |
+| `IAuthorizableCommand` / `IAuthorizableCommand<T>` | ✓ | ✗ | ✗ | Protected state mutations |
+| `IAuthorizableQuery<T>` | ✓ | ✗ | ✗ | Protected reads |
+| `IAuthorizableCacheableQuery<T>` | ✓ | ✓ | ✗ | Protected high-freq reads |
+| `IAuthorizableOwnerScopedCommand` / `<T>` | ✓ | ✗ | ✓ | Protected mutations of owned resources |
+| `IAuthorizableOwnerScopedQuery<T>` | ✓ | ✗ | ✓ | Protected reads of owned resources |
+| `IAuthorizableOwnerScopedCacheableQuery<T>` | ✓ | ✓ | ✓ | Protected, cached reads of owned resources |
 
 ### 4. Utilities & Helpers
 
@@ -240,7 +246,7 @@ Built-in support for OpenTelemetry, structured logging, and distributed tracing 
 
 ```text
 OperationContext (Single Source of Truth)
-    ├─> WHO: UserState, UserId, UserName, TenantId, Roles
+    ├─> WHO: UserState, UserId, UserName, TenantId, Provider, AccessScope
     ├─> WHEN: Timestamp, StartTimestamp, Elapsed
     ├─> WHERE: Environment, RuntimeType
     └─> TIMING: High-precision duration calculation
@@ -253,7 +259,7 @@ RequestContext (Pipeline Context)
 AuthorizationContext (Authorization Decisions)
     ├─> Composes: OperationContext
     ├─> Adds: EffectiveRoles, Resource
-    └─> Delegates: All user properties to Operation
+    └─> Delegates: All user/scope/timing properties to Operation
 ```
 
 ### Zero-Allocation Timing
@@ -273,57 +279,38 @@ TimeSpan requestElapsed = requestContext.ElapsedDuration;
 ### Authorization Flow
 
 ```csharp
-// Ad-hoc authorization (creates context)
+// Ad-hoc authorization (evaluator builds OperationContext)
 var result = await evaluator.Evaluate(resource);
 
-// Pipeline authorization (reuses context)
+// Pipeline authorization (reuses OperationContext built by RequestHandlerWrapperImpl<T>)
 var result = await evaluator.Evaluate(resource, operationContext);
+```
 
-// Validators receive canonical AuthorizationContext
-public class MyValidator : IAuthorizationValidator<MyResource>
+Resource authorizers derive from `ResourceAuthorizerBase<TResource>`, which
+is an `AbstractValidator<AuthorizationContext<TResource>>`. Each resource
+type has **exactly one** registered authorizer (mirroring FluentValidation's
+one-validator-per-type contract):
+
+```csharp
+public sealed class DocumentAuthorizer
+    : ResourceAuthorizerBase<DocumentResource>
 {
-    public Task<Result> Validate(
-        AuthorizationContext<MyResource> context,
-        CancellationToken ct)
+    public DocumentAuthorizer()
     {
-        // Access user, roles, resource, timing all in one place
-        if (context.IsAuthenticated && 
-            context.EffectiveRoles.Contains(requiredRole))
-        {
-            return Result.Success();
-        }
-        return Result.Failure("Unauthorized");
+        // Owner can always access; otherwise admin-role required
+        this.RuleFor(context => context)
+            .Must(context =>
+                context.Resource.OwnerId == context.UserId
+                || context.EffectiveRoles.Any(r => r.Name == "Admin"))
+            .WithMessage("You don't have permission to access this document");
     }
 }
 ```
 
-## Logical Structure
-
-```
-Cirreum.Core/
-├── Abstractions/
-│   ├── Authorization/        # IAuthorizationEvaluator, IAuthorizableResource
-│   ├── Identity/             # IUserState, IUserSession, IApplicationUser
-│   ├── Messaging/            # Request/response contracts
-│   ├── State/                # State management contracts (see below)
-│   └── Environment/          # Runtime and environment abstractions
-├── Contexts/
-│   ├── OperationContext.cs   # Canonical operational context
-│   ├── RequestContext.cs     # Pipeline request context
-│   └── AuthorizationContext.cs # Authorization decision context
-├── Primitives/
-│   ├── Identifiers/          # Operation IDs, correlation IDs
-│   ├── Markers/              # Interface markers
-│   └── Metadata/             # Context metadata carriers
-├── Patterns/
-│   ├── Validators/           # Base validator implementations
-│   ├── Interceptors/         # Pipeline interceptor patterns
-│   └── Resources/            # Authorizable resource models
-└── Utilities/
-    ├── Formatting/           # SmartFormat helpers
-    ├── Validation/           # FluentValidation extensions
-    └── Csv/                  # CSV import/export utilities
-```
+Cross-cutting runtime rules (hours, quotas, kill-switches) live in
+`IPolicyValidator` implementations evaluated in Stage 3. Owner/tenant and
+access-scope gates live in `IScopeEvaluator` / `OwnerScopeEvaluatorBase`
+implementations evaluated in Stage 1.
 
 ## Usage
 
@@ -336,7 +323,7 @@ dotnet add package Cirreum.Core
 ### Basic Context Usage
 
 ```csharp
-// 1. Create operation context (done once in dispatcher)
+// 1. Create operation context (done once in RequestHandlerWrapperImpl<T>)
 var operation = OperationContext.Create(
     userState: currentUserState,
     operationId: Guid.NewGuid().ToString(),
@@ -366,45 +353,33 @@ logger.LogInformation(
 ### Authorization
 
 ```csharp
-// Define authorizable resource
-public record DocumentResource : IAuthorizableResource
+// Define authorizable resource (often the request itself via IAuthorizableRequestBase)
+public sealed record GetDocumentQuery : IAuthorizableQuery<DocumentDto>
 {
     public required string DocumentId { get; init; }
     public required string OwnerId { get; init; }
 }
 
-// Create validator
-public class DocumentAccessValidator 
-    : IAuthorizationValidator<DocumentResource>
+// Exactly one ResourceAuthorizerBase<T> per resource type (FluentValidation-style)
+public sealed class GetDocumentQueryAuthorizer
+    : ResourceAuthorizerBase<GetDocumentQuery>
 {
-    public Task<Result> Validate(
-        AuthorizationContext<DocumentResource> context,
-        CancellationToken ct)
+    public GetDocumentQueryAuthorizer()
     {
-        // Owner can always access
-        if (context.Resource.OwnerId == context.UserId)
-            return Task.FromResult(Result.Success());
-
-        // Admins can access
-        if (context.EffectiveRoles.Any(r => r.Name == "Admin"))
-            return Task.FromResult(Result.Success());
-
-        return Task.FromResult(
-            Result.Failure("You don't have permission to access this document"));
+        // Owner can always access; otherwise Admin role required
+        this.RuleFor(context => context)
+            .Must(context =>
+                context.Resource.OwnerId == context.UserId
+                || context.EffectiveRoles.Any(r => r.Name == "Admin"))
+            .WithMessage("You don't have permission to access this document");
     }
 }
 
-// Evaluate authorization
-var resource = new DocumentResource 
-{ 
-    DocumentId = "doc-123", 
-    OwnerId = "user-456" 
-};
-
-var result = await authEvaluator.Evaluate(resource, operationContext);
-if (result.IsFailure)
+// Evaluate authorization (normally runs inside the Authorization intercept)
+var result = await authEvaluator.Evaluate(query, operationContext);
+if (result.IsFailed)
 {
-    return Forbid(result.Error);
+    return Forbid(result.Errors);
 }
 ```
 
@@ -426,9 +401,10 @@ This library:
 
 ## Documentation
 
-- [Context Architecture](OPERATION-CONTEXT.md) - Detailed context composition guide
-- [Authorization Flow](authorization/FLOW.md) - Authorization best practices
-- [Authorization Sequence](authorization/SEQUENCE.md) - Authorization best practices
+- [Context Architecture](src/Cirreum.Core/OPERATION-CONTEXT.md) - Detailed context composition guide
+- [Authorization Flow](src/Cirreum.Core/Authorization/FLOW.md) - High-level request → authorization flow
+- [Authorization Sequence](src/Cirreum.Core/Authorization/SEQUENCE.md) - Detailed three-stage pipeline
+- [Conductor](src/Cirreum.Core/Conductor/README.md) - In-process dispatcher + intercept pipeline
 
 ## Contribution Guidelines
 

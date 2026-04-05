@@ -1,4 +1,4 @@
-﻿namespace Cirreum.Authorization;
+namespace Cirreum.Authorization;
 
 using Cirreum.Authorization.Diagnostics;
 using Cirreum.Exceptions;
@@ -12,16 +12,52 @@ using System.Collections.Immutable;
 
 /// <summary>
 /// The default implementation of the <see cref="IAuthorizationEvaluator"/>.
+/// Runs the three-stage authorization pipeline.
 /// </summary>
+/// <remarks>
+/// <para>
+/// The pipeline is:
+/// </para>
+/// <list type="number">
+/// <item><description>
+/// <b>Stage 1 — Scope</b>
+/// <list type="bullet">
+/// <item><description>
+/// Step 0: owner-scope gate (<see cref="OwnerScopeEvaluatorBase"/>, optional,
+/// applies only to <see cref="IAuthorizableOwnerScopedResource"/>).
+/// </description></item>
+/// <item><description>
+/// Step 1: generic scope evaluators (<see cref="IScopeEvaluator"/>, zero or more,
+/// run in registration order).
+/// </description></item>
+/// </list>
+/// First failure in Stage 1 short-circuits the pipeline.
+/// </description></item>
+/// <item><description>
+/// <b>Stage 2 — Resource</b>: resource authorizers (<see cref="IResourceAuthorizer{TResource}"/>).
+/// All authorizers run; failures are aggregated.
+/// </description></item>
+/// <item><description>
+/// <b>Stage 3 — Policy</b>: policy validators (<see cref="IPolicyValidator"/>) whose
+/// <see cref="IPolicyValidator.AppliesTo{TResource}(TResource, DomainRuntimeType, DateTimeOffset)"/>
+/// returns true. Run in <see cref="IPolicyValidator.Order"/>; failures are aggregated.
+/// </description></item>
+/// </list>
+/// </remarks>
 /// <param name="registry">The authorization role registry for resolving effective roles.</param>
 /// <param name="userAccessor">The accessor for retrieving current user state.</param>
 /// <param name="services">The service provider for resolving validators.</param>
 /// <param name="logger">The logger for authorization events.</param>
+/// <param name="ownerScopeEvaluator">
+/// Optional owner-scope gate. When present and the resource implements
+/// <see cref="IAuthorizableOwnerScopedResource"/>, runs as Stage 1 Step 0.
+/// </param>
 sealed class DefaultAuthorizationEvaluator(
 	IAuthorizationRoleRegistry registry,
 	IUserStateAccessor userAccessor,
 	IServiceProvider services,
-	ILogger<DefaultAuthorizationEvaluator> logger
+	ILogger<DefaultAuthorizationEvaluator> logger,
+	OwnerScopeEvaluatorBase? ownerScopeEvaluator = null
 ) : IAuthorizationEvaluator {
 
 	/// <inheritdoc/>
@@ -89,27 +125,39 @@ sealed class DefaultAuthorizationEvaluator(
 				nameof(resource));
 		}
 
-		// Get all authorizors for this resource type
-		var resourceAuthorizors = services
-			.GetServices<IAuthorizationResourceValidator<TResource>>()
-			.OfType<AuthorizationValidatorBase<TResource>>()
-			.ToList();
+		// MS.DI's GetServices<T>() materializes as T[] internally; cast to avoid a second
+		// allocation from .ToList() / .ToArray(). Fallback to collection-expr copy if a custom
+		// container ever returns a non-array shape. Call GetService<IEnumerable<T>>()! directly
+		// to bypass GetRequiredService's null-guard + throw-helper — IEnumerable<T> is always
+		// registered by MS.DI (empty array if no components).
+		var rawScope = services.GetService<IEnumerable<IScopeEvaluator>>()!;
+		var scopeEvaluators = rawScope as IScopeEvaluator[] ?? [.. rawScope];
 
-		// Get all policy validators that support the current runtime
-		var policyAuthorizors = services
-			.GetServices<IAuthorizationPolicyValidator>()
-			.Where(pv => pv.SupportedRuntimeTypes.Contains(operation.RuntimeType))
-			.ToList();
+		var rawResource = services.GetService<IEnumerable<IResourceAuthorizer<TResource>>>()!;
+		var resourceAuthorizers = rawResource as IResourceAuthorizer<TResource>[] ?? [.. rawResource];
 
-		if (resourceAuthorizors.Count == 0 && policyAuthorizors.Count == 0) {
+		// Policy runtime-type filter is deferred into the foreach below — combined with
+		// AppliesTo so we walk the array once instead of materializing a filtered copy here
+		// and then iterating again with Where().OrderBy().
+		var rawPolicy = services.GetService<IEnumerable<IPolicyValidator>>()!;
+		var policyAuthorizers = rawPolicy as IPolicyValidator[] ?? [.. rawPolicy];
+
+		var ownerGateApplies = ownerScopeEvaluator is not null
+			&& resource is IAuthorizableOwnerScopedResource;
+
+		if (scopeEvaluators.Length == 0
+			&& resourceAuthorizers.Length == 0
+			&& policyAuthorizers.Length == 0
+			&& !ownerGateApplies) {
 			//******************************************
 			//
-			// RESOURCE HAS NO AUTHORIZORS AND
-			// RUNTIME HAS NO POLICY AUTHORIZORS
+			// RESOURCE HAS NO AUTHORIZERS AND
+			// RUNTIME HAS NO POLICY AUTHORIZERS
+			// AND NO SCOPE CHECKS APPLY
 			//
 			//******************************************
 			var emptyAuthContainerEx = new InvalidOperationException(
-				$"Resource '{resourceName}' has no authorizors or applicable policies.");
+				$"Resource '{resourceName}' has no authorizers or applicable policies.");
 			logger.LogAuthorizingResourceDenied(
 				operation.UserName,
 				resourceName,
@@ -160,28 +208,95 @@ sealed class DefaultAuthorizationEvaluator(
 				effectiveRoles,
 				resource);
 
+			//******************************************
+			//
+			// STAGE 1 — SCOPE
+			//
+			// Step 0: owner-scope gate
+			// Step 1: generic scope evaluators
+			//
+			// First failure short-circuits.
+			//
+			//******************************************
+
+			if (ownerGateApplies) {
+				var ownerResult = await ownerScopeEvaluator!
+					.EvaluateAsync(authorizationContext)
+					.ConfigureAwait(false);
+
+				if (!ownerResult.IsValid) {
+					return this.DenyFromStage(ownerResult.Errors, operation.UserName, resourceName);
+				}
+			}
+
+			foreach (var evaluator in scopeEvaluators) {
+				cancellationToken.ThrowIfCancellationRequested();
+
+				var scopeResult = await evaluator
+					.EvaluateAsync(authorizationContext, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (!scopeResult.IsValid) {
+					return this.DenyFromStage(scopeResult.Errors, operation.UserName, resourceName);
+				}
+			}
+
+			//******************************************
+			//
+			// STAGE 2 — RESOURCE VALIDATORS
+			//
+			// Aggregate failures within the stage. If any resource authorizer
+			// denies, short-circuit before Stage 3 — policy checks are
+			// irrelevant (and often expensive) once resource-level access is
+			// denied.
+			//
+			//******************************************
+
 			// Create FluentValidation context
 			var validationContext = new ValidationContext<AuthorizationContext<TResource>>(authorizationContext);
 
-			// Collect all failures
-			var allFailures = new List<ValidationFailure>();
+			List<ValidationFailure>? stageFailures = null;
 
-			// Run all Resource Authorizors
-			var resourceTasks = resourceAuthorizors
-				.Select(v => v.ValidateAsync(validationContext, cancellationToken));
+			// Run the Resource Authorizer. By contract each TResource has exactly one
+			// ResourceAuthorizerBase<TResource> registered (mirrors AbstractValidator<T>
+			// per T in FluentValidation). Extra registrations are a misconfiguration and
+			// fail loud at evaluation time.
+			if (resourceAuthorizers.Length > 1) {
+				throw new InvalidOperationException(
+					$"Multiple IResourceAuthorizer<{typeof(TResource).Name}> registrations detected "
+					+ $"({resourceAuthorizers.Length}). Exactly one ResourceAuthorizerBase<T> per "
+					+ "resource type is the expected contract.");
+			}
+			if (resourceAuthorizers.Length == 1
+				&& resourceAuthorizers[0] is ResourceAuthorizerBase<TResource> authorizer) {
+				var authResult = await authorizer
+					.ValidateAsync(validationContext, cancellationToken)
+					.ConfigureAwait(false);
+				foreach (var failure in authResult.Errors) {
+					if (failure is not null) {
+						(stageFailures ??= []).Add(failure);
+					}
+				}
+			}
 
-			var resourceResults = await Task.WhenAll(resourceTasks).ConfigureAwait(false);
+			if (stageFailures is not null) {
+				return this.DenyFromStage(stageFailures, operation.UserName, resourceName);
+			}
 
-			allFailures.AddRange(resourceResults
-				.SelectMany(result => result.Errors)
-				.Where(f => f != null));
+			//******************************************
+			//
+			// STAGE 3 — POLICY VALIDATORS
+			//
+			// Aggregate failures within the stage.
+			//
+			//******************************************
 
-			// Run applicable Policy Authorizors
-			var applicablePolicyValidatorsQuery = policyAuthorizors
-				.Where(pv => pv.AppliesTo(resource, operation.RuntimeType, operation.Timestamp))
-				.OrderBy(pv => pv.Order);
+			// Run applicable Policy Authorizers. Combine runtime-support + AppliesTo filters
+			// in one pass; sort only the applicable subset.
+			var applicablePolicies = FilterAndOrderPolicies(
+				policyAuthorizers, resource, operation.RuntimeType, operation.Timestamp);
 
-			foreach (var policyValidator in applicablePolicyValidatorsQuery) {
+			foreach (var policyValidator in applicablePolicies) {
 				cancellationToken.ThrowIfCancellationRequested();
 
 				var policyResult = await policyValidator
@@ -189,25 +304,12 @@ sealed class DefaultAuthorizationEvaluator(
 					.ConfigureAwait(false);
 
 				if (!policyResult.IsValid) {
-					allFailures.AddRange(policyResult.Errors);
+					(stageFailures ??= []).AddRange(policyResult.Errors);
 				}
 			}
 
-			if (allFailures.Count != 0) {
-				//******************************************
-				//
-				// NOT AUTHORIZED
-				//
-				//******************************************
-				var userExplicitlyDeniedEx = string.Join(',', allFailures.Select(f => f.ErrorMessage));
-
-				logger.LogAuthorizingResourceDenied(
-					operation.UserName,
-					resourceName,
-					userExplicitlyDeniedEx);
-
-				var ex = new ForbiddenAccessException(userExplicitlyDeniedEx);
-				return Result.Fail(ex);
+			if (stageFailures is not null) {
+				return this.DenyFromStage(stageFailures, operation.UserName, resourceName);
 			}
 
 			//******************************************
@@ -235,5 +337,33 @@ sealed class DefaultAuthorizationEvaluator(
 				ex.Message);
 			return Result.Fail(ex);
 		}
+	}
+
+	private static List<IPolicyValidator> FilterAndOrderPolicies<TResource>(
+		IPolicyValidator[] all,
+		TResource resource,
+		DomainRuntimeType runtimeType,
+		DateTimeOffset timestamp)
+		where TResource : IAuthorizableResource {
+
+		// Walk once, keep applicable, sort by Order. Typical sizes are small (2-8) so
+		// List.Sort with the delegate comparer is cheaper than LINQ's OrderBy + stable sort.
+		var applicable = new List<IPolicyValidator>(all.Length);
+		foreach (var pv in all) {
+			if (pv.SupportedRuntimeTypes.Contains(runtimeType)
+				&& pv.AppliesTo(resource, runtimeType, timestamp)) {
+				applicable.Add(pv);
+			}
+		}
+		if (applicable.Count > 1) {
+			applicable.Sort(static (a, b) => a.Order.CompareTo(b.Order));
+		}
+		return applicable;
+	}
+
+	private Result DenyFromStage(List<ValidationFailure> failures, string userName, string resourceName) {
+		var message = string.Join(',', failures.Select(f => f.ErrorMessage));
+		logger.LogAuthorizingResourceDenied(userName, resourceName, message);
+		return Result.Fail(new ForbiddenAccessException(message));
 	}
 }

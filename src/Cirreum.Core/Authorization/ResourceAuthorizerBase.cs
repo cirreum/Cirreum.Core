@@ -4,26 +4,26 @@ using Cirreum.Security;
 using FluentValidation;
 
 /// <summary>
-/// Base Validator of <see cref="IAuthorizableResource"/> objects.
+/// Base Authorizer of <see cref="IAuthorizableResource"/> objects.
 /// </summary>
 /// <typeparam name="TResource">The Type of the resource.</typeparam>
 /// <remarks>
 /// <para>
-/// This abstract class that provides a base implementation of the 
-/// <see cref="IAuthorizationResourceValidator{TResource}"/> interface and
-/// serves as a foundational validator for resources that implement the
+/// This abstract class provides a base implementation of the
+/// <see cref="IResourceAuthorizer{TResource}"/> interface and
+/// serves as a foundational authorizer for resources that implement the
 /// <see cref="IAuthorizableResource"/> interface.
 /// </para>
 /// </remarks>
-public abstract class AuthorizationValidatorBase<TResource>
+public abstract class ResourceAuthorizerBase<TResource>
 	: AbstractValidator<AuthorizationContext<TResource>>
-	, IAuthorizationResourceValidator<TResource>
+	, IResourceAuthorizer<TResource>
 	where TResource : IAuthorizableResource {
 
 	/// <summary>
-	/// Initializes a new instance of <see cref="AuthorizationValidatorBase{TResource}"/>
+	/// Initializes a new instance of <see cref="ResourceAuthorizerBase{TResource}"/>
 	/// </summary>
-	protected AuthorizationValidatorBase() {
+	protected ResourceAuthorizerBase() {
 
 		this.RuleFor(context => context.UserState)
 			.NotNull()

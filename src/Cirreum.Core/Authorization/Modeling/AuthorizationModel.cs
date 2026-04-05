@@ -93,31 +93,28 @@ public class AuthorizationModel() {
 		// Step 2: Find all IDomainResource types
 		var domainResourceTypes = allTypes.Where(IsDomainResource).ToList();
 
-		// Step 3: Find all authorizors and build a lookup by resource type
-		var authorizorTypes = allTypes.Where(IsAuthorizationValidator).ToList();
-		var authorizorsByResource = new Dictionary<Type, Type>();
-		foreach (var authorizer in authorizorTypes) {
-			var resourceType = GetResourceTypeFromAuthorizor(authorizer);
+		// Step 3: Find all authorizers and build a lookup by resource type
+		var authorizerTypes = allTypes.Where(IsResourceAuthorizer).ToList();
+		var authorizersByResource = new Dictionary<Type, Type>();
+		foreach (var authorizer in authorizerTypes) {
+			var resourceType = GetResourceTypeFromAuthorizer(authorizer);
 			if (resourceType != null) {
-				authorizorsByResource[resourceType] = authorizer;
+				authorizersByResource[resourceType] = authorizer;
 			}
 		}
 
 		// Step 4: Build ResourceInfo for each domain resource
 		foreach (var resourceType in domainResourceTypes) {
-			var hasAuthorizer = authorizorsByResource.TryGetValue(resourceType, out var authorizorType);
-			var rules = hasAuthorizer ? ExtractValidationRules(resourceType, authorizorType!) : [];
+			var hasAuthorizer = authorizersByResource.TryGetValue(resourceType, out var authorizerType);
+			var rules = hasAuthorizer ? ExtractValidationRules(resourceType, authorizerType!) : [];
 
 			// IsAnonymous: not an IAuthorizableResource (doesn't participate in authorization)
 			var isAnonymous = !IsAuthorizableResource(resourceType);
 
-			// IsAuditable: is an IAuditableRequest (completed flows through pipeline, will emit an request completed notification)
-			var isAuditable = IsAuditableRequest(resourceType);
-
 			// IsCacheableQuery: is an ICacheableQuery (the query results are cached and returned to prevent re-query)
 			var isCacheableQuery = IsCacheableQuery(resourceType);
 
-			// RequiresAuthorization: is an IAuthorizableRequest (flows through pipeline, must have authorizer)
+			// RequiresAuthorization: is an IAuthorizableRequestBase (flows through pipeline, must have authorizer)
 			var requiresAuthorization = !isAnonymous && ImplementsAuthorizableRequest(resourceType);
 
 			var resourceInfo = new ResourceTypeInfo(
@@ -125,11 +122,10 @@ public class AuthorizationModel() {
 				DomainBoundary: GetDomainBoundary(resourceType),
 				ResourceKind: GetResourceKind(resourceType),
 				IsAnonymous: isAnonymous,
-				IsAuditable: isAuditable,
 				IsCacheableQuery: isCacheableQuery,
-				IsProtected: authorizorType != null,
+				IsProtected: authorizerType != null,
 				RequiresAuthorization: requiresAuthorization,
-				AuthorizerType: authorizorType,
+				AuthorizerType: authorizerType,
 				Rules: rules.AsReadOnly()
 			);
 
@@ -169,7 +165,7 @@ public class AuthorizationModel() {
 
 		var rules = new HashSet<AuthorizationRuleTypeInfo>();
 
-		// Find all authorizors
+		// Find all authorizers
 		var assemblies = Cirreum.AssemblyScanner.ScanAssemblies();
 		var allTypes = assemblies
 			.SelectMany(a => {
@@ -181,17 +177,17 @@ public class AuthorizationModel() {
 			})
 			.Where(t => t.IsClass && !t.IsAbstract)
 			.ToList();
-		var authorizorTypes = allTypes.Where(IsAuthorizationValidator).ToList();
+		var authorizerTypes = allTypes.Where(IsResourceAuthorizer).ToList();
 
-		// Extract rules from each authorizor
-		foreach (var authorizorType in authorizorTypes) {
+		// Extract rules from each authorizer
+		foreach (var authorizerType in authorizerTypes) {
 
-			// Get the resource type this authorizor protects
-			var resourceType = GetResourceTypeFromAuthorizor(authorizorType);
+			// Get the resource type this authorizer protects
+			var resourceType = GetResourceTypeFromAuthorizer(authorizerType);
 			resourceType ??= typeof(MissingResource);
 
 			// Extract validation rules
-			var ruleInfos = ExtractValidationRules(resourceType, authorizorType);
+			var ruleInfos = ExtractValidationRules(resourceType, authorizerType);
 			rules.UnionWith(ruleInfos);
 
 		}
@@ -204,7 +200,7 @@ public class AuthorizationModel() {
 	/// <summary>
 	/// Retrieves information about all available authorization policy rules.
 	/// </summary>
-	/// <remarks>This method aggregates policy rule information from all registered IAuthorizationPolicyValidator
+	/// <remarks>This method aggregates policy rule information from all registered IPolicyValidator
 	/// services. If caching is enabled and cached data is available, the method returns the cached results to improve
 	/// performance. Otherwise, it queries the underlying services to obtain the latest policy rules.</remarks>
 	/// <param name="useCache">true to return cached policy rule information if available; false to force retrieval of the latest policy rules
@@ -220,7 +216,7 @@ public class AuthorizationModel() {
 			return new List<PolicyRuleTypeInfo>().AsReadOnly();
 		}
 
-		var policyValidators = this._services.GetServices<IAuthorizationPolicyValidator>().ToList();
+		var policyValidators = this._services.GetServices<IPolicyValidator>().ToList();
 		var policyRules = new List<PolicyRuleTypeInfo>();
 
 		foreach (var policy in policyValidators) {
@@ -314,16 +310,6 @@ public class AuthorizationModel() {
 	}
 
 	/// <summary>
-	/// Determines whether the specified type implements the IAuditableRequestBase interface.
-	/// </summary>
-	/// <param name="type">The type to examine for implementation of the IAuditableRequestBase interface.</param>
-	/// <returns>true if the specified type implements IAuditableRequestBase; otherwise, false.</returns>
-	private static bool IsAuditableRequest(Type type) {
-		var interfaces = type.GetInterfaces();
-		return interfaces.Any(i => i.Name == nameof(IAuditableRequestBase));
-	}
-
-	/// <summary>
 	/// Determines whether the specified type implements the ICacheableQuery interface.
 	/// </summary>
 	/// <param name="type">The type to examine for implementation of the ICacheableQuery interface.</param>
@@ -334,60 +320,57 @@ public class AuthorizationModel() {
 	}
 
 	/// <summary>
-	/// Determines whether the specified type implements an authorizable request interface.
+	/// Determines whether the specified type implements <see cref="IAuthorizableRequestBase"/>.
 	/// </summary>
-	/// <param name="type">The type to inspect for implementation of an authorizable request interface.</param>
-	/// <returns>true if the specified type implements IAuthorizableRequestBase, IAuthorizableRequest,
-	/// or IAuthorizableRequest{T}; otherwise, false.
+	/// <param name="type">The type to inspect.</param>
+	/// <returns>
+	/// true if the specified type implements <see cref="IAuthorizableRequestBase"/>; otherwise, false.
 	/// </returns>
-	/// <remarks>This method checks for implementation of any of the recognized authorizable request marker
-	/// interfaces, including generic variants. Use this to identify types that support authorization in the request
-	/// pipeline.
+	/// <remarks>
+	/// <see cref="IAuthorizableRequestBase"/> is the single pipeline discriminator for authorization —
+	/// all CQRS marker interfaces (<c>IAuthorizableCommand</c>, <c>IAuthorizableQuery&lt;T&gt;</c>,
+	/// owner-scoped variants, cacheable variants) inherit from it.
 	/// </remarks>
 	private static bool ImplementsAuthorizableRequest(Type type) {
-		// Check if the type implements any of the request interfaces
-		return type.GetInterfaces().Any(i =>
-			i.Name == nameof(IAuthorizableRequestBase) ||
-			i.Name == nameof(IAuthorizableRequest) ||
-			(i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAuthorizableRequest<>)));
+		return type.GetInterfaces().Any(i => i.Name == nameof(IAuthorizableRequestBase));
 	}
 
-	private static bool IsAuthorizationValidator(Type type) {
+	private static bool IsResourceAuthorizer(Type type) {
 		// Check for base class validators
 		if (type.BaseType?.IsGenericType == true &&
-			type.BaseType.GetGenericTypeDefinition() == typeof(AuthorizationValidatorBase<>)) {
+			type.BaseType.GetGenericTypeDefinition() == typeof(ResourceAuthorizerBase<>)) {
 			return true;
 		}
 
 		// Check for interface-based validators
 		return type.GetInterfaces()
 			.Any(i => i.IsGenericType &&
-					  i.GetGenericTypeDefinition() == typeof(IAuthorizationResourceValidator<>));
+					  i.GetGenericTypeDefinition() == typeof(IResourceAuthorizer<>));
 	}
 
-	private static Type? GetResourceTypeFromAuthorizor(Type authorizorType) {
+	private static Type? GetResourceTypeFromAuthorizer(Type authorizerType) {
 		// Try base class first
-		if (authorizorType.BaseType?.IsGenericType == true &&
-			authorizorType.BaseType.GetGenericTypeDefinition() == typeof(AuthorizationValidatorBase<>)) {
-			return authorizorType.BaseType.GetGenericArguments()[0];
+		if (authorizerType.BaseType?.IsGenericType == true &&
+			authorizerType.BaseType.GetGenericTypeDefinition() == typeof(ResourceAuthorizerBase<>)) {
+			return authorizerType.BaseType.GetGenericArguments()[0];
 		}
 
 		// Try interface
-		var validatorInterface = authorizorType.GetInterfaces()
+		var validatorInterface = authorizerType.GetInterfaces()
 			.FirstOrDefault(i => i.IsGenericType &&
-								 i.GetGenericTypeDefinition() == typeof(IAuthorizationResourceValidator<>));
+								 i.GetGenericTypeDefinition() == typeof(IResourceAuthorizer<>));
 
 		return validatorInterface?.GetGenericArguments()[0];
 	}
 
-	private static bool IsAttributeBasedPolicy(IAuthorizationPolicyValidator policy) {
+	private static bool IsAttributeBasedPolicy(IPolicyValidator policy) {
 		var baseType = policy.GetType().BaseType;
 		return baseType != null &&
 			   baseType.IsGenericType &&
 			   baseType.GetGenericTypeDefinition() == typeof(AttributeValidatorBase<>);
 	}
 
-	private static Type? GetTargetAttributeType(IAuthorizationPolicyValidator policy) {
+	private static Type? GetTargetAttributeType(IPolicyValidator policy) {
 		if (!IsAttributeBasedPolicy(policy)) {
 			return null;
 		}
@@ -395,7 +378,7 @@ public class AuthorizationModel() {
 		return policy.GetType().BaseType?.GetGenericArguments()[0];
 	}
 
-	private static string GetPolicyDescription(IAuthorizationPolicyValidator policy) {
+	private static string GetPolicyDescription(IPolicyValidator policy) {
 		var type = policy.GetType();
 		var description = type.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false)
 			.Cast<System.ComponentModel.DescriptionAttribute>()

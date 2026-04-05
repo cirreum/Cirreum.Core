@@ -7,6 +7,8 @@ using System.Security.Claims;
 
 public sealed class TestUserState : UserStateBase {
 
+	public override bool IsAuthenticationComplete => true;
+
 	public TestUserState()
 		: this(
 			principal: AnonymousUser.Shared,

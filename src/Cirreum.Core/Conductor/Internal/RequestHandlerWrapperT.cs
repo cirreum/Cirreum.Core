@@ -1,4 +1,4 @@
-﻿namespace Cirreum.Conductor.Internal;
+namespace Cirreum.Conductor.Internal;
 /// <summary>
 /// Base wrapper class for requests with typed responses.
 /// </summary>
@@ -11,6 +11,5 @@ internal abstract class RequestHandlerWrapper<TResponse> {
 	public abstract Task<Result<TResponse>> HandleAsync(
 		IRequest<TResponse> request,
 		IServiceProvider serviceProvider,
-		IPublisher publisher,
 		CancellationToken cancellationToken);
 }

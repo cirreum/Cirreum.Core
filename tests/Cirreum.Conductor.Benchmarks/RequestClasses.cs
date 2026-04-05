@@ -14,7 +14,7 @@ public sealed record ConductorPing(string Message) : Conductor.IRequest<PingResp
 //	}
 //}
 
-//public sealed class PingRequestAuthorizer : AuthorizationValidatorBase<ConductorPing> {
+//public sealed class PingRequestAuthorizer : ResourceAuthorizerBase<ConductorPing> {
 //	public PingRequestAuthorizer() {
 //		this.HasRole(ApplicationRoles.AppUserRole);
 //	}
