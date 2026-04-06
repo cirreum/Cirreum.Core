@@ -1,4 +1,5 @@
 ﻿namespace Cirreum.Messaging.Options;
+
 using Microsoft.Extensions.Options;
 
 /// <summary>

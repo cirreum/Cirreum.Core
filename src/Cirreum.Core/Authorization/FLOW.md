@@ -16,6 +16,7 @@ sequenceDiagram
     participant CN as Conductor Dispatcher
     participant AI as Authorization Intercept
     participant AE as IAuthorizationEvaluator
+    participant GE as GrantEvaluator
     participant RR as IAuthorizationRoleRegistry
     participant US as IUserStateAccessor
 
@@ -41,8 +42,17 @@ sequenceDiagram
     AE->>RR: Resolve effective roles
     RR-->>AE: Role hierarchy (expanded once)
 
-    Note over AE: Three-stage pipeline<br/>(see SEQUENCE.md)
+    Note over AE,GE: Three-stage pipeline<br/>(see SEQUENCE.md)
     AE->>AE: Stage 1 — Scope (short-circuit)
+
+    alt Resource is IGrantedCommand / IGrantedRead / IGrantedList
+        AE->>GE: EvaluateAsync(authContext)
+        Note over GE: Resolve AccessReach<br/>(L1→L2→cold path)
+        GE->>GE: CRL enforcement<br/>(Command / Read / List rules)
+        GE-->>AE: ValidationResult
+    end
+
+    AE->>AE: Stage 1 cont. — Owner + Scope evaluators
     AE->>AE: Stage 2 — Resource (aggregate, then short-circuit)
     AE->>AE: Stage 3 — Policy (aggregate)
 
@@ -71,6 +81,11 @@ sequenceDiagram
   that app-user — never IdP claims directly.
 - **Intercept placement.** Authorization runs after Validation but before
   the handler. The handler can assume a valid, authorized request.
+- **Grants (Stage 1 Step 0).** When a resource implements a Granted interface
+  (`IGrantedCommand`, `IGrantedRead`, `IGrantedList`), the `GrantEvaluator`
+  resolves the caller's `AccessReach` and enforces CRL timing rules before
+  any other scope evaluator runs. If the resource is not granted, this step
+  is a no-op pass. See the [Grants README](Grants/README.md) for details.
 - **Result, not exceptions.** Authentication/authorization failures are
   returned as `Result.Fail(...)` through the pipeline. Exceptions inside
   an evaluator are caught and converted at the pipeline boundary.

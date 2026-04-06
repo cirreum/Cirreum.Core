@@ -95,7 +95,7 @@ sealed class QueryCaching<TRequest, TResponse>
 		return result;
 	}
 
-	private QueryCacheSettings BuildEffectiveSettings(TRequest request, string queryTypeName) {
+	private CacheExpirationSettings BuildEffectiveSettings(TRequest request, string queryTypeName) {
 		var querySettings = request.Cache;
 		var cacheOptions = this._conductorSettings.Cache;
 
@@ -132,7 +132,7 @@ sealed class QueryCaching<TRequest, TResponse>
 		localExpiration ??= cacheOptions.DefaultLocalExpiration;
 		failureExpiration ??= cacheOptions.DefaultFailureExpiration;
 
-		return new QueryCacheSettings(
+		return new CacheExpirationSettings(
 			Expiration: expiration,
 			LocalExpiration: localExpiration,
 			FailureExpiration: failureExpiration

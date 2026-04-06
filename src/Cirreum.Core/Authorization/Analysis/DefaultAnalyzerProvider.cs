@@ -35,7 +35,8 @@ public static class DefaultAnalyzerProvider {
 		var analyzers = new List<IAuthorizationAnalyzer> {
 			new AuthorizationRuleAnalyzer(),
 			new RoleHierarchyAnalyzer(roleRegistry),
-			new AnonymousResourceAnalyzer()
+			new AnonymousResourceAnalyzer(),
+			new GrantedResourceAnalyzer()
 		};
 
 		// Only add service-dependent analyzers if services are provided

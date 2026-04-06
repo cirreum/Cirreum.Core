@@ -122,24 +122,43 @@ public static class ClaimsHelper {
 	}
 
 	/// <summary>
-	/// Attempt to determine the id of the principal.
+	/// Resolves the most stable user identifier from the principal's claims.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Resolution order (first non-null wins):
+	/// </para>
+	/// <list type="number">
+	///   <item><description><c>oid</c> — Entra ID object identifier (tenant-wide, stable across apps).</description></item>
+	///   <item><description><c>http://schemas.microsoft.com/identity/claims/objectidentifier</c> — long-form Entra OID claim.</description></item>
+	///   <item><description><c>sub</c> — OIDC subject identifier. May be pairwise (per-app) with some providers.</description></item>
+	///   <item><description><c>http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier</c> —
+	///     ASP.NET's <see cref="ClaimTypes.NameIdentifier"/>. The OIDC middleware maps <c>sub</c>
+	///     to this URI by default when <c>MapInboundClaims</c> is enabled.</description></item>
+	///   <item><description><c>user_id</c> — Firebase / custom IdP fallback.</description></item>
+	/// </list>
+	/// <para>
+	/// For Entra-backed applications, <c>oid</c> is preferred over <c>sub</c> because Entra's
+	/// subject claim can vary per application (pairwise), while <c>oid</c> is consistent across
+	/// all applications within the same tenant.
+	/// </para>
+	/// </remarks>
 	/// <param name="principal">The <see cref="ClaimsPrincipal"/> to evaluate.</param>
-	/// <returns>The id if resolved otheriwise null.</returns>
+	/// <returns>The resolved identifier, or <see langword="null"/> if no matching claim is found.</returns>
 	public static string? ResolveId(ClaimsPrincipal principal) =>
 		principal.FindFirst("oid")?.Value
 		?? principal.FindFirst(EntraClaimTypes.ObjectId)?.Value
 		?? principal.FindFirst("sub")?.Value
+		?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
 		?? principal.FindFirst("user_id")?.Value;
-	/// <summary>
-	/// Attempt to determine the id of the identity.
-	/// </summary>
+
+	/// <inheritdoc cref="ResolveId(ClaimsPrincipal)"/>
 	/// <param name="identity">The <see cref="ClaimsIdentity"/> to evaluate.</param>
-	/// <returns>The id if resolved otheriwise null.</returns>
 	public static string? ResolveId(ClaimsIdentity identity) =>
 		identity.FindFirst("oid")?.Value
 		?? identity.FindFirst(EntraClaimTypes.ObjectId)?.Value
 		?? identity.FindFirst("sub")?.Value
+		?? identity.FindFirst(ClaimTypes.NameIdentifier)?.Value
 		?? identity.FindFirst("user_id")?.Value;
 
 	/// <summary>

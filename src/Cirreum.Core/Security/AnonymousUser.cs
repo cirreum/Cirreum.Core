@@ -1,4 +1,5 @@
 ﻿namespace Cirreum.Security;
+
 using System.Security.Claims;
 
 /// <summary>

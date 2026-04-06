@@ -5,6 +5,7 @@ using Cirreum.Authorization.Documentation;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Extensions.Internal;
 using Cirreum.Presence;
+using Cirreum.Security;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,22 +34,7 @@ public static class ServiceCollectionExtensions {
 
 
 	/// <summary>
-	/// Tries to add the default built-in <see cref="OwnerScopeEvaluatorBase"/>
-	/// implementation — the Stage 1 Step 0 owner-scope gate that enforces OwnerId
-	/// presence, matching, and enrichment for
-	/// <see cref="IAuthorizableOwnerScopedResource"/> resources. Call this when the
-	/// application's <see cref="IApplicationUser"/> participates in owner scoping
-	/// (i.e. implements <see cref="IOwnedApplicationUser"/>).
-	/// </summary>
-	/// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
-	public static void AddDefaultOwnerScopeEvaluator(
-		this IServiceCollection services) {
-		services.TryAddTransient<OwnerScopeEvaluatorBase, DefaultOwnerScopeEvaluator>();
-	}
-
-
-	/// <summary>
-	/// Tries to add the default built-in implementation of the 
+	/// Tries to add the default built-in implementation of the
 	/// <see cref="IAuthorizationDocumenter"/> service if one is not already registered.
 	/// </summary>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
@@ -61,6 +47,17 @@ public static class ServiceCollectionExtensions {
 			return;
 		}
 		services.TryAddScoped<IAuthorizationDocumenter, AuthorizationDocumenter>();
+	}
+
+
+	/// <summary>
+	/// Registers the <see cref="DefaultAccessScopeResolver"/> as the default
+	/// <see cref="IAccessScopeResolver"/> if one is not already registered.
+	/// </summary>
+	/// <param name="services">The current <see cref="IServiceCollection"/> to register with.</param>
+	public static void AddDefaultAccessScopeResolver(
+		this IServiceCollection services) {
+		services.TryAddSingleton<IAccessScopeResolver, DefaultAccessScopeResolver>();
 	}
 
 
@@ -190,6 +187,11 @@ public static class ServiceCollectionExtensions {
 			 // Conductor options configuration for domain:
 			 optionsBuilder: optionsBuilder,
 			 applyDefaultPipeline: true);
+
+		//
+		// Access Scope
+		//
+		services.AddDefaultAccessScopeResolver();
 
 		//
 		// Domain Context Initializer

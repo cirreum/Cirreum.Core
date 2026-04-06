@@ -97,7 +97,7 @@ public class InterceptTests {
 	public record CacheableTestQuery(int Id)
 		: ICacheableQuery<string> {
 		public string CacheKey => $"test-{this.Id}";
-		public QueryCacheSettings Cache => new() {
+		public CacheExpirationSettings Cache => new() {
 			Expiration = TimeSpan.FromMinutes(10)
 		};
 		public string[]? CacheTags { get; } = ["test-queries"];

@@ -36,22 +36,20 @@ public interface IUserState : IUserSession {
 	bool IsAuthenticationComplete { get; }
 
 	/// <summary>
-	/// The application user id. Typically from the 'sub' claim.
+	/// The caller's stable identity, resolved from claims by
+	/// <see cref="ClaimsHelper.ResolveId(System.Security.Claims.ClaimsPrincipal)"/>.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// This value is typically immutable and can't be reassigned or reused within
-	/// the scope of a single application.
+	/// Resolution prefers the Entra <c>oid</c> (object identifier) claim when present, falling
+	/// back to <c>sub</c> (OIDC subject) and then <c>user_id</c> (Firebase / custom IdP).
+	/// For Entra-backed applications, <c>oid</c> is tenant-wide and stable across apps, whereas
+	/// <c>sub</c> may be pairwise (different per application registration).
 	/// </para>
 	/// <para>
-	/// The subject identifier may be pairwise (different for each application) or
-	/// public (same across applications) depending on the Identity Provider's configuration.
-	/// With pairwise identifiers, if a single user signs into two different apps using
-	/// two different client IDs, those apps receive different values for the subject claim.
-	/// </para>
-	/// <para>
-	/// Such as Microsoft Entra ID (formerly Azure AD), may vary the "sub" value per application.
-	/// In such cases, consider using <see cref="UserProfile.Oid"/> for tenant-wide consistency if available.
+	/// This value is immutable for the lifetime of the user's identity in the IdP and is used
+	/// as the primary key for application-user resolution
+	/// (<see cref="IApplicationUserResolver"/>), grant cache keys, and audit trails.
 	/// </para>
 	/// </remarks>
 	string Id { get; }
@@ -77,6 +75,26 @@ public interface IUserState : IUserSession {
 	/// has stamped a value.
 	/// </summary>
 	AccessScope AccessScope => AccessScope.None;
+
+	/// <summary>
+	/// Gets a value indicating whether the <see cref="AccessScope"/> has been resolved
+	/// for this user state — either by an <see cref="IAccessScopeResolver"/> or by
+	/// explicit assignment.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// When <see langword="false"/>, the <see cref="AccessScope"/> value is the
+	/// unresolved default (<see cref="AccessScope.None"/>). Consumers should not
+	/// interpret <see cref="AccessScope.None"/> as meaningful until this property
+	/// is <see langword="true"/>.
+	/// </para>
+	/// <para>
+	/// This becomes <see langword="true"/> when <c>SetAccessScope</c> is called,
+	/// regardless of the resolved value — including when the resolver explicitly
+	/// returns <see cref="AccessScope.None"/> for an anonymous caller.
+	/// </para>
+	/// </remarks>
+	bool IsAccessScopeResolved => false;
 
 	/// <summary>
 	/// Gets the configured Authentication Library Type.

@@ -14,9 +14,10 @@ public abstract class UserStateBase : IUserState {
 	protected bool _isAuthenticated;
 	protected AuthenticationLibraryType _authenticationType = AuthenticationLibraryType.None;
 
-	private IApplicationUser? _applicationUser;
-	private bool _applicationUserLoaded;
 	private Type? _applicationUserType; // Track the actual type
+	private bool _applicationUserLoaded;
+	private IApplicationUser? _applicationUser;
+	private bool _accessScopeResolved;
 	private AccessScope _accessScope = AccessScope.None;
 
 	/// <inheritdoc/>
@@ -36,16 +37,6 @@ public abstract class UserStateBase : IUserState {
 
 	/// <inheritdoc/>
 	public AuthenticationLibraryType AuthenticationType => this._authenticationType;
-
-	/// <inheritdoc/>
-	public AccessScope AccessScope => this._accessScope;
-
-	/// <summary>
-	/// Sets the access scope for the current instance.
-	/// </summary>
-	/// <param name="scope">The access scope to assign to the instance. Determines the permissions or visibility level applied.</param>
-	protected virtual void SetAccessScope(AccessScope scope) => this._accessScope = scope;
-
 
 	// UserProfile
 	// -------------------------------------------------------------
@@ -97,6 +88,25 @@ public abstract class UserStateBase : IUserState {
 
 		return DateTimeOffset.UtcNow - this.LastActivityTime.Value > timeout;
 	}
+
+	// AccessScope
+	// -------------------------------------------------------------
+
+	/// <inheritdoc/>
+	public AccessScope AccessScope => this._accessScope;
+
+	/// <inheritdoc/>
+	public bool IsAccessScopeResolved => this._accessScopeResolved;
+
+	/// <summary>
+	/// Sets the access scope for the current instance.
+	/// </summary>
+	/// <param name="scope">The access scope to assign to the instance.</param>
+	protected virtual void SetAccessScope(AccessScope scope) {
+		this._accessScope = scope;
+		this._accessScopeResolved = true;
+	}
+
 
 	// IApplicationUser
 	// -------------------------------------------------------------

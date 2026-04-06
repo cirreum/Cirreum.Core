@@ -26,7 +26,7 @@ public interface ICacheableQueryService {
 	ValueTask<TResponse> GetOrCreateAsync<TResponse>(
 		string cacheKey,
 		Func<CancellationToken, ValueTask<TResponse>> factory,
-		QueryCacheSettings settings,
+		CacheExpirationSettings settings,
 		string[]? tags = null,
 		CancellationToken cancellationToken = default);
 

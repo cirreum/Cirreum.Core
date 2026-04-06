@@ -117,6 +117,11 @@ public class AuthorizationModel() {
 			// RequiresAuthorization: is an IAuthorizableRequestBase (flows through pipeline, must have authorizer)
 			var requiresAuthorization = !isAnonymous && ImplementsAuthorizableRequest(resourceType);
 
+			// Grant metadata: domain namespace and required permissions
+			var grantDomain = RequiredPermissionsCache.ResolveDomainNamespace(resourceType);
+			var isGranted = grantDomain is not null;
+			var requiredPermissions = isGranted ? RequiredPermissionsCache.GetFor(resourceType) : null;
+
 			var resourceInfo = new ResourceTypeInfo(
 				ResourceType: resourceType,
 				DomainBoundary: GetDomainBoundary(resourceType),
@@ -126,7 +131,10 @@ public class AuthorizationModel() {
 				IsProtected: authorizerType != null,
 				RequiresAuthorization: requiresAuthorization,
 				AuthorizerType: authorizerType,
-				Rules: rules.AsReadOnly()
+				Rules: rules.AsReadOnly(),
+				IsGranted: isGranted,
+				GrantDomain: grantDomain,
+				RequiredPermissions: requiredPermissions
 			);
 
 			resources.Add(resourceInfo);

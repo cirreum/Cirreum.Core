@@ -294,7 +294,13 @@ authenticated the caller. It's stamped onto `IUserState` by
 
 ### Where It's Used
 
-- **Owner-scope gate (Stage 1 Step 0).** The default `OwnerScopeEvaluator`
+- **Grant evaluation (Stage 1 Step 0a).** The `GrantEvaluator` uses
+  `AccessScope` to enforce CRL rules differently per scope. `Global`
+  callers must supply an explicit `OwnerId` for writes (no auto-enrich),
+  and must supply `OwnerId` for cacheable reads (no unbounded cache bucket).
+  `Tenant` callers may auto-enrich from single-element reach. See the
+  [Grants README](Authorization/Grants/README.md) for full CRL semantics.
+- **Owner-scope gate (Stage 1 Step 0b).** The default `OwnerScopeEvaluator`
   uses `AccessScope` to decide whether the caller is *required* to match
   the resource's `OwnerId`, or is a cross-tenant operator who can bypass
   owner-match (e.g., `Global` callers performing admin-level operations).

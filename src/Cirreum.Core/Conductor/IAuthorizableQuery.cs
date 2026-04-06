@@ -1,7 +1,5 @@
 namespace Cirreum.Conductor;
 
-using Cirreum.Authorization;
-
 /// <summary>
 /// Marker for an authorized read operation (query).
 /// </summary>

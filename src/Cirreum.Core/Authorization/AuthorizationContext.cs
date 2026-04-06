@@ -39,6 +39,21 @@ public sealed record AuthorizationContext<TResource>(
 	public bool HasEnrichedProfile => this.Operation.HasEnrichedProfile;
 	public IUserState UserState => this.Operation.UserState;
 
+	/// <summary>
+	/// The application-layer user loaded from the app's user store, or <see langword="null"/>
+	/// when no app-db record backs this caller (e.g., workforce identities that exist only in
+	/// an operator IdP). Shortcut for <c>UserState.ApplicationUser</c>.
+	/// </summary>
+	public IApplicationUser? ApplicationUser => this.Operation.UserState.ApplicationUser;
+
+	/// <summary>
+	/// The distinct set of permissions declared on <typeparamref name="TResource"/> via
+	/// <see cref="RequiresPermissionAttribute"/>. Hoisted once per type from
+	/// <see cref="RequiredPermissionsCache"/>; available to every authorization stage without
+	/// per-request reflection. AND semantics — every listed permission is required.
+	/// </summary>
+	public IReadOnlyList<Permission> RequiredPermissions => RequiredPermissionsCache.GetFor<TResource>();
+
 	// ExecutionContext properties (for policy validators)
 	public DomainRuntimeType RuntimeType => this.Operation.RuntimeType;
 	public DateTimeOffset Timestamp => this.Operation.Timestamp;

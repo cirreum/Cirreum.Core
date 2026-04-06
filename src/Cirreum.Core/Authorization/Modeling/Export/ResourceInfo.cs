@@ -14,5 +14,8 @@ public sealed record ResourceInfo(
 	bool RequiresAuthorization,
 	string? AuthorizerName,
 	string? AuthorizerFullName,
-	IReadOnlyList<AuthorizationRuleInfo> Rules
+	IReadOnlyList<AuthorizationRuleInfo> Rules,
+	bool IsGranted = false,
+	string? GrantDomain = null,
+	IReadOnlyList<string>? RequiredPermissions = null
 );

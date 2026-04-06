@@ -11,7 +11,7 @@ using FluentValidation.Results;
 /// Scope evaluators are app-supplied, pure checks against
 /// <see cref="Security.AccessScope"/> and resource shape. They do NOT know
 /// about override roles or <see cref="IApplicationUser"/> — those concerns live
-/// only in <see cref="OwnerScopeEvaluatorBase"/>.
+/// only in <see cref="Grants.GrantEvaluator"/>.
 /// </para>
 /// <para>
 /// Zero or more evaluators may be registered. They run in registration order; the

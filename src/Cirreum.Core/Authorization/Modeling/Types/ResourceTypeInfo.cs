@@ -1,6 +1,7 @@
 ﻿namespace Cirreum.Authorization.Modeling.Types;
 
 using Cirreum.Authorization.Modeling.Export;
+using Cirreum.Authorization;
 
 /// <summary>
 /// Internal type used during analysis that includes CLR Type references.
@@ -15,7 +16,10 @@ public sealed record ResourceTypeInfo(
 	bool IsProtected,
 	bool RequiresAuthorization,
 	Type? AuthorizerType,
-	IReadOnlyList<AuthorizationRuleTypeInfo> Rules
+	IReadOnlyList<AuthorizationRuleTypeInfo> Rules,
+	bool IsGranted = false,
+	string? GrantDomain = null,
+	IReadOnlyList<Permission>? RequiredPermissions = null
 ) {
 	/// <summary>
 	/// Converts to the serializable ResourceInfo type.
@@ -31,6 +35,11 @@ public sealed record ResourceTypeInfo(
 		RequiresAuthorization: this.RequiresAuthorization,
 		AuthorizerName: this.AuthorizerType?.Name,
 		AuthorizerFullName: this.AuthorizerType?.FullName,
-		Rules: [.. this.Rules.Select(r => r.ToRuleInfo())]
+		Rules: [.. this.Rules.Select(r => r.ToRuleInfo())],
+		IsGranted: this.IsGranted,
+		GrantDomain: this.GrantDomain,
+		RequiredPermissions: this.RequiredPermissions is not null
+			? [.. this.RequiredPermissions.Select(p => p.ToString())]
+			: []
 	);
 }

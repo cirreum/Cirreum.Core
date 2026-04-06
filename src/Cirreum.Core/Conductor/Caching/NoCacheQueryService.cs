@@ -10,7 +10,7 @@ public class NoCacheQueryService : ICacheableQueryService {
 	public async ValueTask<TResponse> GetOrCreateAsync<TResponse>(
 		string cacheKey,
 		Func<CancellationToken, ValueTask<TResponse>> factory,
-		QueryCacheSettings settings,
+		CacheExpirationSettings settings,
 		string[]? tags = null,
 		CancellationToken cancellationToken = default) {
 		// Always execute, never cache

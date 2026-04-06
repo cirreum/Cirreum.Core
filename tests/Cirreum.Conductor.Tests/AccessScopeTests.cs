@@ -17,6 +17,12 @@ public class AccessScopeTests {
 		Assert.AreEqual(AccessScope.None, user.AccessScope);
 	}
 
+	[TestMethod]
+	public void IUserState_default_IsAccessScopeResolved_is_false() {
+		IUserState user = new MinimalUserState();
+		Assert.IsFalse(user.IsAccessScopeResolved);
+	}
+
 	// UserStateBase backing field + setter
 	// -------------------------------------------------------------
 
@@ -27,6 +33,12 @@ public class AccessScopeTests {
 	}
 
 	[TestMethod]
+	public void UserStateBase_IsAccessScopeResolved_defaults_to_false() {
+		var user = new TestUserState();
+		Assert.IsFalse(user.IsAccessScopeResolved);
+	}
+
+	[TestMethod]
 	public void UserStateBase_SetAccessScope_persists_value() {
 		var user = new AccessScopeExposingUserState();
 		user.StampScope(AccessScope.Global);
@@ -34,6 +46,24 @@ public class AccessScopeTests {
 
 		user.StampScope(AccessScope.Tenant);
 		Assert.AreEqual(AccessScope.Tenant, user.AccessScope);
+	}
+
+	[TestMethod]
+	public void UserStateBase_SetAccessScope_marks_resolved() {
+		var user = new AccessScopeExposingUserState();
+		Assert.IsFalse(user.IsAccessScopeResolved);
+
+		user.StampScope(AccessScope.Global);
+		Assert.IsTrue(user.IsAccessScopeResolved);
+	}
+
+	[TestMethod]
+	public void UserStateBase_SetAccessScope_to_None_still_marks_resolved() {
+		var user = new AccessScopeExposingUserState();
+		user.StampScope(AccessScope.None);
+
+		Assert.AreEqual(AccessScope.None, user.AccessScope);
+		Assert.IsTrue(user.IsAccessScopeResolved, "Explicitly setting None should still mark as resolved");
 	}
 
 	// OperationContext passthrough

@@ -20,7 +20,7 @@ public interface ICacheableQuery<out TResponse> : IRequest<TResponse> {
 	/// Cache expiration settings for this query. Values specified here can be overridden by
 	/// configuration at runtime. If not specified, uses global defaults.
 	/// </summary>
-	QueryCacheSettings Cache => new();
+	CacheExpirationSettings Cache => new();
 
 	/// <summary>
 	/// Tags for cache invalidation. Cannot be overridden by configuration.

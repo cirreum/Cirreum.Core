@@ -9,6 +9,8 @@ sequenceDiagram
     participant AI as Authorization<br/>Intercept
     participant AE as DefaultAuthorization<br/>Evaluator
     participant RR as IAuthorizationRole<br/>Registry
+    participant GE as GrantEvaluator
+    participant AR as AccessReach<br/>Resolver
     participant OE as OwnerScope<br/>Evaluator
     participant SE as IScopeEvaluator[]
     participant RA as IResourceAuthorizer[T]
@@ -36,8 +38,28 @@ sequenceDiagram
     rect rgba(80, 140, 240, 0.25)
     Note over AE,SE: Stage 1 — Scope (first-failure short-circuit)
 
+    alt Resource is IGrantedCommand / IGrantedRead / IGrantedList
+        Note over AE,AR: Step 0a — Grant Evaluation
+        AE->>GE: EvaluateAsync(authContext)
+        GE->>GE: Check ApplicationUser.IsEnabled
+        alt User disabled
+            GE-->>AE: Deny(UserDisabled)
+            AE-->>AI: Result.Fail(Forbidden)
+        end
+        GE->>AR: SelectFor(resourceType)
+        AR-->>GE: IAccessReachResolver
+        GE->>AR: ResolveAsync(context)
+        Note over AR: ShouldBypassAsync (live)<br/>→ L1 cache<br/>→ L2 cache<br/>→ ResolveGrantsAsync + HomeOwner
+        AR-->>GE: AccessReach
+        GE->>GE: CRL enforcement:<br/>Command: OwnerId ∈ reach<br/>Read: stash reach / OwnerId ∈ reach<br/>List: OwnerIds ⊆ reach / stamp
+        alt !IsValid
+            AE-->>AI: Result.Fail(Forbidden)
+        end
+    end
+
     alt Resource is IAuthorizableOwnerScopedResource<br/>and OwnerScopeEvaluator registered
-        AE->>OE: EvaluateAsync(authContext) — Step 0
+        Note over AE,OE: Step 0b — Owner Gate
+        AE->>OE: EvaluateAsync(authContext)
         OE-->>AE: ValidationResult
         alt !IsValid
             AE-->>AI: Result.Fail(Forbidden)
@@ -93,15 +115,35 @@ sequenceDiagram
 
 | Stage | Purpose | Strategy | Short-circuit |
 |---|---|---|---|
-| **1 Step 0** — Owner gate | Enforce `OwnerId` presence + match for `IAuthorizableOwnerScopedResource` | First failure | Within Stage 1 |
+| **1 Step 0a** — Grant gate | Resolve `AccessReach` and enforce CRL timing for `IGrantedCommand`, `IGrantedRead`, `IGrantedList` | First failure | Within Stage 1 |
+| **1 Step 0b** — Owner gate | Enforce `OwnerId` presence + match for `IAuthorizableOwnerScopedResource` | First failure | Within Stage 1 |
 | **1 Step 1** — Scope evaluators | Tenant / access-scope / ambient constraints | First failure, registration order | Within Stage 1 |
 | **2** — Resource authorizer | Role and rule checks specific to this resource type | Single `ResourceAuthorizerBase<T>` per `T`; multiple FluentValidation rules aggregate within it | Stage 2 → Stage 3 |
 | **3** — Policy validators | Cross-cutting runtime policies (hours, quotas, kill-switches) | Sequential by `Order`, aggregate within stage | End of pipeline |
 
+## Grant Evaluation Detail
+
+When a resource implements a Granted interface, the `GrantEvaluator` runs as the
+first sub-step of Stage 1. Its internal flow:
+
+1. **User enabled check** — `IOwnedApplicationUser.IsEnabled` (immediate deny if disabled)
+2. **Resolver selection** — `AccessReachResolverSelector.SelectFor(resourceType)` finds the
+   `GrantBasedAccessReachResolver<TDomain>` matching the resource's `TDomain`
+3. **Reach resolution** — the orchestrator runs:
+   - Bypass check (`ShouldBypassAsync`) — always live, never cached
+   - L1 scoped cache lookup (per-request dedup)
+   - L2 cross-request cache lookup (`ICacheableQueryService`)
+   - Cold path: `ResolveGrantsAsync` + `ResolveHomeOwnerAsync` + merge
+4. **CRL enforcement** — operation-kind-specific rules (see [Grants README](Grants/README.md))
+5. **Reach stashing** — `AccessReach` set on `IAccessReachAccessor` for handler access
+
+If no Granted interface is present, the grant gate is a no-op pass with zero overhead.
+
 ## Why the Strategy Differs Per Stage
 
 - **Stage 1 short-circuits aggressively** because scope failures ("wrong
-  tenant", "not the owner") make every downstream check meaningless.
+  tenant", "not the owner", "no grant reach") make every downstream check
+  meaningless.
 - **Stage 2 has a single authorizer per resource type** (by contract),
   but its FluentValidation rules aggregate all failures so developers
   see *every* denial at once (useful during dev/UI iteration). On
@@ -123,3 +165,5 @@ The hot path is engineered for minimal allocations:
   authorized (happy) path.
 - Policy filter + sort is a single-pass walk into a pre-sized `List`.
 - Resource-authorizer tasks are stored in a pre-sized `Task[]`.
+- Grant reach caching (L1 scoped dictionary) avoids repeated resolution
+  when multiple grant-aware operations run in the same request scope.

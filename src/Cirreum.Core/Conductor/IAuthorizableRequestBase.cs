@@ -12,11 +12,12 @@ using Cirreum.Authorization;
 /// Normally you would not implement this interface directly. Implement one of the
 /// CQRS-facing marker interfaces instead:
 /// <see cref="IAuthorizableCommand"/>, <see cref="IAuthorizableCommand{TResponse}"/>,
-/// <see cref="IAuthorizableQuery{TResponse}"/>,
-/// <see cref="IAuthorizableCacheableQuery{TResponse}"/>,
-/// <see cref="IAuthorizableOwnerScopedCommand"/>,
-/// <see cref="IAuthorizableOwnerScopedCommand{TResponse}"/>, or
-/// <see cref="IAuthorizableOwnerScopedQuery{TResponse}"/>.
+/// <see cref="IAuthorizableQuery{TResponse}"/>, or
+/// <see cref="IAuthorizableCacheableQuery{TResponse}"/>.
+/// For grant-aware (ReBAC) operations, use
+/// <see cref="Authorization.Grants.IGrantedCommand{TDomain}"/>,
+/// <see cref="Authorization.Grants.IGrantedRead{TDomain, TResponse}"/>, or
+/// <see cref="Authorization.Grants.IGrantedList{TDomain, TResponse}"/>.
 /// </para>
 /// <para>
 /// By inheriting <see cref="IAuthorizableResource"/>, every request instance may be

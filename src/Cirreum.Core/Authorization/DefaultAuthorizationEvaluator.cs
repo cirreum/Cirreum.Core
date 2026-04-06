@@ -1,6 +1,7 @@
 namespace Cirreum.Authorization;
 
 using Cirreum.Authorization.Diagnostics;
+using Cirreum.Authorization.Grants;
 using Cirreum.Exceptions;
 using Cirreum.Security;
 using FluentValidation;
@@ -23,8 +24,8 @@ using System.Collections.Immutable;
 /// <b>Stage 1 — Scope</b>
 /// <list type="bullet">
 /// <item><description>
-/// Step 0: owner-scope gate (<see cref="OwnerScopeEvaluatorBase"/>, optional,
-/// applies only to <see cref="IAuthorizableOwnerScopedResource"/>).
+/// Step 0: grant evaluator (<see cref="GrantEvaluator"/>, optional,
+/// applies only to <see cref="IGrantedCommand"/>/<see cref="IGrantedRead"/>/<see cref="IGrantedList"/>).
 /// </description></item>
 /// <item><description>
 /// Step 1: generic scope evaluators (<see cref="IScopeEvaluator"/>, zero or more,
@@ -48,16 +49,17 @@ using System.Collections.Immutable;
 /// <param name="userAccessor">The accessor for retrieving current user state.</param>
 /// <param name="services">The service provider for resolving validators.</param>
 /// <param name="logger">The logger for authorization events.</param>
-/// <param name="ownerScopeEvaluator">
-/// Optional owner-scope gate. When present and the resource implements
-/// <see cref="IAuthorizableOwnerScopedResource"/>, runs as Stage 1 Step 0.
+/// <param name="grantEvaluator">
+/// Optional grant evaluator. When present and the resource implements a Granted
+/// interface (<see cref="IGrantedCommand"/>/<see cref="IGrantedRead"/>/<see cref="IGrantedList"/>),
+/// runs as Stage 1 Step 0.
 /// </param>
 sealed class DefaultAuthorizationEvaluator(
 	IAuthorizationRoleRegistry registry,
 	IUserStateAccessor userAccessor,
 	IServiceProvider services,
 	ILogger<DefaultAuthorizationEvaluator> logger,
-	OwnerScopeEvaluatorBase? ownerScopeEvaluator = null
+	GrantEvaluator? grantEvaluator = null
 ) : IAuthorizationEvaluator {
 
 	/// <inheritdoc/>
@@ -142,13 +144,15 @@ sealed class DefaultAuthorizationEvaluator(
 		var rawPolicy = services.GetService<IEnumerable<IPolicyValidator>>()!;
 		var policyAuthorizers = rawPolicy as IPolicyValidator[] ?? [.. rawPolicy];
 
-		var ownerGateApplies = ownerScopeEvaluator is not null
-			&& resource is IAuthorizableOwnerScopedResource;
+		var grantGateApplies = grantEvaluator is not null
+			&& (resource is IGrantedCommand
+				|| resource is IGrantedRead
+				|| resource is IGrantedList);
 
 		if (scopeEvaluators.Length == 0
 			&& resourceAuthorizers.Length == 0
 			&& policyAuthorizers.Length == 0
-			&& !ownerGateApplies) {
+			&& !grantGateApplies) {
 			//******************************************
 			//
 			// RESOURCE HAS NO AUTHORIZERS AND
@@ -219,13 +223,13 @@ sealed class DefaultAuthorizationEvaluator(
 			//
 			//******************************************
 
-			if (ownerGateApplies) {
-				var ownerResult = await ownerScopeEvaluator!
-					.EvaluateAsync(authorizationContext)
+			if (grantGateApplies) {
+				var grantResult = await grantEvaluator!
+					.EvaluateAsync(authorizationContext, cancellationToken)
 					.ConfigureAwait(false);
 
-				if (!ownerResult.IsValid) {
-					return this.DenyFromStage(ownerResult.Errors, operation.UserName, resourceName);
+				if (!grantResult.IsValid) {
+					return this.DenyFromStage(grantResult.Errors, operation.UserName, resourceName);
 				}
 			}
 

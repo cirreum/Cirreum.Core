@@ -33,7 +33,7 @@ public static class AuthorizationTelemetry {
 
 	// Step names ———————————————————————————————————————————————
 
-	/// <summary>Stage 1, Step 0 — owner-scope gate (<see cref="OwnerScopeEvaluatorBase"/>).</summary>
+	/// <summary>Stage 1, Step 0 — owner-scope gate (<see cref="Grants.GrantEvaluator"/>).</summary>
 	public const string StepOwnerScope = "owner-scope";
 
 	/// <summary>Stage 1, Step 1 — generic <see cref="IScopeEvaluator"/> chain.</summary>

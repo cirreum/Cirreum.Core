@@ -1231,7 +1231,7 @@ public abstract class RemoteClient {
 		string endpoint,
 		Task<HttpResponseMessage> action,
 		CancellationToken cancellationToken) {
-		return this.ProcessWithTelemetryAsync<T>(
+		return this.ProcessWithTelemetryAsync(
 			method,
 			endpoint,
 			async (response, ct) => await response.Content.ReadFromJsonAsync<T>(this.JsonOptions, ct),

@@ -219,7 +219,7 @@ public static class CloningExtensions {
 	/// <exception cref="InvalidOperationException">Thrown when deserialization results in null.</exception>
 	public static T FromJson<T>(this string json, JsonTypeInfo<T> typeInfo) {
 		ArgumentException.ThrowIfNullOrEmpty(json);
-		var newVal = JsonSerializer.Deserialize<T>(json, typeInfo);
+		var newVal = JsonSerializer.Deserialize(json, typeInfo);
 		return newVal ?? throw new InvalidOperationException("Deserialization returned null.");
 	}
 

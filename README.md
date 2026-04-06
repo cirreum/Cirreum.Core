@@ -60,13 +60,16 @@ Flexible, policy-based authorization with support for RBAC, ABAC, and ReBAC patt
 - **RBAC** — roles with inheritance via `IAuthorizationRoleRegistry` and `EffectiveRoles`
 - **ABAC** — attribute checks over user, resource, and ambient context inside `ResourceAuthorizerBase<T>` FluentValidation rules
 - **ReBAC** — owner→resource and tenant→resource relationships enforced by `OwnerScopeEvaluatorBase` (Stage 1 Step 0) and custom `IScopeEvaluator` implementations (Stage 1 Step 1)
+- **Grants (ReBAC)** — opt-in grant-based access control answering *"which owners can this caller reach?"* via `IGrantResolver<TDomain>`, with L1/L2 reach caching and CRL (Command/Read/List) enforcement semantics
 
 - `IAuthorizationEvaluator` - Pluggable, three-stage authorization evaluator (Scope → Resource → Policy)
 - `IAuthorizableResource` - Resources that can be authorized
 - `ResourceAuthorizerBase<TResource>` - FluentValidation-backed resource authorizer (one per resource type)
 - `IScopeEvaluator` / `OwnerScopeEvaluatorBase` - Stage 1 scope gates (tenant, owner, access-scope)
+- `GrantEvaluator` / `IGrantResolver<TDomain>` - Stage 1 grant-aware scope gate with CRL enforcement
 - `IPolicyValidator` - Stage 3 cross-cutting policy validators (hours, quotas, kill-switches)
 - `AccessScope` (None / Global / Tenant) - Coarse authorization dimension resolved by `IAccessScopeResolver`
+- `AccessReach` - Computed set of reachable owners per operation (Denied / Unrestricted / Bounded)
 - Role resolution with inheritance support via `IAuthorizationRoleRegistry`
 - Flexible AuthN/AuthZ with support for OIDC/MSAL/BYOID
 
@@ -195,6 +198,10 @@ Definitions that support Cirreum's architectural patterns:
 | `IAuthorizableOwnerScopedCommand` / `<T>` | ✓ | ✗ | ✓ | Protected mutations of owned resources |
 | `IAuthorizableOwnerScopedQuery<T>` | ✓ | ✗ | ✓ | Protected reads of owned resources |
 | `IAuthorizableOwnerScopedCacheableQuery<T>` | ✓ | ✓ | ✓ | Protected, cached reads of owned resources |
+| `IGrantedCommand<TDomain>` / `<TDomain, T>` | ✓ | ✗ | ✓ | Grant-aware writes (ReBAC) |
+| `IGrantedRead<TDomain, T>` | ✓ | ✗ | ✓ | Grant-aware point-reads (ReBAC) |
+| `IGrantedCacheableRead<TDomain, T>` | ✓ | ✓ | ✓ | Grant-aware cached reads (ReBAC) |
+| `IGrantedList<TDomain, T>` | ✓ | ✗ | ✓ | Grant-aware cross-owner queries (ReBAC) |
 
 ### 4. Utilities & Helpers
 
@@ -312,6 +319,41 @@ Cross-cutting runtime rules (hours, quotas, kill-switches) live in
 access-scope gates live in `IScopeEvaluator` / `OwnerScopeEvaluatorBase`
 implementations evaluated in Stage 1.
 
+### Grants (ReBAC)
+
+For multi-tenant applications requiring relationship-based access control,
+Grants answers *"which owners can this caller reach?"* without the handler
+knowing about grant tables:
+
+```csharp
+// 1. Declare a domain with a permission namespace
+[GrantDomain("issues")]
+public interface IIssueOperation;
+
+// 2. Define grant-aware requests
+[RequiresPermission("delete")]
+public sealed record DeleteIssue(string Id) : IGrantedCommand<IIssueOperation> {
+    public string? OwnerId { get; set; }
+}
+
+// 3. Implement a grant resolver (the only app code)
+public class IssueGrantResolver : IGrantResolver<IIssueOperation> {
+    public async ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
+        AuthorizationContext<TResource> context, CancellationToken ct)
+        where TResource : IAuthorizableResource {
+        // Query your grants table
+        var ownerIds = await db.GetGrantedOwners(context.UserId, context.RequiredPermissions);
+        return new GrantedReach(ownerIds);
+    }
+}
+
+// 4. Register
+services.AddAccessGrants<IIssueOperation, IssueGrantResolver>();
+```
+
+See [Grants README](src/Cirreum.Core/Authorization/Grants/README.md) for the
+full architecture, CRL enforcement rules, caching strategy, and configuration.
+
 ## Usage
 
 ### Installation
@@ -404,6 +446,7 @@ This library:
 - [Context Architecture](src/Cirreum.Core/OPERATION-CONTEXT.md) - Detailed context composition guide
 - [Authorization Flow](src/Cirreum.Core/Authorization/FLOW.md) - High-level request → authorization flow
 - [Authorization Sequence](src/Cirreum.Core/Authorization/SEQUENCE.md) - Detailed three-stage pipeline
+- [Grants (ReBAC)](src/Cirreum.Core/Authorization/Grants/README.md) - Grant-based access control with CRL enforcement
 - [Conductor](src/Cirreum.Core/Conductor/README.md) - In-process dispatcher + intercept pipeline
 
 ## Contribution Guidelines

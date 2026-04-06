@@ -8,6 +8,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="Cirreum.Conductor.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="Cirreum.Result" Version="1.0.15" />
 		<PackageReference Include="Cirreum.Exceptions" Version="1.0.3" />
 		<PackageReference Include="Microsoft.Extensions.Telemetry.Abstractions" Version="10.4.0" />

@@ -13,7 +13,7 @@ public class InMemoryCacheableQueryService : ICacheableQueryService {
 	public async ValueTask<TResponse> GetOrCreateAsync<TResponse>(
 		string cacheKey,
 		Func<CancellationToken, ValueTask<TResponse>> factory,
-		QueryCacheSettings settings,
+		CacheExpirationSettings settings,
 		string[]? tags = null,
 		CancellationToken cancellationToken = default) {
 
@@ -56,7 +56,7 @@ public class InMemoryCacheableQueryService : ICacheableQueryService {
 		}
 	}
 
-	private static DateTime? CalculateExpiration<TResponse>(TResponse value, QueryCacheSettings settings) {
+	private static DateTime? CalculateExpiration<TResponse>(TResponse value, CacheExpirationSettings settings) {
 		// Check if it's a failed result
 		if (value is IResult { IsSuccess: false } && settings.FailureExpiration.HasValue) {
 			return DateTime.UtcNow.Add(settings.FailureExpiration.Value);

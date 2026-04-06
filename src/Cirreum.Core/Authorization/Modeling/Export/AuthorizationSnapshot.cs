@@ -79,6 +79,12 @@ public record AuthorizationSnapshot {
 	public required string RoleHierarchyDiagram { get; init; }
 
 	/// <summary>
+	/// Summary of registered grant domains with their permissions and resource counts.
+	/// Empty when no granted resources exist.
+	/// </summary>
+	public required IReadOnlyList<GrantDomainInfo> GrantDomains { get; init; }
+
+	/// <summary>
 	/// Total number of registered roles.
 	/// </summary>
 	public int TotalRoles => this.RoleHierarchy.Count;
@@ -110,16 +116,47 @@ public record AuthorizationSnapshot {
 		// Build role hierarchy info
 		var roleHierarchy = BuildRoleHierarchy(roleRegistry);
 
+		// Build grant domain summary from catalog resources
+		var catalog = AuthorizationModel.Instance.GetCatalog();
+		var grantDomains = BuildGrantDomains(catalog);
+
 		return new AuthorizationSnapshot {
 			Runtime = DomainContext.RuntimeType,
 			CapturedAtUtc = DateTime.UtcNow,
-			Catalog = AuthorizationModel.Instance.GetCatalog(),
+			Catalog = catalog,
 			AnalysisReport = analysisReport,
 			AnalysisSummary = analysisReport.GetSummary(),
 			RoleHierarchy = roleHierarchy,
 			AuthorizationFlowDiagram = AuthorizationFlowRenderer.ToMermaidDiagram(),
-			RoleHierarchyDiagram = RoleHierarchyRenderer.ToMermaidDiagram(roleRegistry)
+			RoleHierarchyDiagram = RoleHierarchyRenderer.ToMermaidDiagram(roleRegistry),
+			GrantDomains = grantDomains
 		};
+	}
+
+	private static List<GrantDomainInfo> BuildGrantDomains(DomainCatalog catalog) {
+		var grantedResources = catalog.AllResources
+			.Where(r => r.IsGranted && r.GrantDomain is not null);
+
+		var byDomain = grantedResources
+			.GroupBy(r => r.GrantDomain!)
+			.OrderBy(g => g.Key, StringComparer.Ordinal);
+
+		var result = new List<GrantDomainInfo>();
+		foreach (var group in byDomain) {
+			var permissions = group
+				.Where(r => r.RequiredPermissions is not null)
+				.SelectMany(r => r.RequiredPermissions!)
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.OrderBy(p => p, StringComparer.Ordinal)
+				.ToList();
+
+			result.Add(new GrantDomainInfo(
+				Domain: group.Key,
+				Permissions: permissions,
+				GrantedResourceCount: group.Count()
+			));
+		}
+		return result;
 	}
 
 	private static List<RoleHierarchyInfo> BuildRoleHierarchy(IAuthorizationRoleRegistry roleRegistry) {
