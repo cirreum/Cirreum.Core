@@ -1,5 +1,7 @@
 ﻿namespace Cirreum.Conductor;
 
+using Cirreum.Caching;
+
 // ===== Cacheable Query Requests =====
 
 /// <summary>
@@ -17,10 +19,12 @@ public interface ICacheableQuery<out TResponse> : IRequest<TResponse> {
 	string CacheKey { get; }
 
 	/// <summary>
-	/// Cache expiration settings for this query. Values specified here can be overridden by
-	/// configuration at runtime. If not specified, uses global defaults.
+	/// Expiration policy for this query's cache entries. Values specified here serve as
+	/// code-level defaults and can be overridden by configuration at runtime (category
+	/// overrides, query-specific overrides). If not specified, inherits from
+	/// <see cref="CacheSettings.DefaultExpiration"/>.
 	/// </summary>
-	CacheExpirationSettings Cache => new();
+	CacheExpirationSettings CacheExpiration => new();
 
 	/// <summary>
 	/// Tags for cache invalidation. Cannot be overridden by configuration.
@@ -33,13 +37,4 @@ public interface ICacheableQuery<out TResponse> : IRequest<TResponse> {
 	/// </example>
 	string[]? CacheTags => null;
 
-	/// <summary>
-	/// Cache category for configuration grouping. This allows DevOps to configure
-	/// cache settings for groups of related queries without knowing specific query names.
-	/// </summary>
-	/// <remarks>
-	/// Common categories: "users", "orders", "reports", "analytics", "reference-data", "real-time"
-	/// If null, only uses default settings or exact query name overrides.
-	/// </remarks>
-	string? CacheCategory => null;
 }

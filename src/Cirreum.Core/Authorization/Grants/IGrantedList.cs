@@ -3,7 +3,7 @@ namespace Cirreum.Authorization.Grants;
 using Cirreum.Conductor;
 
 /// <summary>
-/// Non-generic sidecar interface for grant-aware cross-owner queries. Carries the plural
+/// Base detection interface for grant-aware cross-owner queries. Carries the plural
 /// <c>OwnerIds</c> set that the grant evaluator validates and stamps before the handler runs.
 /// </summary>
 /// <remarks>
@@ -13,7 +13,7 @@ using Cirreum.Conductor;
 /// of records. What matters is that the query's data scope spans multiple owners.
 /// </para>
 /// </remarks>
-public interface IGrantedList {
+public interface IGrantedListBase {
 
 	/// <summary>
 	/// The identifiers of the owners (tenants/companies) the caller is reading from. When
@@ -25,10 +25,9 @@ public interface IGrantedList {
 
 /// <summary>
 /// Grant-aware cross-owner query. Composes foundation <see cref="IAuthorizableQuery{TResponse}"/>
-/// with the <see cref="IGrantedList"/> sidecar and binds to <typeparamref name="TDomain"/>.
+/// with the <see cref="IGrantedListBase"/> detection surface. Developers implement this
+/// single interface for granted list queries.
 /// </summary>
-/// <typeparam name="TDomain">The bounded-context domain marker (e.g., <c>IIssueOperation</c>).</typeparam>
 /// <typeparam name="TResponse">The type of response returned by the list operation.</typeparam>
-public interface IGrantedList<TDomain, out TResponse>
-	: IAuthorizableQuery<TResponse>, IGrantedList
-	where TDomain : class;
+public interface IGrantedList<out TResponse>
+	: IAuthorizableQuery<TResponse>, IGrantedListBase;

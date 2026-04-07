@@ -1,5 +1,6 @@
 ﻿namespace Cirreum.Conductor.Tests;
 
+using Cirreum.Caching;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Conductor.Intercepts;
 using Microsoft.Extensions.Configuration;
@@ -329,11 +330,7 @@ public sealed class LifetimeTests {
 		var services = Shared.ArrangeServices();
 
 		var customSettings = new ConductorSettings {
-			PublisherStrategy = PublisherStrategy.Sequential,
-			Cache = new ConductorCacheSettings {
-				Provider = CacheProvider.InMemory,
-				DefaultExpiration = TimeSpan.FromSeconds(42)
-			}
+			PublisherStrategy = PublisherStrategy.Sequential
 		};
 
 		services.AddConductor(
@@ -346,15 +343,14 @@ public sealed class LifetimeTests {
 
 		using var sp = services.BuildServiceProvider();
 
-		// Act
-		// However you expose the effective settings in runtime —
-		// if you're registering ConductorSettings as a singleton or IOptions<ConductorSettings>,
-		// pull it that way. Example:
-		var resolvedSettings = sp.GetRequiredService<ConductorSettings>();
+		// Act — central cache settings are registered via ArrangeServices
+		var cacheSettings = sp.GetRequiredService<CacheSettings>();
+		var conductorSettings = sp.GetRequiredService<ConductorSettings>();
 
 		// Assert
-		Assert.AreEqual(TimeSpan.FromSeconds(42), resolvedSettings.Cache.DefaultExpiration);
-		Assert.AreEqual(CacheProvider.InMemory, resolvedSettings.Cache.Provider);
+		Assert.AreEqual(CacheProvider.InMemory, cacheSettings.Provider);
+		Assert.AreEqual(TimeSpan.FromMinutes(5), cacheSettings.DefaultExpiration.Expiration);
+		Assert.AreEqual(PublisherStrategy.Sequential, conductorSettings.PublisherStrategy);
 	}
 
 

@@ -1,32 +1,26 @@
-﻿namespace Cirreum.Conductor.Configuration;
+namespace Cirreum.Conductor.Configuration;
 /*
 {
   "Cirreum": {
-	"Conductor": {
-	  "PublisherStrategy": "Sequential", // Sequential, FailFast, Parallel and FireAndForget
-	  "Cache": {
-		"Provider": "InMemory", // None, InMemory, HybridCache
-		"DefaultExpiration": "00:05:00",
-		"DefaultLocalExpiration": "00:05:00",
-		"DefaultFailureExpiration": "00:00:30",
-		
-		"CategoryOverrides": {
-		  "users": {
-			"Expiration": "00:10:00",
-			"LocalExpiration": "00:02:00"
-			"FailureExpiration": "00:00:10"
-		  }
-		}
-
-		// explicit overrides
-		"QueryOverrides": {
-		  "GetCriticalUserDataQuery": {
-			"Expiration": "00:00:30"
-			"FailureExpiration": "00:00:10"
-		  }
-		}
-	  }
-	}
+    "Cache": {
+      "Provider": "InMemory",
+      "DefaultExpiration": {
+        "Expiration": "00:05:00",
+        "LocalExpiration": "00:02:00",
+        "FailureExpiration": "00:00:30"
+      }
+    },
+    "Conductor": {
+      "PublisherStrategy": "Sequential",
+      "Cache": {
+        "QueryOverrides": {
+          "GetCriticalUserDataQuery": {
+            "Expiration": "00:00:30",
+            "FailureExpiration": "00:00:10"
+          }
+        }
+      }
+    }
   }
 }
 */

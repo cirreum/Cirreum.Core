@@ -3,11 +3,11 @@ namespace Cirreum.Authorization.Grants;
 using Cirreum.Conductor;
 
 /// <summary>
-/// Non-generic sidecar interface for grant-aware point-reads. Carries the scalar
+/// Base detection interface for grant-aware point-reads. Carries the scalar
 /// <c>OwnerId</c> that is checked post-fetch by the handler for existence-hiding
 /// (Pattern C) or pre-flight by the grant evaluator when non-null.
 /// </summary>
-public interface IGrantedRead {
+public interface IGrantedReadBase {
 
 	/// <summary>
 	/// The identifier of the owner (tenant/company). When non-null, enforced
@@ -20,10 +20,9 @@ public interface IGrantedRead {
 
 /// <summary>
 /// Grant-aware point-read. Composes foundation <see cref="IAuthorizableQuery{TResponse}"/>
-/// with the <see cref="IGrantedRead"/> sidecar and binds to <typeparamref name="TDomain"/>.
+/// with the <see cref="IGrantedReadBase"/> detection surface. Developers implement this
+/// single interface for granted read queries.
 /// </summary>
-/// <typeparam name="TDomain">The bounded-context domain marker (e.g., <c>IIssueOperation</c>).</typeparam>
 /// <typeparam name="TResponse">The type of response returned by the read.</typeparam>
-public interface IGrantedRead<TDomain, out TResponse>
-	: IAuthorizableQuery<TResponse>, IGrantedRead
-	where TDomain : class;
+public interface IGrantedRead<out TResponse>
+	: IAuthorizableQuery<TResponse>, IGrantedReadBase;

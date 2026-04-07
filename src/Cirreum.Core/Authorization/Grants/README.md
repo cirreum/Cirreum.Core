@@ -20,7 +20,7 @@ a no-op pass with zero overhead.
 
 1. [Core Concepts](#core-concepts)
 2. [Architecture](#architecture)
-3. [Grant Domain Setup](#grant-domain-setup)
+3. [Domain Resolution](#domain-resolution)
 4. [Request Interfaces](#request-interfaces)
 5. [CRL Enforcement](#crl-enforcement)
 6. [Permission Model](#permission-model)
@@ -38,8 +38,8 @@ a no-op pass with zero overhead.
 | Concept | Description |
 |---------|-------------|
 | **Grant** | A stored relationship: *"caller X holds permission P on owner Y"* |
-| **Domain** | A bounded context (e.g., Issues, Documents) identified by a marker interface |
-| **Permission** | A namespaced capability (e.g., `issues:delete`, `issues:read`) |
+| **Domain** | A bounded context (e.g., Issues, Documents) derived from the C# namespace convention |
+| **Permission** | A feature-scoped capability (e.g., `issues:delete`, `issues:read`) |
 | **AccessReach** | The computed set of owners a caller can touch for a given operation |
 | **CRL** | Command / Read / List — the three grant-aware operation patterns |
 
@@ -48,7 +48,7 @@ a no-op pass with zero overhead.
 - **Not RBAC** — roles live in Stage 2 resource authorizers. Grants don't replace roles;
   they answer *"which owners"*, not *"which actions"*.
 - **Not a grant store** — Core defines the pipeline and contracts. The app implements
-  `IGrantResolver<TDomain>` to query its own grants table.
+  `IGrantResolver` to query its own grants table.
 - **Not mandatory** — if you never call `AddAccessGrants`, the pipeline behaves exactly
   as before. Zero overhead, zero configuration.
 
@@ -79,12 +79,11 @@ a no-op pass with zero overhead.
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              App Layer                                              │
 │                                                                                     │
-│   [GrantDomain("issues")]                                                           │
-│   public interface IIssueOperation;                                                 │
+│   // Domain derived from namespace: MyApp.Domain.Issues.Commands → "issues"         │
 │                                                                                     │
-│   public class IssueGrantResolver : IGrantResolver<IIssueOperation>  ← App writes   │
+│   public class AppGrantResolver : IGrantResolver            ← App writes            │
 │   {                                                                                 │
-│       ResolveGrantsAsync(...)  → queries grants table                               │
+│       ResolveGrantsAsync(...)  → queries grants table (uses context.DomainFeature)  │
 │       ShouldBypassAsync(...)   → admin role check (optional)                        │
 │       ResolveHomeOwnerAsync(.) → home tenant (optional)                             │
 │   }                                                                                 │
@@ -94,7 +93,7 @@ a no-op pass with zero overhead.
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              Core Layer (sealed, no extension points)               │
 │                                                                                     │
-│   GrantBasedAccessReachResolver<TDomain>  ← orchestrator                            │
+│   GrantBasedAccessReachResolver  ← orchestrator                                     │
 │     • Bypass check (live, never cached)                                             │
 │     • L1 scoped cache → L2 cross-request cache → cold-path resolution               │
 │     • Merges grants + home owner → AccessReach                                      │
@@ -111,50 +110,51 @@ a no-op pass with zero overhead.
 
 ---
 
-## Grant Domain Setup
+## Domain Resolution
 
-Every bounded context that uses grants declares a **domain marker interface** with
-`[GrantDomain]`:
+The domain feature is derived structurally from the C# namespace convention — no
+marker interface or attribute is needed:
 
-```csharp
-[GrantDomain("issues")]
-public interface IIssueOperation;
+```text
+MyApp.Domain.Issues.Commands.DeleteIssue  →  domain = "issues"
+MyApp.Domain.Admin.Queries.ListUsers      →  domain = "admin"
 ```
 
-- The namespace (`"issues"`) is normalized to lowercase
-- Declared once — all permissions in this domain share the namespace
-- Validated at startup: a `TDomain` without `[GrantDomain]` throws `InvalidOperationException`
+`DomainFeatureResolver` finds the first segment after `"Domain"` in the type's namespace
+and lowercases it. The resolved domain is available on `AuthorizationContext.DomainFeature`
+and `RequestContext.DomainFeature`.
 
 ---
 
 ## Request Interfaces
 
-Grants provides three composable interfaces that layer on top of existing Conductor
-request types:
+Grants provides composable interfaces that layer on top of existing Conductor request
+types. Each operation pattern requires **one interface** — no marker interfaces or
+generic domain parameters:
 
-| Interface | Base | Sidecar | Scope |
-|-----------|------|---------|-------|
-| `IGrantedCommand<TDomain>` | `IAuthorizableCommand` | `OwnerId` (scalar) | Single-owner write |
-| `IGrantedCommand<TDomain, TResponse>` | `IAuthorizableCommand<TResponse>` | `OwnerId` (scalar) | Single-owner write with response |
-| `IGrantedRead<TDomain, TResponse>` | `IAuthorizableQuery<TResponse>` | `OwnerId` (scalar) | Single-owner read |
-| `IGrantedCacheableRead<TDomain, TResponse>` | `ICacheableQuery<TResponse>` | `OwnerId` + `CallerAccessScope` | Cacheable single-owner read |
-| `IGrantedList<TDomain, TResponse>` | `IAuthorizableQuery<TResponse>` | `OwnerIds` (plural) | Cross-owner query |
+| Interface | Base | Property | Scope |
+|-----------|------|----------|-------|
+| `IGrantedCommand` | `IAuthorizableCommand` | `OwnerId` (scalar) | Single-owner write (void) |
+| `IGrantedCommand<TResponse>` | `IAuthorizableCommand<TResponse>` | `OwnerId` (scalar) | Single-owner write with response |
+| `IGrantedRead<TResponse>` | `IAuthorizableQuery<TResponse>` | `OwnerId` (scalar) | Single-owner read |
+| `IGrantedCacheableRead<TResponse>` | `ICacheableQuery<TResponse>` | `OwnerId` + `CallerAccessScope` | Cacheable single-owner read |
+| `IGrantedList<TResponse>` | `IAuthorizableQuery<TResponse>` | `OwnerIds` (plural) | Cross-owner query |
 
 ### Example
 
 ```csharp
 [RequiresPermission("delete")]
-public sealed record DeleteIssue(string Id) : IGrantedCommand<IIssueOperation> {
+public sealed record DeleteIssue(string Id) : IGrantedCommand {
     public string? OwnerId { get; set; }
 }
 
 [RequiresPermission("read")]
-public sealed record GetIssue(string Id) : IGrantedRead<IIssueOperation, Issue> {
+public sealed record GetIssue(string Id) : IGrantedRead<Issue> {
     public string? OwnerId { get; set; }
 }
 
 [RequiresPermission("read")]
-public sealed record ListIssues : IGrantedList<IIssueOperation, IReadOnlyList<Issue>> {
+public sealed record ListIssues : IGrantedList<IReadOnlyList<Issue>> {
     public IReadOnlyList<string>? OwnerIds { get; set; }
 }
 ```
@@ -206,31 +206,34 @@ via `IOwnedApplicationUser.IsEnabled`. Disabled users are denied regardless of g
 
 ### Declaration
 
-Permissions are declared on grant-aware resources via `[RequiresPermission]`:
+Permissions are declared on any authorizable resource via `[RequiresPermission]`.
+On granted resources, permissions drive grant resolution (Stage 1). On non-granted
+resources, permissions are available on `ctx.Permissions` for use in resource
+authorizers (Stage 2) and policy validators (Stage 3).
 
 ```csharp
-// Single-arg — namespace auto-resolved from TDomain's [GrantDomain("issues")]
+// Single-arg — feature auto-resolved from namespace convention
 [RequiresPermission("delete")]
-public sealed record DeleteIssue : IGrantedCommand<IIssueOperation> { ... }
+public sealed record DeleteIssue : IGrantedCommand { ... }
 
-// Two-arg explicit — namespace validated against domain
+// Two-arg explicit — feature validated against namespace-derived domain
 [RequiresPermission("issues", "delete")]
-public sealed record ArchiveIssue : IGrantedCommand<IIssueOperation> { ... }
+public sealed record ArchiveIssue : IGrantedCommand { ... }
 
-// Permission constant — namespace validated
+// Permission constant — feature validated
 [RequiresPermission(Permissions.Issues.Delete)]
-public sealed record PurgeIssue : IGrantedCommand<IIssueOperation> { ... }
+public sealed record PurgeIssue : IGrantedCommand { ... }
 ```
 
-### Namespace Validation
+### Feature Validation
 
-All permissions on a granted resource **must** use the domain's namespace. A mismatch
+All permissions on a granted resource **must** use the domain's feature. A mismatch
 throws `InvalidOperationException` at startup:
 
 ```csharp
-// Runtime error — namespace "audit" does not match domain "issues"
+// Runtime error — feature "audit" does not match domain "issues"
 [RequiresPermission("audit", "write")]
-public sealed record BadAction : IGrantedCommand<IIssueOperation> { ... }
+public sealed record BadAction : IGrantedCommand { ... }
 ```
 
 Cross-cutting concerns (audit logging, rate limiting) belong in Stage 2 resource
@@ -291,7 +294,7 @@ flowchart TD
 | Level | Scope | Storage | Purpose |
 |-------|-------|---------|---------|
 | **L1** | DI scope (per-request) | `Dictionary` on scoped resolver | Same user hitting 5 granted operations in one request resolves once |
-| **L2** | Cross-request | `ICacheableQueryService` | Second request from same user is a cache hit |
+| **L2** | Cross-request | `ICacheService` | Second request from same user is a cache hit |
 
 ### Cache Key Format
 
@@ -301,8 +304,8 @@ reach:v{version}:{callerId}:{domain}:{permissionSignature}
 
 - **`callerId`** — covers both C2M (human users with delegated permissions) and M2M
   (service principals with app roles)
-- **`domain`** — the `[GrantDomain]` namespace (e.g., `issues`)
-- **`permissionSignature`** — sorted, `+`-joined permission names (e.g., `delete+write`)
+- **`domain`** — the namespace-derived feature name (e.g., `issues`)
+- **`permissionSignature`** — sorted, `+`-joined permission operation names (e.g., `delete+write`)
 
 Sorting is required for **cache correctness**: permissions use AND semantics, so
 `["delete","archive"]` and `["archive","delete"]` must hit the same entry.
@@ -326,7 +329,7 @@ Sorting is required for **cache correctness**: permissions use AND semantics, so
 await cacheInvalidator.InvalidateCallerAsync(targetUserId);
 
 // After a domain-wide policy change — invalidate all users in this domain
-await cacheInvalidator.InvalidateDomainAsync<IIssueOperation>();
+await cacheInvalidator.InvalidateDomainAsync("issues");
 ```
 
 ---
@@ -341,8 +344,8 @@ No parallel discovery mechanism is needed.
 `AuthorizationModel` automatically detects granted resources during assembly scanning:
 
 - `ResourceTypeInfo.IsGranted` — whether the resource implements a Granted interface
-- `ResourceTypeInfo.GrantDomain` — the `[GrantDomain]` namespace
-- `ResourceTypeInfo.RequiredPermissions` — resolved permissions from `[RequiresPermission]`
+- `ResourceTypeInfo.GrantDomain` — the namespace-derived domain feature
+- `ResourceTypeInfo.Permissions` — resolved permissions from `[RequiresPermission]`
 
 These flow through to the serializable `ResourceInfo` export for API transport and
 the `DomainCatalog` for organized resource browsing.
@@ -368,9 +371,9 @@ The analyzer detects grant-specific misconfigurations:
 | Check | Severity | Description |
 |-------|----------|-------------|
 | Missing permissions | Warning | Granted resource without `[RequiresPermission]` — no permission gate |
-| Inert permissions | Warning | `[RequiresPermission]` on non-granted resource — attribute has no effect |
+| Permissions without grants | Info | `[RequiresPermission]` on non-granted resource — permissions available on `ctx.Permissions` for resource authorizers |
 | No resource authorizer | Info | Granted resource without Stage 2 authorizer — grants-only is valid but flagged |
-| Orphaned domains | Warning | `[GrantDomain]` marker with no granted resources |
+| Unused domains | Info | Namespace domains with no granted resources |
 | Mixed authorization | Info | Domain boundary with both granted and non-granted resources — possible incomplete migration |
 
 All metrics flow into the standard `AnalysisReport` and `AuthorizationSnapshot`:
@@ -380,32 +383,31 @@ Granted Resources.GrantedResourceCount     = 12
 Granted Resources.GrantDomainCount         = 3
 Granted Resources.TotalPermissionCount     = 8
 Granted Resources.MissingPermissionCount   = 0
-Granted Resources.InertPermissionCount     = 1
-Granted Resources.OrphanedDomainCount      = 0
+Granted Resources.PermissionsWithoutGrantsCount = 1
+Granted Resources.UnusedDomainCount        = 0
 ```
 
 ---
 
 ## DI Registration
 
-### Per-Domain Registration
+### Single Resolver Registration
 
 ```csharp
-// Register grants for a single bounded context
-services.AddAccessGrants<IIssueOperation, IssueGrantResolver>();
-services.AddAccessGrants<IDocumentOperation, DocumentGrantResolver>();
+// Register the app's universal grant resolver
+services.AddAccessGrants<AppGrantResolver>();
 ```
 
-Each call registers:
-- The app's `IGrantResolver<TDomain>`
-- Core's `GrantBasedAccessReachResolver<TDomain>` orchestrator
-- Shared infrastructure (idempotent): `IAccessReachAccessor`, `AccessReachResolverSelector`,
+This registers:
+- The app's `IGrantResolver`
+- Core's `GrantBasedAccessReachResolver` orchestrator
+- Shared infrastructure: `IAccessReachAccessor`, `AccessReachResolverSelector`,
   `GrantEvaluator`, cache settings
 
 ### Assembly-Scanned Registration
 
 ```csharp
-// Discover and register all IGrantResolver<TDomain> implementations
+// Discover and register the IGrantResolver implementation
 services.AddGrantAuthorization(
     configuration: builder.Configuration,
     assemblies: [typeof(Program).Assembly],
@@ -414,9 +416,9 @@ services.AddGrantAuthorization(
 
 ### Idempotency
 
-- Per-domain: duplicate `AddAccessGrants<TDomain>` calls are no-ops
+- Resolver: duplicate `AddAccessGrants` calls are no-ops
 - Shared services: registered via `TryAdd` — safe to call repeatedly
-- Cache infrastructure: registered once across all domains
+- Cache infrastructure: registered once
 
 ---
 
@@ -428,12 +430,10 @@ services.AddGrantAuthorization(
     "Authorization": {
       "Grants": {
         "Cache": {
-          "Enabled": true,
           "Version": 1,
           "Expiration": "00:05:00",
           "DomainOverrides": {
-            "issues": { "Expiration": "00:10:00" },
-            "admin": { "Enabled": false }
+            "issues": { "Expiration": "00:10:00" }
           }
         }
       }
@@ -444,40 +444,44 @@ services.AddGrantAuthorization(
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `Enabled` | `true` | Master switch for L2 caching |
 | `Version` | `1` | Bump to invalidate all stale cache entries |
-| `Expiration` | `00:05:00` | Default cache entry TTL |
-| `DomainOverrides` | `{}` | Per-domain overrides keyed by `[GrantDomain]` namespace |
+| `Expiration` | inherited from `CacheSettings.DefaultExpiration` | Default cache entry TTL |
+| `DomainOverrides` | `{}` | Per-domain overrides keyed by namespace-derived feature name |
 
 ---
 
 ## Customization Patterns
 
-### Shared Grant Resolver Base
+### Universal Grant Resolver
 
-When an app has multiple grant domains that share common behavior (e.g., the same
-admin bypass logic or home-owner policy), create an app-level abstract base class:
+The app implements a single `IGrantResolver` that handles all domains. Use
+`context.DomainFeature` to route to domain-specific grant logic:
 
 ```csharp
-// App layer — shared defaults for all grant resolvers
-public abstract class AppGrantResolverBase<TDomain> : IGrantResolver<TDomain>
-    where TDomain : class {
+public class AppGrantResolver : IGrantResolver {
 
     // Shared bypass: app-wide super-admin skips grants in every domain
-    public virtual ValueTask<bool> ShouldBypassAsync<TResource>(
+    public ValueTask<bool> ShouldBypassAsync<TResource>(
         AuthorizationContext<TResource> context,
         CancellationToken cancellationToken)
         where TResource : IAuthorizableResource =>
         new(context.EffectiveRoles.Any(r => r.Name == "SuperAdmin"));
 
-    // Each domain provides its own grant lookup
-    public abstract ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
+    // Domain-aware grant lookup
+    public async ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
         AuthorizationContext<TResource> context,
         CancellationToken cancellationToken)
-        where TResource : IAuthorizableResource;
+        where TResource : IAuthorizableResource {
 
-    // Shared home-owner with custom suspension check
-    public virtual ValueTask<string?> ResolveHomeOwnerAsync<TResource>(
+        var ownerIds = await db.GetGrantedOwners(
+            context.UserId,
+            context.DomainFeature,
+            context.Permissions);
+        return new GrantedReach(ownerIds);
+    }
+
+    // Home-owner with suspension check
+    public ValueTask<string?> ResolveHomeOwnerAsync<TResource>(
         AuthorizationContext<TResource> context,
         CancellationToken cancellationToken)
         where TResource : IAuthorizableResource {
@@ -490,38 +494,15 @@ public abstract class AppGrantResolverBase<TDomain> : IGrantResolver<TDomain>
 }
 ```
 
-Domain resolvers inherit the shared behavior and only implement the data lookup:
-
-```csharp
-public class IssueGrantResolver : AppGrantResolverBase<IIssueOperation> {
-    public override async ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
-        AuthorizationContext<TResource> context, CancellationToken ct) {
-        var ownerIds = await db.GetGrantedOwners(context.UserId, context.RequiredPermissions);
-        return new GrantedReach(ownerIds);
-    }
-}
-
-public class DocumentGrantResolver : AppGrantResolverBase<IDocumentOperation> {
-    public override async ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
-        AuthorizationContext<TResource> context, CancellationToken ct) {
-        var ownerIds = await db.GetDocumentGrantedOwners(context.UserId, context.RequiredPermissions);
-        return new GrantedReach(ownerIds);
-    }
-}
-```
-
-Core provides sensible defaults via default interface methods on `IGrantResolver<TDomain>`,
-so this pattern is only needed when the app wants to **customize** those defaults
-consistently across domains. If the defaults are fine, implement `IGrantResolver<TDomain>`
-directly — no base class needed.
-
 ### Extensions for Auxiliary Dimensions
 
 `AccessReach.Extensions` carries app-specific auxiliary dimensions through the pipeline:
 
 ```csharp
-public override async ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
-    AuthorizationContext<TResource> context, CancellationToken ct) {
+public async ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
+    AuthorizationContext<TResource> context,
+    CancellationToken ct)
+    where TResource : IAuthorizableResource {
 
     var (ownerIds, tiers) = await db.GetGrantsWithTiers(context.UserId, ...);
 
@@ -554,7 +535,16 @@ Grants is part of the Conductor authorization pipeline — the same layer that o
 `IAuthorizationEvaluator`, `ResourceAuthorizerBase<T>`, and `IScopeEvaluator`. Moving
 it to a separate package would split the pipeline contract across assemblies. Core
 already has identical patterns: settings POCOs, `IConfiguration` binding, assembly
-scanning, and `ICacheableQueryService`.
+scanning, and `ICacheService`.
+
+### Why Convention-Based Domain Resolution
+
+The domain feature is already structurally encoded in the C# namespace (`*.Domain.Issues.*`).
+Requiring a marker interface with `[DomainFeature("issues")]` was redundant ceremony that
+added no information the compiler didn't already have. Convention-based resolution via
+`DomainFeatureResolver` eliminates the marker interface, the attribute, and the `TDomain`
+generic parameter from the entire chain — reducing each granted resource from 5 pieces of
+ceremony to 1 interface.
 
 ### Why the App Never Touches AccessReach
 

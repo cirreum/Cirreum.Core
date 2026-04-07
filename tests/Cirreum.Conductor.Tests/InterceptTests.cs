@@ -1,6 +1,7 @@
 ﻿namespace Cirreum.Conductor.Tests;
 
 using Cirreum.Authorization;
+using Cirreum.Caching;
 using Cirreum.Conductor;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Conductor.Intercepts;
@@ -97,11 +98,10 @@ public class InterceptTests {
 	public record CacheableTestQuery(int Id)
 		: ICacheableQuery<string> {
 		public string CacheKey => $"test-{this.Id}";
-		public CacheExpirationSettings Cache => new() {
+		public CacheExpirationSettings CacheExpiration => new() {
 			Expiration = TimeSpan.FromMinutes(10)
 		};
 		public string[]? CacheTags { get; } = ["test-queries"];
-		public string CacheCategory => "TestQueries";
 	}
 	public class CacheableTestHandler : IRequestHandler<CacheableTestQuery, string> {
 		public Task<Result<string>> HandleAsync(

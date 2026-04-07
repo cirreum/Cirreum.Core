@@ -15,9 +15,9 @@ using Cirreum.Authorization;
 /// <see cref="IAuthorizableQuery{TResponse}"/>, or
 /// <see cref="IAuthorizableCacheableQuery{TResponse}"/>.
 /// For grant-aware (ReBAC) operations, use
-/// <see cref="Authorization.Grants.IGrantedCommand{TDomain}"/>,
-/// <see cref="Authorization.Grants.IGrantedRead{TDomain, TResponse}"/>, or
-/// <see cref="Authorization.Grants.IGrantedList{TDomain, TResponse}"/>.
+/// <see cref="Authorization.Grants.IGrantedCommand"/>,
+/// <see cref="Authorization.Grants.IGrantedRead{TResponse}"/>, or
+/// <see cref="Authorization.Grants.IGrantedList{TResponse}"/>.
 /// </para>
 /// <para>
 /// By inheriting <see cref="IAuthorizableResource"/>, every request instance may be

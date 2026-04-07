@@ -1,9 +1,9 @@
-﻿namespace Cirreum.Conductor;
+﻿namespace Cirreum.Caching;
 
 /// <summary>
-/// Expiration policy for a cache entry. Used by both the query caching intercept
-/// (for <see cref="ICacheableQuery{TResponse}"/> results) and the grant reach cache
-/// (for <see cref="Cirreum.Authorization.Grants.AccessReach"/> entries).
+/// Expiration policy for a single cache entry. Participants (query caching, grant
+/// reach caching, etc.) supply an instance per cache operation; the underlying
+/// <see cref="ICacheService"/> implementation interprets the values.
 /// </summary>
 /// <param name="Expiration">
 /// The absolute expiration duration for the cache entry. Applied to distributed (L2)

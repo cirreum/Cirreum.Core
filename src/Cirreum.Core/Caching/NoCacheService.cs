@@ -1,12 +1,11 @@
-﻿namespace Cirreum.Conductor.Caching;
-
-using Cirreum.Conductor;
+﻿namespace Cirreum.Caching;
 
 /// <summary>
-/// No-op cache service that always executes queries without caching.
-/// Useful for testing or when caching should be disabled.
+/// No-op <see cref="ICacheService"/> that always invokes the factory directly,
+/// bypassing any caching. Registered automatically when <see cref="CacheSettings.Provider"/>
+/// is <see cref="CacheProvider.None"/>.
 /// </summary>
-public class NoCacheQueryService : ICacheableQueryService {
+public class NoCacheService : ICacheService {
 	public async ValueTask<TResponse> GetOrCreateAsync<TResponse>(
 		string cacheKey,
 		Func<CancellationToken, ValueTask<TResponse>> factory,

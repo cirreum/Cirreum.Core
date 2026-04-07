@@ -38,7 +38,7 @@ sequenceDiagram
     rect rgba(80, 140, 240, 0.25)
     Note over AE,SE: Stage 1 — Scope (first-failure short-circuit)
 
-    alt Resource is IGrantedCommand / IGrantedRead / IGrantedList
+    alt Resource is IGrantedCommandBase / IGrantedReadBase / IGrantedListBase
         Note over AE,AR: Step 0a — Grant Evaluation
         AE->>GE: EvaluateAsync(authContext)
         GE->>GE: Check ApplicationUser.IsEnabled
@@ -128,11 +128,11 @@ first sub-step of Stage 1. Its internal flow:
 
 1. **User enabled check** — `IOwnedApplicationUser.IsEnabled` (immediate deny if disabled)
 2. **Resolver selection** — `AccessReachResolverSelector.SelectFor(resourceType)` finds the
-   `GrantBasedAccessReachResolver<TDomain>` matching the resource's `TDomain`
+   `GrantBasedAccessReachResolver` for the resource
 3. **Reach resolution** — the orchestrator runs:
    - Bypass check (`ShouldBypassAsync`) — always live, never cached
    - L1 scoped cache lookup (per-request dedup)
-   - L2 cross-request cache lookup (`ICacheableQueryService`)
+   - L2 cross-request cache lookup (`ICacheService`)
    - Cold path: `ResolveGrantsAsync` + `ResolveHomeOwnerAsync` + merge
 4. **CRL enforcement** — operation-kind-specific rules (see [Grants README](Grants/README.md))
 5. **Reach stashing** — `AccessReach` set on `IAccessReachAccessor` for handler access

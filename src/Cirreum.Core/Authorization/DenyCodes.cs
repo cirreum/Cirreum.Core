@@ -21,7 +21,7 @@ public static class DenyCodes {
 
 	/// <summary>
 	/// OwnerId is required for cacheable owner-scoped reads but was not supplied.
-	/// Emitted on Global-scope reads of <see cref="Grants.IGrantedCacheableRead"/>
+	/// Emitted on Global-scope reads of <see cref="Grants.IGrantedCacheableReadBase"/>
 	/// that did not name a target tenant — required to keep the cache keyed per-tenant.
 	/// </summary>
 	public const string CacheableReadOwnerIdRequired = "CACHEABLE_READ_OWNER_ID_REQUIRED";

@@ -1,7 +1,7 @@
-﻿namespace Cirreum.Conductor.Intercepts;
+namespace Cirreum.Conductor.Intercepts;
 
+using Cirreum.Caching;
 using Cirreum.Conductor;
-using Cirreum.Conductor.Caching;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Diagnostics;
 using Microsoft.Extensions.Logging;
@@ -18,27 +18,30 @@ sealed class QueryCaching<TRequest, TResponse>
 		unit: "ms",
 		description: "Cache operation duration");
 
-	private readonly ICacheableQueryService _cache;
+	private readonly ICacheService _cache;
 	private readonly ConductorSettings _conductorSettings;
+	private readonly CacheSettings _cacheSettings;
 	private readonly ILogger<QueryCaching<TRequest, TResponse>> _logger;
 
 	public QueryCaching(
-		ICacheableQueryService cache,
+		ICacheService cache,
 		ConductorSettings conductorSettings,
+		CacheSettings cacheSettings,
 		ILogger<QueryCaching<TRequest, TResponse>> logger) {
 		this._cache = cache;
 		this._conductorSettings = conductorSettings;
+		this._cacheSettings = cacheSettings;
 		this._logger = logger;
 
 		// Check once at construction time instead of every request
-		if (conductorSettings.Cache.Provider == CacheProvider.Hybrid &&
-			cache is NoCacheQueryService) {
+		if (cacheSettings.Provider == CacheProvider.Hybrid &&
+			cache is NoCacheService) {
 			logger.LogWarning(
 				"CacheProvider is set to 'Hybrid' yet the service is not registered. " +
 				"Did you forget to add a hybrid caching implementation?");
 		}
-		if (conductorSettings.Cache.Provider == CacheProvider.Distributed &&
-			cache is NoCacheQueryService) {
+		if (cacheSettings.Provider == CacheProvider.Distributed &&
+			cache is NoCacheService) {
 			logger.LogWarning(
 				"CacheProvider is set to 'Distributed' yet the service is not registered. " +
 				"Did you forget to add a distributed caching implementation?");
@@ -50,13 +53,10 @@ sealed class QueryCaching<TRequest, TResponse>
 		RequestHandlerDelegate<TRequest, TResponse> next,
 		CancellationToken cancellationToken) {
 
-		var category = context.Request.CacheCategory ?? "uncategorized";
-
 		if (this._logger.IsEnabled(LogLevel.Debug)) {
 			this._logger.LogDebug(
-				"Processing cacheable query: {QueryType} (Category: {Category}, CacheKey: {CacheKey})",
+				"Processing cacheable query: {QueryType} (CacheKey: {CacheKey})",
 				context.RequestType,
-				category,
 				context.Request.CacheKey);
 		}
 
@@ -77,7 +77,6 @@ sealed class QueryCaching<TRequest, TResponse>
 
 		var telemetryTags = new TagList {
 			{ ConductorTelemetry.QueryNameTag, context.RequestType },
-			{ ConductorTelemetry.QueryCategoryTag, category },
 			{ ConductorTelemetry.QueryStatusTag, result.IsSuccess ? "success" : "failure" }
 		};
 
@@ -85,10 +84,9 @@ sealed class QueryCaching<TRequest, TResponse>
 
 		if (this._logger.IsEnabled(LogLevel.Debug)) {
 			this._logger.LogDebug(
-				"Query {QueryType} completed: Status={Status}, Category={Category}, Duration={Duration}ms",
+				"Query {QueryType} completed: Status={Status}, Duration={Duration}ms",
 				context.RequestType,
 				result.IsSuccess ? "Success" : "Failed",
-				category,
 				Math.Round(elapsed, 2));
 		}
 
@@ -96,25 +94,12 @@ sealed class QueryCaching<TRequest, TResponse>
 	}
 
 	private CacheExpirationSettings BuildEffectiveSettings(TRequest request, string queryTypeName) {
-		var querySettings = request.Cache;
+		var querySettings = request.CacheExpiration;
 		var cacheOptions = this._conductorSettings.Cache;
 
 		var expiration = querySettings.Expiration;
 		var localExpiration = querySettings.LocalExpiration;
 		var failureExpiration = querySettings.FailureExpiration;
-
-		// Apply category-based overrides if category is specified
-		if (request.CacheCategory is not null &&
-			cacheOptions.CategoryOverrides.TryGetValue(request.CacheCategory, out var categoryOverrides)) {
-			expiration = categoryOverrides.Expiration ?? expiration;
-			localExpiration = categoryOverrides.LocalExpiration ?? localExpiration;
-			failureExpiration = categoryOverrides.FailureExpiration ?? failureExpiration;
-
-			if (this._logger.IsEnabled(LogLevel.Debug)) {
-				this._logger.LogDebug("Applied category override '{Category}' for {QueryType}",
-					request.CacheCategory, queryTypeName);
-			}
-		}
 
 		// Apply exact query-specific overrides (highest priority)
 		if (cacheOptions.QueryOverrides.TryGetValue(queryTypeName, out var queryOverrides)) {
@@ -127,10 +112,11 @@ sealed class QueryCaching<TRequest, TResponse>
 			}
 		}
 
-		// Apply global defaults for any remaining nulls
-		expiration ??= cacheOptions.DefaultExpiration;
-		localExpiration ??= cacheOptions.DefaultLocalExpiration;
-		failureExpiration ??= cacheOptions.DefaultFailureExpiration;
+		// Apply global defaults from central CacheSettings for any remaining nulls
+		var defaults = this._cacheSettings.DefaultExpiration;
+		expiration ??= defaults.Expiration;
+		localExpiration ??= defaults.LocalExpiration;
+		failureExpiration ??= defaults.FailureExpiration;
 
 		return new CacheExpirationSettings(
 			Expiration: expiration,

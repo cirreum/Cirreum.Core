@@ -17,5 +17,5 @@ public sealed record ResourceInfo(
 	IReadOnlyList<AuthorizationRuleInfo> Rules,
 	bool IsGranted = false,
 	string? GrantDomain = null,
-	IReadOnlyList<string>? RequiredPermissions = null
+	IReadOnlyList<string> Permissions = null!
 );

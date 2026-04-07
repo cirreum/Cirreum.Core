@@ -1,7 +1,7 @@
 ﻿namespace Cirreum;
 
+using Cirreum.Caching;
 using Cirreum.Conductor;
-using Cirreum.Conductor.Caching;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Extensions.Internal;
 using Microsoft.Extensions.Configuration;
@@ -160,8 +160,10 @@ public static class ConductorServiceCollectionExtensions {
 			sp => sp.GetRequiredService<Dispatcher>(),
 			dispatcherLifetime));
 
-		// Register cache services based on configuration.
-		services.AddCacheableQueryService(settings);
+		// Safety nets: ensure cache infrastructure is available even if
+		// AddCirreumCaching hasn't been called yet (e.g., standalone AddConductor usage).
+		services.TryAddSingleton(new CacheSettings());
+		services.TryAddSingleton<ICacheService, NoCacheService>();
 
 		// Configure the Conductor builder (handlers, notifications, intercepts).
 		var builder = new ConductorBuilder();
@@ -188,32 +190,6 @@ public static class ConductorServiceCollectionExtensions {
 
 	}
 
-
-	private static void AddCacheableQueryService(
-		this IServiceCollection services,
-		ConductorSettings settings) {
-
-		// Register cache service based on configuration
-		// Use Replace for None/InMemory to enforce config over code registration
-		// Use TryAdd for Distributed/Hybrid to allow infrastructure layer to provide implementation
-		switch (settings.Cache.Provider) {
-			case CacheProvider.None:
-				services.Replace(ServiceDescriptor.Singleton<ICacheableQueryService, NoCacheQueryService>());
-				break;
-
-			case CacheProvider.InMemory:
-				services.Replace(ServiceDescriptor.Singleton<ICacheableQueryService, InMemoryCacheableQueryService>());
-				break;
-
-			case CacheProvider.Distributed:
-			case CacheProvider.Hybrid:
-				// Runtime extensions or Application should register
-				// If not registered, fall back to None
-				services.TryAddSingleton<ICacheableQueryService, NoCacheQueryService>();
-				break;
-		}
-
-	}
 
 	private static IServiceCollection AddRequestHandlers(
 		this IServiceCollection services,

@@ -22,6 +22,12 @@ public sealed record RequestContext<TRequest>(
 	string RequestType)
 	where TRequest : notnull {
 
+	/// <summary>
+	/// The domain feature derived from <typeparamref name="TRequest"/>'s namespace convention.
+	/// Cached per-type via <see cref="DomainFeatureResolver"/> — zero per-request cost.
+	/// </summary>
+	public string? DomainFeature => DomainFeatureResolver.Resolve<TRequest>();
+
 	// Delegate to Operation for convenience
 	public string Environment => this.Operation.Environment;
 	public DomainRuntimeType RuntimeType => this.Operation.RuntimeType;

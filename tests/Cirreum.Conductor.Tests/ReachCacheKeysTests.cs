@@ -6,52 +6,44 @@ using Cirreum.Authorization.Grants.Caching;
 [TestClass]
 public class ReachCacheKeysTests {
 
-	// BuildPermissionSignature
+	// PermissionSet.ToSignature
 	// -------------------------------------------------------------
 
 	[TestMethod]
-	public void Single_permission_signature_is_name_only() {
-		var permissions = new List<Permission> { new("issues", "delete") };
+	public void Single_permission_signature_is_operation_only() {
+		var set = new PermissionSet([new Permission("issues", "delete")]);
 
-		var sig = ReachCacheKeys.BuildPermissionSignature(permissions);
-
-		Assert.AreEqual("delete", sig);
+		Assert.AreEqual("delete", set.ToSignature());
 	}
 
 	[TestMethod]
 	public void Multiple_permissions_are_sorted_and_joined() {
-		var permissions = new List<Permission> {
-			new("issues", "write"),
-			new("issues", "delete"),
-			new("issues", "audit"),
-		};
+		var set = new PermissionSet([
+			new Permission("issues", "write"),
+			new Permission("issues", "delete"),
+			new Permission("issues", "audit"),
+		]);
 
-		var sig = ReachCacheKeys.BuildPermissionSignature(permissions);
-
-		Assert.AreEqual("audit+delete+write", sig);
+		Assert.AreEqual("audit+delete+write", set.ToSignature());
 	}
 
 	[TestMethod]
 	public void Empty_permissions_produce_empty_signature() {
-		var sig = ReachCacheKeys.BuildPermissionSignature([]);
-
-		Assert.AreEqual(string.Empty, sig);
+		Assert.AreEqual(string.Empty, PermissionSet.Empty.ToSignature());
 	}
 
 	[TestMethod]
 	public void Signature_is_deterministic_regardless_of_input_order() {
-		var a = new List<Permission> {
-			new("issues", "delete"),
-			new("issues", "write"),
-		};
-		var b = new List<Permission> {
-			new("issues", "write"),
-			new("issues", "delete"),
-		};
+		var a = new PermissionSet([
+			new Permission("issues", "delete"),
+			new Permission("issues", "write"),
+		]);
+		var b = new PermissionSet([
+			new Permission("issues", "write"),
+			new Permission("issues", "delete"),
+		]);
 
-		Assert.AreEqual(
-			ReachCacheKeys.BuildPermissionSignature(a),
-			ReachCacheKeys.BuildPermissionSignature(b));
+		Assert.AreEqual(a.ToSignature(), b.ToSignature());
 	}
 
 	// BuildKey
@@ -59,31 +51,31 @@ public class ReachCacheKeysTests {
 
 	[TestMethod]
 	public void BuildKey_produces_expected_format() {
-		var permissions = new List<Permission> { new("issues", "delete") };
+		var set = new PermissionSet([new Permission("issues", "delete")]);
 
-		var key = ReachCacheKeys.BuildKey(1, "user-123", "issues", permissions);
+		var key = ReachCacheKeys.BuildKey(1, "user-123", "issues", set);
 
 		Assert.AreEqual("reach:v1:user-123:issues:delete", key);
 	}
 
 	[TestMethod]
 	public void BuildKey_with_multiple_permissions_sorts_signature() {
-		var permissions = new List<Permission> {
-			new("issues", "write"),
-			new("issues", "delete"),
-		};
+		var set = new PermissionSet([
+			new Permission("issues", "write"),
+			new Permission("issues", "delete"),
+		]);
 
-		var key = ReachCacheKeys.BuildKey(2, "user-456", "issues", permissions);
+		var key = ReachCacheKeys.BuildKey(2, "user-456", "issues", set);
 
 		Assert.AreEqual("reach:v2:user-456:issues:delete+write", key);
 	}
 
 	[TestMethod]
 	public void Version_bump_changes_key() {
-		var permissions = new List<Permission> { new("issues", "read") };
+		var set = new PermissionSet([new Permission("issues", "read")]);
 
-		var v1 = ReachCacheKeys.BuildKey(1, "u1", "issues", permissions);
-		var v2 = ReachCacheKeys.BuildKey(2, "u1", "issues", permissions);
+		var v1 = ReachCacheKeys.BuildKey(1, "u1", "issues", set);
+		var v2 = ReachCacheKeys.BuildKey(2, "u1", "issues", set);
 
 		Assert.AreNotEqual(v1, v2);
 	}

@@ -88,7 +88,7 @@ public abstract class ResourceAuthorizerBase<TResource>
 	/// <summary>
 	/// Conditionally registers rules when the operation declares the specified
 	/// <paramref name="permission"/> via <see cref="RequiresPermissionAttribute"/>. Use this to
-	/// write permission-aware rules without scattering <c>ctx.RequiredPermissions.Contains</c>
+	/// write permission-aware rules without scattering <c>ctx.Permissions.Contains</c>
 	/// checks across each rule's <c>When</c>-clause.
 	/// </summary>
 	/// <param name="permission">The required permission that gates the nested rules.</param>
@@ -102,16 +102,7 @@ public abstract class ResourceAuthorizerBase<TResource>
 	protected void WhenRequires(Permission permission, Action configure) {
 		ArgumentNullException.ThrowIfNull(permission);
 		ArgumentNullException.ThrowIfNull(configure);
-		this.When(ctx => ContainsPermission(ctx.RequiredPermissions, permission), configure);
-	}
-
-	private static bool ContainsPermission(IReadOnlyList<Permission> permissions, Permission target) {
-		for (var i = 0; i < permissions.Count; i++) {
-			if (permissions[i].Equals(target)) {
-				return true;
-			}
-		}
-		return false;
+		this.When(ctx => ctx.Permissions.Contains(permission), configure);
 	}
 
 }

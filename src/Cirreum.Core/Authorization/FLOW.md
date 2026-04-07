@@ -45,7 +45,7 @@ sequenceDiagram
     Note over AE,GE: Three-stage pipeline<br/>(see SEQUENCE.md)
     AE->>AE: Stage 1 — Scope (short-circuit)
 
-    alt Resource is IGrantedCommand / IGrantedRead / IGrantedList
+    alt Resource is Granted (IGrantedCommand / IGrantedRead / IGrantedList)
         AE->>GE: EvaluateAsync(authContext)
         Note over GE: Resolve AccessReach<br/>(L1→L2→cold path)
         GE->>GE: CRL enforcement<br/>(Command / Read / List rules)
@@ -86,6 +86,10 @@ sequenceDiagram
   resolves the caller's `AccessReach` and enforces CRL timing rules before
   any other scope evaluator runs. If the resource is not granted, this step
   is a no-op pass. See the [Grants README](Grants/README.md) for details.
+- **Permissions are general-purpose.** `[RequiresPermission]` attributes are
+  resolved for all authorizable resources — not just granted ones. The
+  resolved `PermissionSet` is available on `AuthorizationContext.Permissions`
+  for use by resource authorizers (Stage 2) and policy validators (Stage 3).
 - **Result, not exceptions.** Authentication/authorization failures are
   returned as `Result.Fail(...)` through the pipeline. Exceptions inside
   an evaluator are caught and converted at the pipeline boundary.

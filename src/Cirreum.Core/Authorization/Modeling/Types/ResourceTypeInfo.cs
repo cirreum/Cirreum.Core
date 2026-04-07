@@ -19,7 +19,7 @@ public sealed record ResourceTypeInfo(
 	IReadOnlyList<AuthorizationRuleTypeInfo> Rules,
 	bool IsGranted = false,
 	string? GrantDomain = null,
-	IReadOnlyList<Permission>? RequiredPermissions = null
+	PermissionSet Permissions = null!
 ) {
 	/// <summary>
 	/// Converts to the serializable ResourceInfo type.
@@ -38,8 +38,6 @@ public sealed record ResourceTypeInfo(
 		Rules: [.. this.Rules.Select(r => r.ToRuleInfo())],
 		IsGranted: this.IsGranted,
 		GrantDomain: this.GrantDomain,
-		RequiredPermissions: this.RequiredPermissions is not null
-			? [.. this.RequiredPermissions.Select(p => p.ToString())]
-			: []
+		Permissions: [.. this.Permissions.Select(p => p.ToString())]
 	);
 }

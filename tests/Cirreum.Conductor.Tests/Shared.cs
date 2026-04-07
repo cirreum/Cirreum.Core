@@ -1,6 +1,7 @@
-﻿namespace Cirreum.Conductor.Tests;
+namespace Cirreum.Conductor.Tests;
 
 using Cirreum.Authorization;
+using Cirreum.Caching;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Conductor.Intercepts;
 using Cirreum.Messaging;
@@ -12,53 +13,36 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 public static class Shared {
 
-	public static ConductorSettings SequentialSettings { get; } = new ConductorSettings {
-		PublisherStrategy = PublisherStrategy.Sequential,
-		Cache = new ConductorCacheSettings {
-			Provider = CacheProvider.InMemory,
-			DefaultExpiration = TimeSpan.FromMinutes(5)
+	public static CacheSettings DefaultCacheSettings { get; } = new CacheSettings {
+		Provider = CacheProvider.InMemory,
+		DefaultExpiration = new QueryCacheOverride {
+			Expiration = TimeSpan.FromMinutes(5)
 		}
+	};
+
+	public static ConductorSettings SequentialSettings { get; } = new ConductorSettings {
+		PublisherStrategy = PublisherStrategy.Sequential
 	};
 
 	public static ConductorSettings FireAndForgetSettings { get; } = new ConductorSettings {
-		PublisherStrategy = PublisherStrategy.FireAndForget,
-		Cache = new ConductorCacheSettings {
-			Provider = CacheProvider.InMemory,
-			DefaultExpiration = TimeSpan.FromMinutes(5)
-		}
+		PublisherStrategy = PublisherStrategy.FireAndForget
 	};
 
 	public static ConductorSettings ParallelSettings { get; } = new ConductorSettings {
-		PublisherStrategy = PublisherStrategy.Parallel,
-		Cache = new ConductorCacheSettings {
-			Provider = CacheProvider.InMemory,
-			DefaultExpiration = TimeSpan.FromMinutes(5)
-		}
+		PublisherStrategy = PublisherStrategy.Parallel
 	};
 
 	public static readonly Action<ConductorSettings> ConfigureSequentialSettings = settings => {
 		settings.PublisherStrategy = PublisherStrategy.Sequential;
-		settings.Cache = new ConductorCacheSettings {
-			Provider = CacheProvider.InMemory,
-			DefaultExpiration = TimeSpan.FromMinutes(5)
-		};
 	};
 
 
 	public static readonly Action<ConductorSettings> ConfigureFireAndForgetSettings = settings => {
 		settings.PublisherStrategy = PublisherStrategy.FireAndForget;
-		settings.Cache = new ConductorCacheSettings {
-			Provider = CacheProvider.InMemory,
-			DefaultExpiration = TimeSpan.FromMinutes(5)
-		};
 	};
 
 	public static readonly Action<ConductorSettings> ConfigureParallelSettings = settings => {
 		settings.PublisherStrategy = PublisherStrategy.Parallel;
-		settings.Cache = new ConductorCacheSettings {
-			Provider = CacheProvider.InMemory,
-			DefaultExpiration = TimeSpan.FromMinutes(5)
-		};
 	};
 
 
@@ -105,6 +89,10 @@ public static class Shared {
 
 			lb.SetMinimumLevel(LogLevel.Trace);
 		});
+
+		// Central cache settings
+		services.AddSingleton(DefaultCacheSettings);
+		services.AddSingleton<ICacheService, InMemoryCacheService>();
 
 		services.AddDomainContextInitilizer();
 

@@ -28,6 +28,12 @@ public sealed record AuthorizationContext<TResource>(
 	TResource Resource)
 	where TResource : IAuthorizableResource {
 
+	/// <summary>
+	/// The domain feature derived from <typeparamref name="TResource"/>'s namespace convention.
+	/// Cached per-type via <see cref="DomainFeatureResolver"/> — zero per-request cost.
+	/// </summary>
+	public string? DomainFeature => DomainFeatureResolver.Resolve<TResource>();
+
 	// Convenience properties delegated to Operation
 	public string UserId => this.Operation.UserId;
 	public string UserName => this.Operation.UserName;
@@ -49,10 +55,10 @@ public sealed record AuthorizationContext<TResource>(
 	/// <summary>
 	/// The distinct set of permissions declared on <typeparamref name="TResource"/> via
 	/// <see cref="RequiresPermissionAttribute"/>. Hoisted once per type from
-	/// <see cref="RequiredPermissionsCache"/>; available to every authorization stage without
+	/// <see cref="PermissionSetCache"/>; available to every authorization stage without
 	/// per-request reflection. AND semantics — every listed permission is required.
 	/// </summary>
-	public IReadOnlyList<Permission> RequiredPermissions => RequiredPermissionsCache.GetFor<TResource>();
+	public PermissionSet Permissions => PermissionSetCache.GetFor<TResource>();
 
 	// ExecutionContext properties (for policy validators)
 	public DomainRuntimeType RuntimeType => this.Operation.RuntimeType;

@@ -7,12 +7,6 @@ namespace Cirreum.Authorization.Grants.Caching;
 public sealed class GrantCacheDomainOverride {
 
 	/// <summary>
-	/// Override the <see cref="GrantCacheSettings.Enabled"/> flag for this domain.
-	/// <see langword="null"/> inherits the global setting.
-	/// </summary>
-	public bool? Enabled { get; set; }
-
-	/// <summary>
 	/// Override the <see cref="GrantCacheSettings.Expiration"/> for this domain.
 	/// <see langword="null"/> inherits the global setting.
 	/// </summary>

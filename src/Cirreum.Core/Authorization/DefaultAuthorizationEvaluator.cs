@@ -25,7 +25,7 @@ using System.Collections.Immutable;
 /// <list type="bullet">
 /// <item><description>
 /// Step 0: grant evaluator (<see cref="GrantEvaluator"/>, optional,
-/// applies only to <see cref="IGrantedCommand"/>/<see cref="IGrantedRead"/>/<see cref="IGrantedList"/>).
+/// applies only to <see cref="IGrantedCommandBase"/>/<see cref="IGrantedReadBase"/>/<see cref="IGrantedListBase"/>).
 /// </description></item>
 /// <item><description>
 /// Step 1: generic scope evaluators (<see cref="IScopeEvaluator"/>, zero or more,
@@ -51,7 +51,7 @@ using System.Collections.Immutable;
 /// <param name="logger">The logger for authorization events.</param>
 /// <param name="grantEvaluator">
 /// Optional grant evaluator. When present and the resource implements a Granted
-/// interface (<see cref="IGrantedCommand"/>/<see cref="IGrantedRead"/>/<see cref="IGrantedList"/>),
+/// interface (<see cref="IGrantedCommandBase"/>/<see cref="IGrantedReadBase"/>/<see cref="IGrantedListBase"/>),
 /// runs as Stage 1 Step 0.
 /// </param>
 sealed class DefaultAuthorizationEvaluator(
@@ -145,9 +145,9 @@ sealed class DefaultAuthorizationEvaluator(
 		var policyAuthorizers = rawPolicy as IPolicyValidator[] ?? [.. rawPolicy];
 
 		var grantGateApplies = grantEvaluator is not null
-			&& (resource is IGrantedCommand
-				|| resource is IGrantedRead
-				|| resource is IGrantedList);
+			&& (resource is IGrantedCommandBase
+				|| resource is IGrantedReadBase
+				|| resource is IGrantedListBase);
 
 		if (scopeEvaluators.Length == 0
 			&& resourceAuthorizers.Length == 0

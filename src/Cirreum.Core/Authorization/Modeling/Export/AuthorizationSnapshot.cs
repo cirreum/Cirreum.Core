@@ -144,8 +144,7 @@ public record AuthorizationSnapshot {
 		var result = new List<GrantDomainInfo>();
 		foreach (var group in byDomain) {
 			var permissions = group
-				.Where(r => r.RequiredPermissions is not null)
-				.SelectMany(r => r.RequiredPermissions!)
+				.SelectMany(r => r.Permissions)
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.OrderBy(p => p, StringComparer.Ordinal)
 				.ToList();

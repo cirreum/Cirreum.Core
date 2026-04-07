@@ -4,50 +4,50 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
-/// Represents a fine-grained permission in the system with a defined namespace and name.
-/// Permissions follow the format <c>{namespace}:{name}</c> (e.g., <c>document:browse</c>,
-/// <c>folder:delete</c>, <c>data:loans</c>).
+/// Represents a fine-grained permission in the system with a defined feature and operation.
+/// Permissions follow the format <c>{feature}:{operation}</c> (e.g., <c>issues:delete</c>,
+/// <c>documents:browse</c>, <c>data:loans</c>).
 /// </summary>
 /// <remarks>
 /// <para>
-/// Permissions are capabilities — "what you can do." They are paired with
-/// <see cref="Role"/> ("who you are") in a <see cref="PermissionGrant"/> to express
-/// "this role can do these things."
+/// Permissions are capabilities — "what you can do." The <see cref="Feature"/> is the
+/// domain feature area (derived from namespace convention), and the <see cref="Operation"/>
+/// is the verb (e.g., read, write, delete).
 /// </para>
 /// <para>
-/// Both <see cref="Namespace"/> and <see cref="Name"/> are normalized to lower-invariant
+/// Both <see cref="Feature"/> and <see cref="Operation"/> are normalized to lower-invariant
 /// during construction, matching <see cref="Role"/> behavior.
 /// </para>
 /// </remarks>
 [JsonConverter(typeof(PermissionJsonConverter))]
 public sealed record Permission : IComparable<Permission> {
 
-	/// <summary>Gets the namespace of the permission (e.g., "document", "folder", "data").</summary>
-	public string Namespace { get; }
+	/// <summary>Gets the domain feature area of the permission (e.g., "issues", "documents", "data").</summary>
+	public string Feature { get; }
 
-	/// <summary>Gets the name of the permission (e.g., "browse", "upload", "loans").</summary>
-	public string Name { get; }
+	/// <summary>Gets the operation of the permission (e.g., "read", "write", "delete").</summary>
+	public string Operation { get; }
 
 	/// <summary>
-	/// Creates a new permission with the specified namespace and name.
+	/// Creates a new permission with the specified feature and operation.
 	/// </summary>
-	/// <param name="namespace">The permission namespace (e.g., "document", "folder", "data").</param>
-	/// <param name="name">The permission name (e.g., "browse", "upload", "loans").</param>
-	public Permission(string @namespace, string name) {
-		ArgumentException.ThrowIfNullOrWhiteSpace(@namespace);
-		ArgumentException.ThrowIfNullOrWhiteSpace(name);
-		this.Namespace = @namespace.ToLowerInvariant();
-		this.Name = name.ToLowerInvariant();
+	/// <param name="feature">The domain feature area (e.g., "issues", "documents", "data").</param>
+	/// <param name="operation">The operation verb (e.g., "read", "write", "delete").</param>
+	public Permission(string feature, string operation) {
+		ArgumentException.ThrowIfNullOrWhiteSpace(feature);
+		ArgumentException.ThrowIfNullOrWhiteSpace(operation);
+		this.Feature = feature.ToLowerInvariant();
+		this.Operation = operation.ToLowerInvariant();
 	}
 
 	/// <summary>
-	/// Parses a permission from its string representation (<c>namespace:name</c>).
+	/// Parses a permission from its string representation (<c>feature:operation</c>).
 	/// </summary>
 	public static Permission Parse(string value) {
 		ArgumentException.ThrowIfNullOrWhiteSpace(value);
 		var parts = value.Split(':', 2);
 		if (parts.Length != 2) {
-			throw new FormatException($"Permission must be in 'namespace:name' format. Got: '{value}'");
+			throw new FormatException($"Permission must be in 'feature:operation' format. Got: '{value}'");
 		}
 		return new Permission(parts[0], parts[1]);
 	}
@@ -69,9 +69,9 @@ public sealed record Permission : IComparable<Permission> {
 	}
 
 	/// <summary>
-	/// Gets the string representation in <c>namespace:name</c> format.
+	/// Gets the string representation in <c>feature:operation</c> format.
 	/// </summary>
-	public override string ToString() => $"{this.Namespace}:{this.Name}";
+	public override string ToString() => $"{this.Feature}:{this.Operation}";
 
 	/// <summary>Compares permissions alphabetically.</summary>
 	public int CompareTo(Permission? other) {
@@ -99,13 +99,13 @@ public sealed record Permission : IComparable<Permission> {
 
 	public bool Equals(Permission? other) =>
 		other is not null &&
-		string.Equals(this.Namespace, other.Namespace, StringComparison.OrdinalIgnoreCase) &&
-		string.Equals(this.Name, other.Name, StringComparison.OrdinalIgnoreCase);
+		string.Equals(this.Feature, other.Feature, StringComparison.OrdinalIgnoreCase) &&
+		string.Equals(this.Operation, other.Operation, StringComparison.OrdinalIgnoreCase);
 
 	public override int GetHashCode() =>
 		HashCode.Combine(
-			this.Namespace.ToLowerInvariant(),
-			this.Name.ToLowerInvariant());
+			this.Feature.ToLowerInvariant(),
+			this.Operation.ToLowerInvariant());
 }
 
 /// <summary>

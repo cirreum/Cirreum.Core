@@ -1,11 +1,11 @@
-namespace Cirreum.Conductor.Tests;
+namespace Cirreum.Conductor.Tests {
 
 using System.Collections.Immutable;
 using Cirreum.Authorization;
 using Cirreum.Authorization.Grants;
 using Cirreum.Authorization.Grants.Caching;
-using Cirreum.Conductor;
-using Cirreum.Conductor.Caching;
+using Cirreum.Caching;
+using Cirreum.Conductor.Tests.Domain.TestGrant;
 
 [TestClass]
 public class ReachCacheTests {
@@ -53,7 +53,7 @@ public class ReachCacheTests {
 	public async Task L2_hit_resolves_grants_once_across_scopes() {
 		var grantResolver = new CountingGrantResolver([TenantA]);
 		var cacheService = new InMemoryTestCacheService();
-		var settings = new GrantCacheSettings { Enabled = true };
+		var settings = new GrantCacheSettings();
 
 		// Scope 1
 		var resolver1 = BuildResolver(grantResolver, cacheService, settings);
@@ -75,7 +75,7 @@ public class ReachCacheTests {
 	public async Task Same_permissions_on_different_types_share_L2_entry() {
 		var grantResolver = new CountingGrantResolver([TenantA]);
 		var cacheService = new InMemoryTestCacheService();
-		var settings = new GrantCacheSettings { Enabled = true };
+		var settings = new GrantCacheSettings();
 
 		var resolver = BuildResolver(grantResolver, cacheService, settings);
 
@@ -90,51 +90,48 @@ public class ReachCacheTests {
 			"Two resource types with same permissions should share a cache entry");
 	}
 
-	// Cache disabled — resolves every time
+	// Cache disabled (NoCacheService) — resolves every time
 	// -------------------------------------------------------------
 
 	[TestMethod]
-	public async Task Cache_disabled_resolves_every_time() {
+	public async Task NoCacheService_resolves_every_time() {
 		var grantResolver = new CountingGrantResolver([TenantA]);
-		var settings = new GrantCacheSettings { Enabled = false };
-		var resolver = BuildResolver(grantResolver, cacheSettings: settings);
+		var noCacheService = new NoCacheService();
 
-		var ctx1 = BuildContext(new TestDeleteCmd());
-		var ctx2 = BuildContext(new TestDeleteCmd());
+		// Scope 1
+		var resolver1 = BuildResolver(grantResolver, noCacheService);
+		await resolver1.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
-		await resolver.ResolveAsync(ctx1, CancellationToken.None);
-
-		// New scope — fresh resolver, no L2 either
-		var resolver2 = BuildResolver(grantResolver, cacheSettings: settings);
-		var ctx3 = BuildContext(new TestDeleteCmd());
-		await resolver2.ResolveAsync(ctx3, CancellationToken.None);
+		// Scope 2 — fresh resolver, NoCacheService passes through
+		var resolver2 = BuildResolver(grantResolver, noCacheService);
+		await resolver2.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
 		Assert.AreEqual(2, grantResolver.ResolveCount);
 	}
 
-	// Domain override disabled
+	// Domain override expiration
 	// -------------------------------------------------------------
 
 	[TestMethod]
-	public async Task Domain_override_disabled_bypasses_L2() {
+	public async Task Domain_override_expiration_is_respected() {
 		var grantResolver = new CountingGrantResolver([TenantA]);
 		var cacheService = new InMemoryTestCacheService();
 		var settings = new GrantCacheSettings {
-			Enabled = true,
+			Expiration = TimeSpan.FromMinutes(5),
 			DomainOverrides = new Dictionary<string, GrantCacheDomainOverride> {
-				["test-domain"] = new() { Enabled = false }
+				["testgrant"] = new() { Expiration = TimeSpan.FromMinutes(10) }
 			}
 		};
 
-		// Scope 1
+		// Scope 1 — populates L2
 		var resolver1 = BuildResolver(grantResolver, cacheService, settings);
 		await resolver1.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
-		// Scope 2
+		// Scope 2 — should hit L2 cache
 		var resolver2 = BuildResolver(grantResolver, cacheService, settings);
 		await resolver2.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
-		Assert.AreEqual(2, grantResolver.ResolveCount, "Domain override disabled should bypass L2");
+		Assert.AreEqual(1, grantResolver.ResolveCount, "Domain override expiration should not prevent L2 hit");
 	}
 
 	// Version bump causes miss
@@ -146,12 +143,12 @@ public class ReachCacheTests {
 		var cacheService = new InMemoryTestCacheService();
 
 		// Scope 1 with version 1
-		var settings1 = new GrantCacheSettings { Enabled = true, Version = 1 };
+		var settings1 = new GrantCacheSettings { Version = 1 };
 		var resolver1 = BuildResolver(grantResolver, cacheService, settings1);
 		await resolver1.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
 		// Scope 2 with version 2 — different key, L2 miss
-		var settings2 = new GrantCacheSettings { Enabled = true, Version = 2 };
+		var settings2 = new GrantCacheSettings { Version = 2 };
 		var resolver2 = BuildResolver(grantResolver, cacheService, settings2);
 		await resolver2.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
@@ -232,15 +229,17 @@ public class ReachCacheTests {
 	// Helpers
 	// -------------------------------------------------------------
 
-	private static GrantBasedAccessReachResolver<ITestGrantDomain> BuildResolver(
+	private static GrantBasedAccessReachResolver BuildResolver(
 		CountingGrantResolver grantResolver,
-		ICacheableQueryService? cacheService = null,
-		GrantCacheSettings? cacheSettings = null) {
+		ICacheService? cacheService = null,
+		GrantCacheSettings? cacheSettings = null,
+		CacheSettings? rootCacheSettings = null) {
 
-		return new GrantBasedAccessReachResolver<ITestGrantDomain>(
+		return new GrantBasedAccessReachResolver(
 			grantResolver,
 			cacheService ?? new InMemoryTestCacheService(),
-			cacheSettings ?? new GrantCacheSettings { Enabled = true });
+			rootCacheSettings ?? new CacheSettings(),
+			cacheSettings ?? new GrantCacheSettings());
 	}
 
 	private static AuthorizationContext<TResource> BuildContext<TResource>(TResource resource)
@@ -281,66 +280,10 @@ public class ReachCacheTests {
 			Resource: resource);
 	}
 
-	// Test doubles
-	// -------------------------------------------------------------
-
-	[GrantDomain("test-domain")]
-	internal interface ITestGrantDomain;
-
-	[RequiresPermission("delete")]
-	private sealed class TestDeleteCmd : IGrantedCommand<ITestGrantDomain>, IAuthorizableCommand {
-		public string? OwnerId { get; set; }
-	}
-
-	[RequiresPermission("delete")]
-	private sealed class TestDeleteCmd2 : IGrantedCommand<ITestGrantDomain>, IAuthorizableCommand {
-		public string? OwnerId { get; set; }
-	}
-
-	[RequiresPermission("read")]
-	private sealed class TestReadCmd : IGrantedCommand<ITestGrantDomain>, IAuthorizableCommand {
-		public string? OwnerId { get; set; }
-	}
-
-	private sealed class CountingGrantResolver(IReadOnlyList<string> ownerIds)
-		: IGrantResolver<ITestGrantDomain> {
-
-		public int ResolveCount;
-		public int BypassCount;
-		public bool AlwaysBypass;
-		public string? HomeOwnerId;
-
-		public ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
-			AuthorizationContext<TResource> context,
-			CancellationToken cancellationToken)
-			where TResource : IAuthorizableResource {
-
-			Interlocked.Increment(ref this.ResolveCount);
-			return ValueTask.FromResult(new GrantedReach(ownerIds));
-		}
-
-		public ValueTask<bool> ShouldBypassAsync<TResource>(
-			AuthorizationContext<TResource> context,
-			CancellationToken cancellationToken)
-			where TResource : IAuthorizableResource {
-
-			Interlocked.Increment(ref this.BypassCount);
-			return ValueTask.FromResult(this.AlwaysBypass);
-		}
-
-		public ValueTask<string?> ResolveHomeOwnerAsync<TResource>(
-			AuthorizationContext<TResource> context,
-			CancellationToken cancellationToken)
-			where TResource : IAuthorizableResource {
-
-			return ValueTask.FromResult(this.HomeOwnerId);
-		}
-	}
-
 	/// <summary>
 	/// Simple in-memory cache service for testing L2 behavior.
 	/// </summary>
-	private sealed class InMemoryTestCacheService : ICacheableQueryService {
+	private sealed class InMemoryTestCacheService : ICacheService {
 
 		private readonly Dictionary<string, object> _store = [];
 		private readonly Dictionary<string, HashSet<string>> _tagIndex = [];
@@ -392,6 +335,68 @@ public class ReachCacheTests {
 				this.RemoveByTagAsync(tag, cancellationToken);
 			}
 			return ValueTask.CompletedTask;
+		}
+	}
+}
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Test doubles in a *.Domain.TestGrant.* namespace for DomainFeatureResolver
+// ─────────────────────────────────────────────────────────────────
+
+namespace Cirreum.Conductor.Tests.Domain.TestGrant {
+
+	using Cirreum.Authorization;
+	using Cirreum.Authorization.Grants;
+	using Cirreum.Conductor;
+
+	[RequiresPermission("delete")]
+	internal sealed class TestDeleteCmd : IGrantedCommand {
+		public string? OwnerId { get; set; }
+	}
+
+	[RequiresPermission("delete")]
+	internal sealed class TestDeleteCmd2 : IGrantedCommand {
+		public string? OwnerId { get; set; }
+	}
+
+	[RequiresPermission("read")]
+	internal sealed class TestReadCmd : IGrantedCommand {
+		public string? OwnerId { get; set; }
+	}
+
+	internal sealed class CountingGrantResolver(IReadOnlyList<string> ownerIds)
+		: IGrantResolver {
+
+		public int ResolveCount;
+		public int BypassCount;
+		public bool AlwaysBypass;
+		public string? HomeOwnerId;
+
+		public ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
+			AuthorizationContext<TResource> context,
+			CancellationToken cancellationToken)
+			where TResource : IAuthorizableResource {
+
+			Interlocked.Increment(ref this.ResolveCount);
+			return ValueTask.FromResult(new GrantedReach(ownerIds));
+		}
+
+		public ValueTask<bool> ShouldBypassAsync<TResource>(
+			AuthorizationContext<TResource> context,
+			CancellationToken cancellationToken)
+			where TResource : IAuthorizableResource {
+
+			Interlocked.Increment(ref this.BypassCount);
+			return ValueTask.FromResult(this.AlwaysBypass);
+		}
+
+		public ValueTask<string?> ResolveHomeOwnerAsync<TResource>(
+			AuthorizationContext<TResource> context,
+			CancellationToken cancellationToken)
+			where TResource : IAuthorizableResource {
+
+			return ValueTask.FromResult(this.HomeOwnerId);
 		}
 	}
 }

@@ -4,12 +4,12 @@ using Cirreum.Conductor;
 using Cirreum.Security;
 
 /// <summary>
-/// Non-generic sidecar interface for grant-aware cacheable reads. Extends
-/// <see cref="IGrantedRead"/> with a <see cref="CallerAccessScope"/> discriminator
+/// Base detection interface for grant-aware cacheable reads. Extends
+/// <see cref="IGrantedReadBase"/> with a <see cref="CallerAccessScope"/> discriminator
 /// that the grant evaluator stamps after successful authorization to isolate
 /// per-scope cache buckets.
 /// </summary>
-public interface IGrantedCacheableRead : IGrantedRead {
+public interface IGrantedCacheableReadBase : IGrantedReadBase {
 
 	/// <summary>
 	/// The caller's <see cref="AccessScope"/> at the time authorization ran.
@@ -20,16 +20,17 @@ public interface IGrantedCacheableRead : IGrantedRead {
 }
 
 /// <summary>
-/// Grant-aware cacheable point-read. Composes <see cref="IGrantedRead{TDomain, TResponse}"/>
-/// with the <see cref="IGrantedCacheableRead"/> sidecar and <see cref="ICacheableQuery{TResponse}"/>
-/// caching contract. The framework composes the final cache key as
+/// Grant-aware cacheable point-read. Composes <see cref="IGrantedRead{TResponse}"/>
+/// with the <see cref="IGrantedCacheableReadBase"/> detection surface and
+/// <see cref="ICacheableQuery{TResponse}"/> caching contract. The framework composes
+/// the final cache key as
 /// <c>owner:{OwnerId}:scope:{CallerAccessScope}:{ScopedCacheKey}</c>, which isolates
 /// tenants from each other and cross-tenant operators from tenant-scoped callers.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Cache safety contract.</b> The handler's result MUST depend only on
-/// <see cref="IGrantedRead.OwnerId"/>, the discriminators inside
+/// <see cref="IGrantedReadBase.OwnerId"/>, the discriminators inside
 /// <see cref="ScopedCacheKey"/>, and shared state — <b>never</b> on the caller's identity,
 /// roles, or per-caller authorization side-effects. Two callers resolving the same
 /// <c>OwnerId</c> and <see cref="ScopedCacheKey"/> must always get the same result.
@@ -45,13 +46,11 @@ public interface IGrantedCacheableRead : IGrantedRead {
 /// tenant's cached entries.
 /// </para>
 /// </remarks>
-/// <typeparam name="TDomain">The bounded-context domain marker.</typeparam>
 /// <typeparam name="TResponse">
 /// The type of response returned by the read. Must be immutable for safe caching.
 /// </typeparam>
-public interface IGrantedCacheableRead<TDomain, TResponse>
-	: IGrantedRead<TDomain, TResponse>, IGrantedCacheableRead, ICacheableQuery<TResponse>
-	where TDomain : class {
+public interface IGrantedCacheableRead<TResponse>
+	: IGrantedRead<TResponse>, IGrantedCacheableReadBase, ICacheableQuery<TResponse> {
 
 	/// <summary>
 	/// The per-tenant portion of the cache key. Uniqueness is only required

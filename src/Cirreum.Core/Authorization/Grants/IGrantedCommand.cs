@@ -3,10 +3,12 @@ namespace Cirreum.Authorization.Grants;
 using Cirreum.Conductor;
 
 /// <summary>
-/// Non-generic sidecar interface for grant-aware commands. Carries the scalar
+/// Base detection interface for grant-aware commands. Carries the scalar
 /// <c>OwnerId</c> that the grant evaluator enforces before the handler runs.
+/// Does not inherit <see cref="IAuthorizableCommand"/> — used by
+/// <see cref="GrantEvaluator"/> for runtime detection via <c>is</c> casts.
 /// </summary>
-public interface IGrantedCommand {
+public interface IGrantedCommandBase {
 
 	/// <summary>
 	/// The identifier of the target owner (tenant/company). Enforced <c>OwnerId ∈ reach</c>
@@ -17,20 +19,17 @@ public interface IGrantedCommand {
 
 /// <summary>
 /// Grant-aware command with no response. Composes foundation <see cref="IAuthorizableCommand"/>
-/// with the <see cref="IGrantedCommand"/> sidecar and binds to <typeparamref name="TDomain"/>
-/// for resolver matching.
+/// with the <see cref="IGrantedCommandBase"/> detection surface. Developers implement this
+/// single interface for void granted commands.
 /// </summary>
-/// <typeparam name="TDomain">The bounded-context domain marker (e.g., <c>IIssueOperation</c>).</typeparam>
-public interface IGrantedCommand<TDomain>
-	: IAuthorizableCommand, IGrantedCommand
-	where TDomain : class;
+public interface IGrantedCommand
+	: IAuthorizableCommand, IGrantedCommandBase;
 
 /// <summary>
 /// Grant-aware command with a response. Composes foundation <see cref="IAuthorizableCommand{TResponse}"/>
-/// with the <see cref="IGrantedCommand"/> sidecar and binds to <typeparamref name="TDomain"/>.
+/// with the <see cref="IGrantedCommandBase"/> detection surface. Developers implement this
+/// single interface for granted commands that return a value.
 /// </summary>
-/// <typeparam name="TDomain">The bounded-context domain marker.</typeparam>
 /// <typeparam name="TResponse">The type of response returned by the command.</typeparam>
-public interface IGrantedCommand<TDomain, out TResponse>
-	: IAuthorizableCommand<TResponse>, IGrantedCommand
-	where TDomain : class;
+public interface IGrantedCommand<out TResponse>
+	: IAuthorizableCommand<TResponse>, IGrantedCommandBase;

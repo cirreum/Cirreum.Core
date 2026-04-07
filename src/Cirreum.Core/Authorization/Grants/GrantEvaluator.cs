@@ -16,11 +16,11 @@ using System.Diagnostics;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Resources that do not implement <see cref="IGrantedCommand"/>, <see cref="IGrantedRead"/>,
-/// or <see cref="IGrantedList"/> short-circuit with a pass — the gate is purely a Grants concern.
+/// Resources that do not implement <see cref="IGrantedCommandBase"/>, <see cref="IGrantedReadBase"/>,
+/// or <see cref="IGrantedListBase"/> short-circuit with a pass — the gate is purely a Grants concern.
 /// </para>
 /// <para>
-/// All customization is in <see cref="IGrantResolver{TDomain}"/>: bypass logic, grant lookup,
+/// All customization is in <see cref="IGrantResolver"/>: bypass logic, grant lookup,
 /// and home-owner policy. This evaluator is sealed with no virtual extension points.
 /// </para>
 /// </remarks>
@@ -42,9 +42,9 @@ public sealed class GrantEvaluator(
 		where TResource : notnull, IAuthorizableResource {
 
 		// Not applicable — short-circuit pass.
-		var grantedCommand = context.Resource as IGrantedCommand;
-		var grantedRead = context.Resource as IGrantedRead;
-		var grantedList = context.Resource as IGrantedList;
+		var grantedCommand = context.Resource as IGrantedCommandBase;
+		var grantedRead = context.Resource as IGrantedReadBase;
+		var grantedList = context.Resource as IGrantedListBase;
 		if (grantedCommand is null && grantedRead is null && grantedList is null) {
 			return Pass();
 		}
@@ -62,7 +62,7 @@ public sealed class GrantEvaluator(
 			EmitTelemetry(context, DenyCodes.ScopeNotPermitted);
 			return Deny(DenyCodes.ScopeNotPermitted,
 				$"No IAccessReachResolver registered for resource type '{typeof(TResource).Name}'. " +
-				$"Register a grant resolver via services.AddAccessGrants<TDomain, TResolver>().");
+				$"Register a grant resolver via services.AddAccessGrants<TResolver>().");
 		}
 
 		var reach = await resolver
@@ -90,7 +90,7 @@ public sealed class GrantEvaluator(
 
 	private static ValidationResult EvaluateCommand<TResource>(
 		AuthorizationContext<TResource> context,
-		IGrantedCommand command,
+		IGrantedCommandBase command,
 		AccessReach reach) where TResource : notnull, IAuthorizableResource {
 
 		if (!string.IsNullOrWhiteSpace(command.OwnerId)) {
@@ -115,7 +115,7 @@ public sealed class GrantEvaluator(
 
 	private static ValidationResult EvaluateRead<TResource>(
 		AuthorizationContext<TResource> context,
-		IGrantedRead read,
+		IGrantedReadBase read,
 		AccessReach reach)
 		where TResource : notnull, IAuthorizableResource {
 
@@ -124,14 +124,14 @@ public sealed class GrantEvaluator(
 				return Deny(DenyCodes.OwnerNotInReach, "Requested owner is not in the caller's reach.");
 			}
 			// OwnerId supplied and in reach — stamp CallerAccessScope for cacheable reads.
-			if (context.Resource is IGrantedCacheableRead cacheableWithOwner) {
+			if (context.Resource is IGrantedCacheableReadBase cacheableWithOwner) {
 				cacheableWithOwner.CallerAccessScope = context.AccessScope;
 			}
 			return Pass();
 		}
 
 		// Cacheable read: Global callers MUST supply OwnerId to prevent unbounded cache bucket.
-		if (context.Resource is IGrantedCacheableRead) {
+		if (context.Resource is IGrantedCacheableReadBase) {
 			if (context.AccessScope == AccessScope.Global) {
 				return Deny(DenyCodes.CacheableReadOwnerIdRequired,
 					"OwnerId is required for cross-tenant cacheable reads.");
@@ -140,14 +140,14 @@ public sealed class GrantEvaluator(
 
 		// OwnerId null — defer to handler (Pattern C). Reach already stashed on accessor.
 		// Stamp CallerAccessScope for cacheable reads.
-		if (context.Resource is IGrantedCacheableRead cacheable) {
+		if (context.Resource is IGrantedCacheableReadBase cacheable) {
 			cacheable.CallerAccessScope = context.AccessScope;
 		}
 		return Pass();
 	}
 
 	private static ValidationResult EvaluateList(
-		IGrantedList list,
+		IGrantedListBase list,
 		AccessReach reach) {
 		if (list.OwnerIds is null) {
 			// Stamp reach. Unrestricted = null (no bound).

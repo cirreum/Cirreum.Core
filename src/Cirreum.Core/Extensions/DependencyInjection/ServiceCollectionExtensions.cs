@@ -164,6 +164,11 @@ public static class ServiceCollectionExtensions {
 		var assemblies = AssemblyScanner.ScanAssemblies().ToArray();
 
 		//
+		// Central cache infrastructure
+		//
+		services.AddCirreumCaching(configuration);
+
+		//
 		// FluentValidation
 		//
 		services.AddFluentValidationAndAuthorization(assemblies);

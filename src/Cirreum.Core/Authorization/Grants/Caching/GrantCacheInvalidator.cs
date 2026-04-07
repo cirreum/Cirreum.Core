@@ -1,16 +1,16 @@
 namespace Cirreum.Authorization.Grants.Caching;
 
-using Cirreum.Conductor.Caching;
+using Cirreum.Caching;
 
 /// <summary>
 /// Default implementation of <see cref="IGrantCacheInvalidator"/>. Delegates to the
-/// application's registered <see cref="ICacheableQueryService"/> for tag-based removal.
+/// application's registered <see cref="ICacheService"/> for tag-based removal.
 /// Registered as a singleton.
 /// </summary>
-public sealed class GrantCacheInvalidator(ICacheableQueryService cacheService)
+public sealed class GrantCacheInvalidator(ICacheService cacheService)
 	: IGrantCacheInvalidator {
 
-	private readonly ICacheableQueryService _cacheService =
+	private readonly ICacheService _cacheService =
 		cacheService ?? throw new ArgumentNullException(nameof(cacheService));
 
 	/// <inheritdoc />
@@ -24,12 +24,12 @@ public sealed class GrantCacheInvalidator(ICacheableQueryService cacheService)
 	}
 
 	/// <inheritdoc />
-	public ValueTask InvalidateDomainAsync<TDomain>(
-		CancellationToken cancellationToken = default)
-		where TDomain : class {
+	public ValueTask InvalidateDomainAsync(
+		string domainFeature,
+		CancellationToken cancellationToken = default) {
 
-		var domain = GrantDomainCache.GetFor<TDomain>().Namespace;
-		var tag = ReachCacheKeys.DomainTag(domain);
+		ArgumentException.ThrowIfNullOrWhiteSpace(domainFeature);
+		var tag = ReachCacheKeys.DomainTag(domainFeature);
 		return this._cacheService.RemoveByTagAsync(tag, cancellationToken);
 	}
 }

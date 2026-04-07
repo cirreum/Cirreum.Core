@@ -1,7 +1,8 @@
-﻿namespace Cirreum.Conductor.Benchmarks;
+namespace Cirreum.Conductor.Benchmarks;
 
 using Cirreum;
 using Cirreum.Authorization;
+using Cirreum.Caching;
 using Cirreum.Conductor;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Messaging;
@@ -12,27 +13,15 @@ using Microsoft.Extensions.Logging;
 public static class Shared {
 
 	public static ConductorSettings SequentialSettings { get; } = new ConductorSettings {
-		PublisherStrategy = PublisherStrategy.Sequential,
-		Cache = new ConductorCacheSettings {
-			Provider = CacheProvider.InMemory,
-			DefaultExpiration = TimeSpan.FromMinutes(5)
-		}
+		PublisherStrategy = PublisherStrategy.Sequential
 	};
 
 	public static ConductorSettings FireAndForgetSettings { get; } = new ConductorSettings {
-		PublisherStrategy = PublisherStrategy.FireAndForget,
-		Cache = new ConductorCacheSettings {
-			Provider = CacheProvider.InMemory,
-			DefaultExpiration = TimeSpan.FromMinutes(5)
-		}
+		PublisherStrategy = PublisherStrategy.FireAndForget
 	};
 
 	public static ConductorSettings ParallelSettings { get; } = new ConductorSettings {
-		PublisherStrategy = PublisherStrategy.Parallel,
-		Cache = new ConductorCacheSettings {
-			Provider = CacheProvider.InMemory,
-			DefaultExpiration = TimeSpan.FromMinutes(5)
-		}
+		PublisherStrategy = PublisherStrategy.Parallel
 	};
 
 	public static IServiceCollection ArrangeServices(
@@ -45,6 +34,15 @@ public static class Shared {
 			lb.AddDebug();
 			lb.SetMinimumLevel(LogLevel.Trace);
 		});
+
+		// Central cache settings
+		services.AddSingleton(new CacheSettings {
+			Provider = CacheProvider.InMemory,
+			DefaultExpiration = new QueryCacheOverride {
+			Expiration = TimeSpan.FromMinutes(5)
+		}
+		});
+		services.AddSingleton<ICacheService, InMemoryCacheService>();
 
 		services.AddSingleton<IDomainEnvironment>(sp =>
 			new TestApplicationEnvironment());

@@ -37,11 +37,6 @@ public static class ConductorTelemetry {
 	public const string QueryNameTag = "query.name";
 
 	/// <summary>
-	/// Tag: Query cache category.
-	/// </summary>
-	public const string QueryCategoryTag = "query.category";
-
-	/// <summary>
 	/// Tag: Query status (success/failure).
 	/// </summary>
 	public const string QueryStatusTag = "query.status";

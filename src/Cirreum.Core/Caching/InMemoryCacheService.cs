@@ -1,13 +1,13 @@
-﻿namespace Cirreum.Conductor.Caching;
+﻿namespace Cirreum.Caching;
 
-using Cirreum.Conductor;
 using System.Collections.Concurrent;
 
 /// <summary>
-/// In-memory implementation of <see cref="ICacheableQueryService"/> for development and testing.
-/// Does not support distributed caching or expiration - entries remain until manually removed or app restart.
+/// Single-instance in-memory <see cref="ICacheService"/> implementation. Supports
+/// absolute expiration via <see cref="CacheExpirationSettings.Expiration"/> and failure-aware
+/// expiration. Suitable for Blazor WASM, development, testing, and single-instance deployments.
 /// </summary>
-public class InMemoryCacheableQueryService : ICacheableQueryService {
+public class InMemoryCacheService : ICacheService {
 	private readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
 
 	public async ValueTask<TResponse> GetOrCreateAsync<TResponse>(

@@ -1,11 +1,12 @@
-﻿namespace Cirreum.Conductor.Configuration;
+﻿namespace Cirreum.Caching;
 
 /// <summary>
-/// Cache provider types for Conductor queries.
+/// Specifies the caching infrastructure used by the Cirreum platform.
+/// Configured centrally via <see cref="CacheSettings.Provider"/>.
 /// </summary>
 public enum CacheProvider {
 	/// <summary>
-	/// No caching - queries always execute.
+	/// No caching — factories always execute. Safe default.
 	/// </summary>
 	None,
 

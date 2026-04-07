@@ -2,6 +2,7 @@ namespace Cirreum.Authorization.Modeling;
 
 using Cirreum;
 using Cirreum.Authorization;
+using Cirreum.Authorization.Grants;
 using Cirreum.Authorization.Modeling.Export;
 using Cirreum.Authorization.Modeling.Types;
 using Cirreum.Conductor;
@@ -117,10 +118,13 @@ public class AuthorizationModel() {
 			// RequiresAuthorization: is an IAuthorizableRequestBase (flows through pipeline, must have authorizer)
 			var requiresAuthorization = !isAnonymous && ImplementsAuthorizableRequest(resourceType);
 
-			// Grant metadata: domain namespace and required permissions
-			var grantDomain = RequiredPermissionsCache.ResolveDomainNamespace(resourceType);
-			var isGranted = grantDomain is not null;
-			var requiredPermissions = isGranted ? RequiredPermissionsCache.GetFor(resourceType) : null;
+			// Permission metadata: domain feature and required permissions are available
+			// for all resources in a *.Domain.* namespace, not just grant-aware ones.
+			var grantDomain = PermissionSetCache.ResolveDomainNamespace(resourceType);
+			var permissions = PermissionSetCache.GetFor(resourceType);
+			var isGranted = typeof(IGrantedCommandBase).IsAssignableFrom(resourceType)
+				|| typeof(IGrantedReadBase).IsAssignableFrom(resourceType)
+				|| typeof(IGrantedListBase).IsAssignableFrom(resourceType);
 
 			var resourceInfo = new ResourceTypeInfo(
 				ResourceType: resourceType,
@@ -134,7 +138,7 @@ public class AuthorizationModel() {
 				Rules: rules.AsReadOnly(),
 				IsGranted: isGranted,
 				GrantDomain: grantDomain,
-				RequiredPermissions: requiredPermissions
+				Permissions: permissions
 			);
 
 			resources.Add(resourceInfo);
@@ -281,11 +285,12 @@ public class AuthorizationModel() {
 	#region Boundary/Kind Extraction
 
 	private static string GetDomainBoundary(Type resourceType) {
-		var parts = resourceType.Namespace?.Split('.') ?? [];
-		var domainIndex = Array.IndexOf(parts, "Domain");
-		return domainIndex >= 0 && parts.Length > domainIndex + 1
-			? parts[domainIndex + 1]
-			: "Other";
+		var resolved = DomainFeatureResolver.Resolve(resourceType);
+		if (resolved is null) {
+			return "Other";
+		}
+		// PascalCase for display: "issues" → "Issues"
+		return char.ToUpperInvariant(resolved[0]) + resolved[1..];
 	}
 
 	private static string GetResourceKind(Type resourceType) {

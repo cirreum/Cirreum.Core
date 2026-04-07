@@ -327,7 +327,7 @@ knowing about grant tables:
 
 ```csharp
 // 1. Declare a domain with a permission namespace
-[GrantDomain("issues")]
+[DomainFeature("issues")]
 public interface IIssueOperation;
 
 // 2. Define grant-aware requests

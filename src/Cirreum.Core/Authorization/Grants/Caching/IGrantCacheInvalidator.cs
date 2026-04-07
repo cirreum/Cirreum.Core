@@ -8,7 +8,7 @@ namespace Cirreum.Authorization.Grants.Caching;
 /// <remarks>
 /// <para>
 /// Invalidation is tag-based: each cached reach entry is tagged with the caller ID
-/// and domain namespace. Invalidating a caller removes all entries for that user
+/// and domain feature. Invalidating a caller removes all entries for that user
 /// across all domains; invalidating a domain removes all entries for that domain
 /// across all users.
 /// </para>
@@ -24,11 +24,10 @@ public interface IGrantCacheInvalidator {
 	ValueTask InvalidateCallerAsync(string callerId, CancellationToken cancellationToken = default);
 
 	/// <summary>
-	/// Invalidates all cached reach entries for a specific domain. Call this after
+	/// Invalidates all cached reach entries for a specific domain feature. Call this after
 	/// domain-wide permission structure changes.
 	/// </summary>
-	/// <typeparam name="TDomain">The domain marker type (e.g., <c>IIssueOperation</c>).</typeparam>
+	/// <param name="domainFeature">The domain feature name (e.g., <c>"issues"</c>).</param>
 	/// <param name="cancellationToken">Cancellation token.</param>
-	ValueTask InvalidateDomainAsync<TDomain>(CancellationToken cancellationToken = default)
-		where TDomain : class;
+	ValueTask InvalidateDomainAsync(string domainFeature, CancellationToken cancellationToken = default);
 }

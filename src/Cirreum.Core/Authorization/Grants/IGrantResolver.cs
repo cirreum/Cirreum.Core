@@ -1,32 +1,28 @@
 namespace Cirreum.Authorization.Grants;
 
 /// <summary>
-/// App-implemented contract for grant resolution within a single bounded context (domain).
+/// App-implemented contract for grant resolution. A single universal resolver handles
+/// all bounded contexts, using <c>context.DomainFeature</c> and
+/// <c>context.Permissions</c> to query the grants table.
 /// </summary>
 /// <remarks>
 /// <para>
 /// This is the only Grants interface the app writes code against. It has one required
 /// method (<see cref="ResolveGrantsAsync"/>) and two optional hooks (<see cref="ShouldBypassAsync"/>,
 /// <see cref="ResolveHomeOwnerAsync"/>). The app does not touch <see cref="AccessReach"/> —
-/// Core's <c>GrantBasedAccessReachResolver&lt;TDomain&gt;</c> orchestrator does all
+/// Core's <c>GrantBasedAccessReachResolver</c> orchestrator does all
 /// translation policy (denied/unrestricted semantics, home-owner merge, empty-set collapse).
 /// </para>
 /// <para>
-/// Register with <c>services.AddAccessGrants&lt;TDomain, TGrantResolver&gt;()</c>. Core wires
+/// Register with <c>services.AddAccessGrants&lt;TResolver&gt;()</c>. Core wires
 /// up the orchestrator and binds it to <see cref="IAccessReachResolver"/> automatically.
 /// </para>
 /// </remarks>
-/// <typeparam name="TDomain">
-/// The bounded-context domain marker (e.g., <c>IIssueOperation</c>) used as the first type
-/// argument in <see cref="IGrantedCommand{TDomain}"/>, <see cref="IGrantedRead{TDomain, TResponse}"/>,
-/// and <see cref="IGrantedList{TDomain, TResponse}"/>. Ties a set of requests to this resolver.
-/// </typeparam>
-public interface IGrantResolver<TDomain>
-	where TDomain : class {
+public interface IGrantResolver {
 
 	/// <summary>
 	/// Queries the app's grants table. Returns the owner IDs — and any auxiliary dimensions —
-	/// where the caller holds ALL permissions in <c>context.RequiredPermissions</c>.
+	/// where the caller holds ALL permissions in <c>context.Permissions</c>.
 	/// </summary>
 	/// <remarks>
 	/// <para>

@@ -1,7 +1,8 @@
-﻿namespace Cirreum.Conductor.Configuration;
+﻿namespace Cirreum.Caching;
 
 /// <summary>
-/// Cache setting overrides for a specific query type or category.
+/// Expiration overrides that can be applied to a group of cache entries
+/// (e.g., by category or by specific key pattern) via configuration.
 /// </summary>
 public class QueryCacheOverride {
 	/// <summary>

@@ -3,7 +3,7 @@ namespace Cirreum.Authorization;
 /// <summary>
 /// Declares a permission that an operation requires on the target owner. Consumed by Stage 1
 /// (grant resolution filters grants by these permissions), Stage 2 (resource authorizers can
-/// write permission-aware rules via <c>ctx.RequiredPermissions</c>), and Stage 3 (policy
+/// write permission-aware rules via <c>ctx.Permissions</c>), and Stage 3 (policy
 /// validators can key on required permissions).
 /// </summary>
 /// <remarks>
@@ -16,13 +16,13 @@ namespace Cirreum.Authorization;
 /// </para>
 /// <list type="bullet">
 ///   <item><description>
-///     <b>Name-only</b> (<c>[RequiresPermission("delete")]</c>) — the permission namespace
-///     is auto-resolved from the resource's TDomain marker via
-///     <see cref="Grants.GrantDomainAttribute"/>. Use this for granted resources.
+///     <b>Name-only</b> (<c>[RequiresPermission("delete")]</c>) — the permission feature
+///     is auto-resolved from the resource type's namespace convention via
+///     <see cref="DomainFeatureResolver"/>. Use this for granted resources.
 ///   </description></item>
 ///   <item><description>
-///     <b>Namespace + name</b> (<c>[RequiresPermission("issues", "delete")]</c>) — explicit
-///     namespace. Validated against the domain namespace for granted resources.
+///     <b>Feature + operation</b> (<c>[RequiresPermission("issues", "delete")]</c>) — explicit
+///     feature. Validated against the domain feature for granted resources.
 ///   </description></item>
 ///   <item><description>
 ///     <b>Permission object</b> (<c>[RequiresPermission(Permissions.Issues.Delete)]</c>) —
@@ -37,8 +37,7 @@ namespace Cirreum.Authorization;
 /// <example>
 /// <code>
 /// [RequiresPermission("delete")]
-/// public sealed record DeleteIssue(string Id)
-///     : IGrantedCommand&lt;IIssueOperation&gt; {
+/// public sealed record DeleteIssue(string Id) : IGrantedCommand {
 ///     public string? OwnerId { get; set; }
 /// }
 /// </code>
@@ -47,13 +46,13 @@ namespace Cirreum.Authorization;
 public sealed class RequiresPermissionAttribute : Attribute {
 
 	/// <summary>
-	/// Declares a permission by name only. The namespace is resolved at pipeline setup
-	/// from the resource's TDomain marker via <see cref="Grants.GrantDomainAttribute"/>.
+	/// Declares a permission by operation name only. The feature is resolved at pipeline setup
+	/// from the resource type's namespace convention via <see cref="DomainFeatureResolver"/>.
 	/// </summary>
-	/// <param name="name">The permission name (e.g., <c>"read"</c>, <c>"write"</c>, <c>"delete"</c>).</param>
+	/// <param name="name">The operation name (e.g., <c>"read"</c>, <c>"write"</c>, <c>"delete"</c>).</param>
 	/// <exception cref="InvalidOperationException">
-	/// Thrown at pipeline setup if the resource type does not implement a Granted interface
-	/// with a TDomain marker that has <c>[GrantDomain]</c> applied.
+	/// Thrown at pipeline setup if the resource type's namespace does not follow the
+	/// <c>*.Domain.*</c> convention required for feature resolution.
 	/// </exception>
 	public RequiresPermissionAttribute(string name) {
 		ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -61,14 +60,14 @@ public sealed class RequiresPermissionAttribute : Attribute {
 	}
 
 	/// <summary>
-	/// Declares a permission with an explicit namespace and name.
+	/// Declares a permission with an explicit feature and operation.
 	/// </summary>
-	/// <param name="namespace">The permission namespace (typically the bounded context — e.g., <c>"issues"</c>).</param>
-	/// <param name="name">The permission name (typically the verb — e.g., <c>"read"</c>, <c>"write"</c>, <c>"delete"</c>).</param>
-	public RequiresPermissionAttribute(string @namespace, string name) {
-		ArgumentException.ThrowIfNullOrWhiteSpace(@namespace);
-		ArgumentException.ThrowIfNullOrWhiteSpace(name);
-		this.Permission = new Permission(@namespace, name);
+	/// <param name="feature">The domain feature area (typically the bounded context — e.g., <c>"issues"</c>).</param>
+	/// <param name="operation">The operation verb (e.g., <c>"read"</c>, <c>"write"</c>, <c>"delete"</c>).</param>
+	public RequiresPermissionAttribute(string feature, string operation) {
+		ArgumentException.ThrowIfNullOrWhiteSpace(feature);
+		ArgumentException.ThrowIfNullOrWhiteSpace(operation);
+		this.Permission = new Permission(feature, operation);
 	}
 
 	/// <summary>
@@ -81,7 +80,7 @@ public sealed class RequiresPermissionAttribute : Attribute {
 
 	/// <summary>
 	/// The declared permission. <see langword="null"/> when constructed with the name-only
-	/// overload until resolved by <see cref="RequiredPermissionsCache"/>.
+	/// overload until resolved by <see cref="PermissionSetCache"/>.
 	/// </summary>
 	public Permission? Permission { get; internal set; }
 
@@ -92,8 +91,8 @@ public sealed class RequiresPermissionAttribute : Attribute {
 	internal string? UnresolvedName { get; }
 
 	/// <summary>
-	/// <see langword="true"/> when this attribute needs namespace resolution from the
-	/// resource's TDomain via <see cref="Grants.GrantDomainAttribute"/>.
+	/// <see langword="true"/> when this attribute needs feature resolution from the
+	/// resource type's namespace convention via <see cref="DomainFeatureResolver"/>.
 	/// </summary>
 	internal bool NeedsNamespaceResolution => this.UnresolvedName is not null;
 }

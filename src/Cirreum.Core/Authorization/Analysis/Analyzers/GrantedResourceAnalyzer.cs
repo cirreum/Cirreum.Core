@@ -3,7 +3,7 @@ namespace Cirreum.Authorization.Analysis.Analyzers;
 using Cirreum.Authorization.Grants;
 using Cirreum.Authorization.Modeling;
 using Cirreum.Authorization.Modeling.Types;
-using System.Reflection;
+
 
 /// <summary>
 /// Analyzes granted resources and grant domain hygiene. Detects misconfigurations
@@ -33,7 +33,7 @@ public class GrantedResourceAnalyzer : IAuthorizationAnalyzer {
 		// ──────────────────────────────────────────────
 
 		var missingPermissions = grantedResources
-			.Where(r => r.RequiredPermissions is null or { Count: 0 })
+			.Where(r => r.Permissions.Count == 0)
 			.ToList();
 
 		if (missingPermissions.Count > 0) {
@@ -52,22 +52,21 @@ public class GrantedResourceAnalyzer : IAuthorizationAnalyzer {
 		// 2. [RequiresPermission] on non-granted resources
 		// ──────────────────────────────────────────────
 
-		var inertPermissions = allResources
-			.Where(r => !r.IsGranted && r.RequiresAuthorization)
-			.Where(r => HasRequiresPermissionAttribute(r.ResourceType))
+		var permissionsWithoutGrants = allResources
+			.Where(r => !r.IsGranted && r.Permissions.Count > 0)
 			.ToList();
 
-		if (inertPermissions.Count > 0) {
+		if (permissionsWithoutGrants.Count > 0) {
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
-				Severity: IssueSeverity.Warning,
-				Description: $"Found {inertPermissions.Count} authorizable resource(s) with [RequiresPermission] " +
-					"that do not implement a Granted interface (IGrantedCommand, IGrantedRead, etc.). " +
-					"The permission attribute is inert without the grant pipeline.",
-				RelatedTypeNames: [.. inertPermissions.Select(TypeName)],
-				Recommendation: "Either add the appropriate Granted interface (e.g., IGrantedCommand<TDomain>) " +
-					"to enable grant evaluation, or remove the [RequiresPermission] attribute if permissions " +
-					"are not intended for this resource."));
+				Severity: IssueSeverity.Info,
+				Description: $"Found {permissionsWithoutGrants.Count} resource(s) with [RequiresPermission] " +
+					"that do not implement a Granted interface. Permissions are available on " +
+					"AuthorizationContext.Permissions for use in resource authorizers.",
+				RelatedTypeNames: [.. permissionsWithoutGrants.Select(TypeName)],
+				Recommendation: "If grant-based access control is intended, add the appropriate Granted " +
+					"interface (e.g., IGrantedCommand). Otherwise, ensure the resource authorizer " +
+					"consumes Permissions for authorization decisions."));
 		}
 
 		// ──────────────────────────────────────────────
@@ -92,25 +91,25 @@ public class GrantedResourceAnalyzer : IAuthorizationAnalyzer {
 		}
 
 		// ──────────────────────────────────────────────
-		// 4. Orphaned grant domains
+		// 4. Domain namespaces with granted interfaces but no granted resources
 		// ──────────────────────────────────────────────
 
-		var declaredDomains = DiscoverDeclaredGrantDomains();
+		var namespaceDomains = DiscoverNamespaceDomains();
 		var usedDomains = new HashSet<string>(grantDomains, StringComparer.OrdinalIgnoreCase);
 
-		var orphanedDomains = declaredDomains
-			.Where(d => !usedDomains.Contains(d.Namespace))
+		var unusedDomains = namespaceDomains
+			.Where(d => !usedDomains.Contains(d))
 			.ToList();
 
-		if (orphanedDomains.Count > 0) {
+		if (unusedDomains.Count > 0) {
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
-				Severity: IssueSeverity.Warning,
-				Description: $"Found {orphanedDomains.Count} [GrantDomain] marker interface(s) with no " +
-					"granted resources. These domain declarations are unused.",
-				RelatedTypeNames: [.. orphanedDomains.Select(d => d.MarkerType.FullName ?? d.MarkerType.Name)],
-				Recommendation: "Either add granted resources (IGrantedCommand<TDomain>, IGrantedRead<TDomain, T>, etc.) " +
-					"that use these domain markers, or remove the unused [GrantDomain] declarations."));
+				Severity: IssueSeverity.Info,
+				Description: $"Found {unusedDomains.Count} domain namespace(s) with no granted resources: " +
+					string.Join(", ", unusedDomains) + ".",
+				RelatedTypeNames: unusedDomains,
+				Recommendation: "If these domains should use grant-based access control, add the appropriate " +
+					"Granted interface (IGrantedCommand, IGrantedRead<T>, etc.) to their resources."));
 		}
 
 		// ──────────────────────────────────────────────
@@ -124,8 +123,7 @@ public class GrantedResourceAnalyzer : IAuthorizationAnalyzer {
 		// ──────────────────────────────────────────────
 
 		var permissionCount = grantedResources
-			.Where(r => r.RequiredPermissions is not null)
-			.SelectMany(r => r.RequiredPermissions!)
+			.SelectMany(r => r.Permissions)
 			.Select(p => p.ToString())
 			.Distinct(StringComparer.OrdinalIgnoreCase)
 			.Count();
@@ -134,8 +132,8 @@ public class GrantedResourceAnalyzer : IAuthorizationAnalyzer {
 		metrics[$"{AnalyzerCategory}.GrantDomainCount"] = grantDomains.Count;
 		metrics[$"{AnalyzerCategory}.TotalPermissionCount"] = permissionCount;
 		metrics[$"{AnalyzerCategory}.MissingPermissionCount"] = missingPermissions.Count;
-		metrics[$"{AnalyzerCategory}.InertPermissionCount"] = inertPermissions.Count;
-		metrics[$"{AnalyzerCategory}.OrphanedDomainCount"] = orphanedDomains.Count;
+		metrics[$"{AnalyzerCategory}.PermissionsWithoutGrantsCount"] = permissionsWithoutGrants.Count;
+		metrics[$"{AnalyzerCategory}.UnusedDomainCount"] = unusedDomains.Count;
 
 		// Summary
 		if (grantedResources.Count > 0) {
@@ -191,10 +189,10 @@ public class GrantedResourceAnalyzer : IAuthorizationAnalyzer {
 	}
 
 	/// <summary>
-	/// Scans assemblies for interfaces decorated with <see cref="GrantDomainAttribute"/>.
+	/// Derives domain feature names from all authorizable resource types' namespaces.
 	/// </summary>
-	private static List<(Type MarkerType, string Namespace)> DiscoverDeclaredGrantDomains() {
-		var result = new List<(Type, string)>();
+	private static HashSet<string> DiscoverNamespaceDomains() {
+		var domains = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 		foreach (var assembly in AssemblyScanner.ScanAssemblies()) {
 			Type[] types;
@@ -205,21 +203,18 @@ public class GrantedResourceAnalyzer : IAuthorizationAnalyzer {
 			}
 
 			foreach (var type in types) {
-				if (!type.IsInterface) {
+				if (!type.IsClass || type.IsAbstract) {
 					continue;
 				}
-				var attr = type.GetCustomAttribute<GrantDomainAttribute>();
-				if (attr is not null) {
-					result.Add((type, attr.Namespace));
+				var domain = DomainFeatureResolver.Resolve(type);
+				if (domain is not null) {
+					domains.Add(domain);
 				}
 			}
 		}
 
-		return result;
+		return domains;
 	}
-
-	private static bool HasRequiresPermissionAttribute(Type resourceType) =>
-		resourceType.GetCustomAttributes<RequiresPermissionAttribute>(inherit: true).Any();
 
 	private static string TypeName(ResourceTypeInfo r) =>
 		r.ResourceType.FullName ?? r.ResourceType.Name;
