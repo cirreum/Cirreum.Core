@@ -45,10 +45,10 @@ sequenceDiagram
     Note over AE,GE: Three-stage pipeline<br/>(see SEQUENCE.md)
     AE->>AE: Stage 1 — Scope (short-circuit)
 
-    alt Resource is Granted (IGrantedCommand / IGrantedRead / IGrantedList)
+    alt Resource is Granted (Mutate / Lookup / Search / Self)
         AE->>GE: EvaluateAsync(authContext)
         Note over GE: Resolve AccessReach<br/>(L1→L2→cold path)
-        GE->>GE: CRL enforcement<br/>(Command / Read / List rules)
+        GE->>GE: Grant enforcement<br/>(Mutate / Lookup / Search / Self rules)
         GE-->>AE: ValidationResult
     end
 
@@ -81,11 +81,13 @@ sequenceDiagram
   that app-user — never IdP claims directly.
 - **Intercept placement.** Authorization runs after Validation but before
   the handler. The handler can assume a valid, authorized request.
-- **Grants (Stage 1 Step 0).** When a resource implements a Granted interface
-  (`IGrantedCommand`, `IGrantedRead`, `IGrantedList`), the `GrantEvaluator`
-  resolves the caller's `AccessReach` and enforces CRL timing rules before
-  any other scope evaluator runs. If the resource is not granted, this step
-  is a no-op pass. See the [Grants README](Grants/README.md) for details.
+- **Grants (Stage 1 Step 0).** When a resource implements a grant interface
+  (`IGrantMutateRequest`, `IGrantLookupRequest`, `IGrantSearchRequest`,
+  `IGrantMutateSelfRequest`, `IGrantLookupSelfRequest`), the `GrantEvaluator`
+  resolves the caller's `AccessReach` (owner-scoped) or performs identity
+  matching (self-scoped) before any other scope evaluator runs. If the
+  resource is not granted, this step is a no-op pass. See the
+  [Grants README](Grants/README.md) for details.
 - **Permissions are general-purpose.** `[RequiresPermission]` attributes are
   resolved for all authorizable resources — not just granted ones. The
   resolved `PermissionSet` is available on `AuthorizationContext.Permissions`

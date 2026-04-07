@@ -23,8 +23,8 @@ using Cirreum.Diagnostics;
 /// </list>
 /// <para>
 /// Self-advertises via <see cref="Handles"/>: checks for
-/// <see cref="IGrantedCommandBase"/>, <see cref="IGrantedReadBase"/>, or
-/// <see cref="IGrantedListBase"/> on the resource type.
+/// <see cref="IGrantableMutateBase"/>, <see cref="IGrantableLookupBase"/>,
+/// <see cref="IGrantableSearchBase"/>, or <see cref="IGrantableSelfBase"/> on the resource type.
 /// </para>
 /// </remarks>
 sealed class GrantBasedAccessReachResolver(
@@ -48,9 +48,10 @@ sealed class GrantBasedAccessReachResolver(
 
 	public bool Handles(Type resourceType) {
 		ArgumentNullException.ThrowIfNull(resourceType);
-		return typeof(IGrantedCommandBase).IsAssignableFrom(resourceType) ||
-			   typeof(IGrantedReadBase).IsAssignableFrom(resourceType) ||
-			   typeof(IGrantedListBase).IsAssignableFrom(resourceType);
+		return typeof(IGrantableMutateBase).IsAssignableFrom(resourceType) ||
+			   typeof(IGrantableLookupBase).IsAssignableFrom(resourceType) ||
+			   typeof(IGrantableSearchBase).IsAssignableFrom(resourceType) ||
+			   typeof(IGrantableSelfBase).IsAssignableFrom(resourceType);
 	}
 
 	public async ValueTask<AccessReach> ResolveAsync<TResource>(

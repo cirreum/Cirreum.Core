@@ -351,17 +351,17 @@ namespace Cirreum.Conductor.Tests.Domain.TestGrant {
 	using Cirreum.Conductor;
 
 	[RequiresPermission("delete")]
-	internal sealed class TestDeleteCmd : IGrantedCommand {
+	internal sealed class TestDeleteCmd : IGrantMutateRequest {
 		public string? OwnerId { get; set; }
 	}
 
 	[RequiresPermission("delete")]
-	internal sealed class TestDeleteCmd2 : IGrantedCommand {
+	internal sealed class TestDeleteCmd2 : IGrantMutateRequest {
 		public string? OwnerId { get; set; }
 	}
 
 	[RequiresPermission("read")]
-	internal sealed class TestReadCmd : IGrantedCommand {
+	internal sealed class TestReadCmd : IGrantMutateRequest {
 		public string? OwnerId { get; set; }
 	}
 

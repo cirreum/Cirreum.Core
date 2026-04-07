@@ -13,7 +13,7 @@ namespace Cirreum.Authorization.Grants;
 /// Three distinguished shapes:
 /// </para>
 /// <list type="bullet">
-///   <item><description><b>Denied</b> — empty set; the caller has no access (<see cref="OwnResourcesOnly"/> is <see langword="false"/>, <see cref="OwnerIds"/> is empty).</description></item>
+///   <item><description><b>Denied</b> — empty set; the caller has no access (<see cref="OwnerIds"/> is empty).</description></item>
 ///   <item><description><b>Unrestricted</b> — no bound; the caller has cross-tenant visibility (<see cref="OwnerIds"/> is <see langword="null"/>).</description></item>
 ///   <item><description><b>Bounded</b> — an explicit non-empty set of owner IDs (<see cref="OwnerIds"/> is non-null).</description></item>
 /// </list>
@@ -28,17 +28,12 @@ namespace Cirreum.Authorization.Grants;
 /// The set of owner IDs the caller can touch, or <see langword="null"/> when reach is unrestricted.
 /// An empty non-null set means denied.
 /// </param>
-/// <param name="OwnResourcesOnly">
-/// Reserved for future use — when <see langword="true"/>, narrows reach to resources the caller
-/// personally owns (e.g., user-created records) within the owner set.
-/// </param>
 /// <param name="Extensions">
 /// Optional app-specific auxiliary dimensions (e.g., SSV codes, tiers, regions) that handlers
 /// may apply in addition to the owner filter. Keyed by app-chosen strings; opaque to Core.
 /// </param>
 public sealed record AccessReach(
 	IReadOnlyList<string>? OwnerIds,
-	bool OwnResourcesOnly = false,
 	IReadOnlyDictionary<string, object>? Extensions = null) {
 
 	/// <summary>
@@ -65,7 +60,7 @@ public sealed record AccessReach(
 		ArgumentNullException.ThrowIfNull(ownerIds);
 		return ownerIds.Count == 0
 			? Denied
-			: new AccessReach(ownerIds, OwnResourcesOnly: false, extensions);
+			: new AccessReach(ownerIds, extensions);
 	}
 
 	/// <summary>

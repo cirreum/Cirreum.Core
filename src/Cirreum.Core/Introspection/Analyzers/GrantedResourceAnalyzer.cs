@@ -65,7 +65,7 @@ public class GrantedResourceAnalyzer : IDomainAnalyzer {
 					"AuthorizationContext.Permissions for use in resource authorizers.",
 				RelatedTypeNames: [.. permissionsWithoutGrants.Select(TypeName)],
 				Recommendation: "If grant-based access control is intended, add the appropriate Granted " +
-					"interface (e.g., IGrantedCommand). Otherwise, ensure the resource authorizer " +
+					"interface (e.g., IGrantMutateRequest). Otherwise, ensure the resource authorizer " +
 					"consumes Permissions for authorization decisions."));
 		}
 
@@ -109,7 +109,7 @@ public class GrantedResourceAnalyzer : IDomainAnalyzer {
 					string.Join(", ", unusedDomains) + ".",
 				RelatedTypeNames: unusedDomains,
 				Recommendation: "If these domains should use grant-based access control, add the appropriate " +
-					"Granted interface (IGrantedCommand, IGrantedRead<T>, etc.) to their resources."));
+					"Granted interface (IGrantMutateRequest, IGrantLookupRequest<T>, etc.) to their resources."));
 		}
 
 		// ──────────────────────────────────────────────

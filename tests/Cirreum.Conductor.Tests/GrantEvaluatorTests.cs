@@ -520,19 +520,19 @@ public class GrantEvaluatorTests {
 
 	private sealed class NonOwnedResource : IAuthorizableResource;
 
-	private sealed class GrantedCommand : IGrantedCommand {
+	private sealed class GrantedCommand : IGrantMutateRequest {
 		public string? OwnerId { get; set; }
 	}
 
-	private sealed class GrantedRead : IGrantedReadBase, IAuthorizableResource {
+	private sealed class GrantedRead : IGrantableLookupBase, IAuthorizableResource {
 		public string? OwnerId { get; set; }
 	}
 
-	private sealed class GrantedList : IGrantedListBase, IAuthorizableResource {
+	private sealed class GrantedList : IGrantableSearchBase, IAuthorizableResource {
 		public IReadOnlyList<string>? OwnerIds { get; set; }
 	}
 
-	private sealed class GrantedCacheableRead : IGrantedCacheableReadBase, ICacheableQuery<string>, IAuthorizableResource {
+	private sealed class GrantedCacheableRead : IGrantableCacheableLookupBase, ICacheableQuery<string>, IAuthorizableResource {
 		public string? OwnerId { get; set; }
 		public AccessScope? CallerAccessScope { get; set; }
 		public string ScopedCacheKey => "test-key";

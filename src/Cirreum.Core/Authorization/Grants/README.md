@@ -22,7 +22,7 @@ a no-op pass with zero overhead.
 2. [Architecture](#architecture)
 3. [Domain Resolution](#domain-resolution)
 4. [Request Interfaces](#request-interfaces)
-5. [CRL Enforcement](#crl-enforcement)
+5. [Grant Enforcement](#grant-enforcement)
 6. [Permission Model](#permission-model)
 7. [Reach Resolution Flow](#reach-resolution-flow)
 8. [Caching](#caching)
@@ -41,7 +41,7 @@ a no-op pass with zero overhead.
 | **Domain** | A bounded context (e.g., Issues, Documents) derived from the C# namespace convention |
 | **Permission** | A feature-scoped capability (e.g., `issues:delete`, `issues:read`) |
 | **AccessReach** | The computed set of owners a caller can touch for a given operation |
-| **CRL** | Command / Read / List — the three grant-aware operation patterns |
+| **Grant Kinds** | Mutate / Lookup / Search / Self — the four grant-aware operation patterns |
 
 ### What Grants Is Not
 
@@ -98,10 +98,11 @@ a no-op pass with zero overhead.
 │     • L1 scoped cache → L2 cross-request cache → cold-path resolution               │
 │     • Merges grants + home owner → AccessReach                                      │
 │                                                                                     │
-│   GrantEvaluator  ← CRL enforcement                                                │
-│     • Command: OwnerId ∈ reach (pre-handler)                                       │
-│     • Read: stash reach for post-fetch check, or OwnerId ∈ reach when supplied      │
-│     • List: OwnerIds ⊆ reach, stamp when null                                      │
+│   GrantEvaluator  ← grant enforcement                                               │
+│     • Mutate: OwnerId ∈ reach (pre-handler)                                        │
+│     • Lookup: stash reach for post-fetch check, or OwnerId ∈ reach when supplied    │
+│     • Search: OwnerIds ⊆ reach, stamp when null                                    │
+│     • Self: ExternalId == UserId / admin bypass                                     │
 │                                                                                     │
 │   AccessReach  ← the gate's output                                                  │
 │     • Denied (empty set) / Unrestricted (no bound) / Bounded (explicit owners)      │
@@ -132,40 +133,60 @@ Grants provides composable interfaces that layer on top of existing Conductor re
 types. Each operation pattern requires **one interface** — no marker interfaces or
 generic domain parameters:
 
+### Owner-Scoped (tenant/company)
+
 | Interface | Base | Property | Scope |
 |-----------|------|----------|-------|
-| `IGrantedCommand` | `IAuthorizableCommand` | `OwnerId` (scalar) | Single-owner write (void) |
-| `IGrantedCommand<TResponse>` | `IAuthorizableCommand<TResponse>` | `OwnerId` (scalar) | Single-owner write with response |
-| `IGrantedRead<TResponse>` | `IAuthorizableQuery<TResponse>` | `OwnerId` (scalar) | Single-owner read |
-| `IGrantedCacheableRead<TResponse>` | `ICacheableQuery<TResponse>` | `OwnerId` + `CallerAccessScope` | Cacheable single-owner read |
-| `IGrantedList<TResponse>` | `IAuthorizableQuery<TResponse>` | `OwnerIds` (plural) | Cross-owner query |
+| `IGrantMutateRequest` | `IAuthorizableRequest` | `OwnerId` (scalar) | Single-owner write (void) |
+| `IGrantMutateRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerId` (scalar) | Single-owner write with response |
+| `IGrantLookupRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerId` (scalar) | Single-owner read |
+| `IGrantCacheableLookupRequest<TResponse>` | `ICacheableQuery<TResponse>` | `OwnerId` + `CallerAccessScope` | Cacheable single-owner read |
+| `IGrantSearchRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerIds` (plural) | Cross-owner query |
+
+### Self-Scoped (user-owned)
+
+| Interface | Base | Property | Scope |
+|-----------|------|----------|-------|
+| `IGrantMutateSelfRequest` | `IAuthorizableRequest` | `Id` / `ExternalId` | User-owned write (void) |
+| `IGrantMutateSelfRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `Id` / `ExternalId` | User-owned write with response |
+| `IGrantLookupSelfRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `Id` / `ExternalId` | User-owned read |
 
 ### Example
 
 ```csharp
+// Owner-scoped: which tenant?
 [RequiresPermission("delete")]
-public sealed record DeleteIssue(string Id) : IGrantedCommand {
+public sealed record DeleteIssue(string Id) : IGrantMutateRequest {
     public string? OwnerId { get; set; }
 }
 
 [RequiresPermission("read")]
-public sealed record GetIssue(string Id) : IGrantedRead<Issue> {
+public sealed record GetIssue(string Id) : IGrantLookupRequest<Issue> {
     public string? OwnerId { get; set; }
 }
 
 [RequiresPermission("read")]
-public sealed record ListIssues : IGrantedList<IReadOnlyList<Issue>> {
+public sealed record ListIssues : IGrantSearchRequest<IReadOnlyList<Issue>> {
     public IReadOnlyList<string>? OwnerIds { get; set; }
+}
+
+// Self-scoped: is this mine?
+public sealed record GetMyProfile : IGrantLookupSelfRequest<UserProfile> {
+    public string? Id { get; set; }
+}
+
+public sealed record UpdateMyProfile(string DisplayName) : IGrantMutateSelfRequest {
+    public string? Id { get; set; }
 }
 ```
 
 ---
 
-## CRL Enforcement
+## Grant Enforcement
 
 The `GrantEvaluator` enforces timing rules per operation kind:
 
-### Command
+### Mutate (owner-scoped)
 
 ```text
 OwnerId supplied  →  OwnerId ∈ reach? Pass : Deny
@@ -176,7 +197,7 @@ OwnerId null:
   • Multi-owner reach     →  Deny (ambiguous — caller must specify)
 ```
 
-### Read
+### Lookup (owner-scoped)
 
 ```text
 OwnerId supplied  →  OwnerId ∈ reach? Pass : Deny
@@ -188,16 +209,31 @@ OwnerId null      →  Pass (Pattern C — reach stashed on IAccessReachAccessor
 `reach.Contains(entity.OwnerId)`, and returns 404 (not 403) if the caller
 doesn't have reach — preventing information leakage about resource existence.
 
-### List
+### Search (owner-scoped)
 
 ```text
 OwnerIds supplied  →  OwnerIds ⊆ reach? Pass : Deny
 OwnerIds null      →  Stamp OwnerIds from reach (unrestricted = null = no bound)
 ```
 
+### Self (user-owned)
+
+```text
+Id null + MutateSelf  →  Auto-enrich Id from context.UserId, Pass
+Id null/invalid       →  Deny (ResourceIdRequired)
+ExternalId == UserId  →  Pass (identity match — fast path, no resolver)
+ExternalId != UserId  →  Resolve reach via ShouldBypassAsync
+  • reach.IsUnrestricted  →  Pass (admin bypass)
+  • Otherwise             →  Deny (NotResourceOwner)
+```
+
+Self-scoped requests perform a direct identity match (`ExternalId == context.UserId`)
+without reach resolution for the happy path. Admin bypass is supported via the existing
+`IGrantResolver.ShouldBypassAsync` mechanism.
+
 ### Pre-flight: User Enabled Check
 
-Before any CRL check, the evaluator verifies the application user is enabled
+Before any grant check, the evaluator verifies the application user is enabled
 via `IOwnedApplicationUser.IsEnabled`. Disabled users are denied regardless of grants.
 
 ---
@@ -214,15 +250,15 @@ authorizers (Stage 2) and policy validators (Stage 3).
 ```csharp
 // Single-arg — feature auto-resolved from namespace convention
 [RequiresPermission("delete")]
-public sealed record DeleteIssue : IGrantedCommand { ... }
+public sealed record DeleteIssue : IGrantMutateRequest { ... }
 
 // Two-arg explicit — feature validated against namespace-derived domain
 [RequiresPermission("issues", "delete")]
-public sealed record ArchiveIssue : IGrantedCommand { ... }
+public sealed record ArchiveIssue : IGrantMutateRequest { ... }
 
 // Permission constant — feature validated
 [RequiresPermission(Permissions.Issues.Delete)]
-public sealed record PurgeIssue : IGrantedCommand { ... }
+public sealed record PurgeIssue : IGrantMutateRequest { ... }
 ```
 
 ### Feature Validation
@@ -233,7 +269,7 @@ throws `InvalidOperationException` at startup:
 ```csharp
 // Runtime error — feature "audit" does not match domain "issues"
 [RequiresPermission("audit", "write")]
-public sealed record BadAction : IGrantedCommand { ... }
+public sealed record BadAction : IGrantMutateRequest { ... }
 ```
 
 Cross-cutting concerns (audit logging, rate limiting) belong in Stage 2 resource
@@ -575,15 +611,16 @@ orchestrator (`GrantBasedAccessReachResolver`) handles all translation policy so
 can't accidentally produce an invalid reach. Apps return `GrantedReach` (a simple
 owner list) and Core does the rest.
 
-### Why CRL Instead of a Generic "Grant Gate"
+### Why Four Grant Kinds Instead of a Generic "Grant Gate"
 
-Command, Read, and List have fundamentally different timing requirements:
-- Commands must know the target owner *before* the handler (no speculative writes)
-- Reads may need to hide existence (Pattern C — check *after* fetch)
-- Lists operate on sets, not scalars (subset enforcement, auto-stamping)
+Mutate, Lookup, Search, and Self have fundamentally different timing requirements:
+- Mutate must know the target owner *before* the handler (no speculative writes)
+- Lookup may need to hide existence (Pattern C — check *after* fetch)
+- Search operates on sets, not scalars (subset enforcement, auto-stamping)
+- Self performs direct identity matching without reach resolution
 
-A single generic gate would either be too permissive or too restrictive. CRL captures
-the real-world patterns.
+A single generic gate would either be too permissive or too restrictive. The four kinds
+capture the real-world patterns.
 
 ### Why Bypass Is Never Cached
 

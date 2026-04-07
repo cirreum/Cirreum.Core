@@ -64,7 +64,7 @@ public sealed class DispatcherTests {
 		}
 	}
 
-	private sealed record AuthRequest() : IAuthorizableCommand;
+	private sealed record AuthRequest() : IAuthorizableRequest;
 
 	private sealed class AuthRequestHandler : IRequestHandler<AuthRequest> {
 		public bool Called { get; private set; }

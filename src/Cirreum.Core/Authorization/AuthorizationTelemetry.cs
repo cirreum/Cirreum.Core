@@ -36,6 +36,9 @@ public static class AuthorizationTelemetry {
 	/// <summary>Stage 1, Step 0 — owner-scope gate (<see cref="Grants.GrantEvaluator"/>).</summary>
 	public const string StepOwnerScope = "owner-scope";
 
+	/// <summary>Stage 1, Step 0s — self-identity gate (<see cref="Grants.GrantEvaluator"/>).</summary>
+	public const string StepSelfIdentity = "self-identity";
+
 	/// <summary>Stage 1, Step 1 — generic <see cref="IScopeEvaluator"/> chain.</summary>
 	public const string StepScopeEvaluator = "scope-evaluator";
 

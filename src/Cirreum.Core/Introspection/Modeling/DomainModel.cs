@@ -122,9 +122,10 @@ public class DomainModel() {
 			// for all resources in a *.Domain.* namespace, not just grant-aware ones.
 			var grantDomain = PermissionSetCache.ResolveDomainNamespace(resourceType);
 			var permissions = PermissionSetCache.GetFor(resourceType);
-			var isGranted = typeof(IGrantedCommandBase).IsAssignableFrom(resourceType)
-				|| typeof(IGrantedReadBase).IsAssignableFrom(resourceType)
-				|| typeof(IGrantedListBase).IsAssignableFrom(resourceType);
+			var isGranted = typeof(IGrantableMutateBase).IsAssignableFrom(resourceType)
+				|| typeof(IGrantableLookupBase).IsAssignableFrom(resourceType)
+				|| typeof(IGrantableSearchBase).IsAssignableFrom(resourceType)
+				|| typeof(IGrantableSelfBase).IsAssignableFrom(resourceType);
 
 			var resourceInfo = new ResourceTypeInfo(
 				ResourceType: resourceType,
@@ -341,8 +342,8 @@ public class DomainModel() {
 	/// </returns>
 	/// <remarks>
 	/// <see cref="IAuthorizableRequestBase"/> is the single pipeline discriminator for authorization —
-	/// all CQRS marker interfaces (<c>IAuthorizableCommand</c>, <c>IAuthorizableQuery&lt;T&gt;</c>,
-	/// owner-scoped variants, cacheable variants) inherit from it.
+	/// all request marker interfaces (<c>IAuthorizableRequest</c>, <c>IAuthorizableRequest&lt;T&gt;</c>,
+	/// and the grant interfaces) inherit from it.
 	/// </remarks>
 	private static bool ImplementsAuthorizableRequest(Type type) {
 		return type.GetInterfaces().Any(i => i.Name == nameof(IAuthorizableRequestBase));

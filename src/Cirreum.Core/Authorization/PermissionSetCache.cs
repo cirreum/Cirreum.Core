@@ -18,8 +18,8 @@ using System.Reflection;
 /// permissions from the context without doing its own reflection.
 /// </para>
 /// <para>
-/// For granted resources (those implementing <see cref="IGrantedCommandBase"/>,
-/// <see cref="IGrantedReadBase"/>, <see cref="IGrantedListBase"/>), this cache also:
+/// For granted resources (those implementing <see cref="IGrantableMutateBase"/>,
+/// <see cref="IGrantableLookupBase"/>, <see cref="IGrantableSearchBase"/>), this cache also:
 /// </para>
 /// <list type="bullet">
 ///   <item><description>Resolves name-only <c>[RequiresPermission("delete")]</c> attributes

@@ -85,7 +85,7 @@ public class InterceptTests {
 
 	// For Authorization tests
 	public record AuthorizableTestRequest(string UserId)
-		: IAuthorizableQuery<string>;
+		: IAuthorizableRequest<string>;
 	public class AuthorizableTestHandler : IRequestHandler<AuthorizableTestRequest, string> {
 		public Task<Result<string>> HandleAsync(
 			AuthorizableTestRequest request,
@@ -113,7 +113,7 @@ public class InterceptTests {
 
 	// Authorizable query composite (replaces obsolete IDomainQuery<T>)
 	public record DomainTestRequest(string UserId)
-		: IAuthorizableQuery<string>;
+		: IAuthorizableRequest<string>;
 	public class DomainTestHandler : IRequestHandler<DomainTestRequest, string> {
 		public Task<Result<string>> HandleAsync(
 			DomainTestRequest request,
@@ -124,7 +124,7 @@ public class InterceptTests {
 
 	// Cacheable authorizable query composite (replaces obsolete IDomainCacheableQuery<T>)
 	public record DomainCacheableTestRequest(string UserId)
-		: IAuthorizableCacheableQuery<string> {
+		: IAuthorizableRequest<string>, ICacheableQuery<string> {
 		public string CacheKey => nameof(DomainCacheableTestRequest);
 	}
 

@@ -10,14 +10,14 @@ using Cirreum.Authorization;
 /// <remarks>
 /// <para>
 /// Normally you would not implement this interface directly. Implement one of the
-/// CQRS-facing marker interfaces instead:
-/// <see cref="IAuthorizableCommand"/>, <see cref="IAuthorizableCommand{TResponse}"/>,
-/// <see cref="IAuthorizableQuery{TResponse}"/>, or
-/// <see cref="IAuthorizableCacheableQuery{TResponse}"/>.
-/// For grant-aware (ReBAC) operations, use
-/// <see cref="Authorization.Grants.IGrantedCommand"/>,
-/// <see cref="Authorization.Grants.IGrantedRead{TResponse}"/>, or
-/// <see cref="Authorization.Grants.IGrantedList{TResponse}"/>.
+/// request marker interfaces instead:
+/// <see cref="IAuthorizableRequest"/> or <see cref="IAuthorizableRequest{TResponse}"/>.
+/// For grant-aware (ReBAC) operations, use the grant interfaces:
+/// <see cref="Authorization.Grants.IGrantMutateRequest"/>,
+/// <see cref="Authorization.Grants.IGrantLookupRequest{TResponse}"/>,
+/// <see cref="Authorization.Grants.IGrantSearchRequest{TResponse}"/>,
+/// <see cref="Authorization.Grants.IGrantMutateSelfRequest"/>, or
+/// <see cref="Authorization.Grants.IGrantLookupSelfRequest{TResponse}"/>.
 /// </para>
 /// <para>
 /// By inheriting <see cref="IAuthorizableResource"/>, every request instance may be

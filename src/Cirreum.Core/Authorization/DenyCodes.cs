@@ -21,7 +21,7 @@ public static class DenyCodes {
 
 	/// <summary>
 	/// OwnerId is required for cacheable owner-scoped reads but was not supplied.
-	/// Emitted on Global-scope reads of <see cref="Grants.IGrantedCacheableReadBase"/>
+	/// Emitted on Global-scope reads of <see cref="Grants.IGrantableCacheableLookupBase"/>
 	/// that did not name a target tenant — required to keep the cache keyed per-tenant.
 	/// </summary>
 	public const string CacheableReadOwnerIdRequired = "CACHEABLE_READ_OWNER_ID_REQUIRED";
@@ -55,4 +55,17 @@ public static class DenyCodes {
 	/// OwnerId and a multi-element reach.
 	/// </summary>
 	public const string OwnerAmbiguous = "OWNER_AMBIGUOUS";
+
+	/// <summary>
+	/// Id is required on a self-scoped resource but was not supplied or is invalid. Emitted on
+	/// <see cref="Grants.IGrantableSelfBase"/> operations with a null or invalid <c>Id</c>.
+	/// </summary>
+	public const string ResourceIdRequired = "RESOURCE_ID_REQUIRED";
+
+	/// <summary>
+	/// The resource's ExternalId does not match the calling user and the caller does not
+	/// have bypass (admin) privileges. Emitted on <see cref="Grants.IGrantableSelfBase"/>
+	/// operations where the identity match fails.
+	/// </summary>
+	public const string NotResourceOwner = "NOT_RESOURCE_OWNER";
 }

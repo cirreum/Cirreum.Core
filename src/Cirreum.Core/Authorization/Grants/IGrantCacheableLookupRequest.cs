@@ -4,24 +4,8 @@ using Cirreum.Conductor;
 using Cirreum.Security;
 
 /// <summary>
-/// Base detection interface for grant-aware cacheable reads. Extends
-/// <see cref="IGrantedReadBase"/> with a <see cref="CallerAccessScope"/> discriminator
-/// that the grant evaluator stamps after successful authorization to isolate
-/// per-scope cache buckets.
-/// </summary>
-public interface IGrantedCacheableReadBase : IGrantedReadBase {
-
-	/// <summary>
-	/// The caller's <see cref="AccessScope"/> at the time authorization ran.
-	/// Null before authorization; non-null after a successful grant evaluation.
-	/// Used purely as a cache-key discriminator to prevent cross-scope bucket sharing.
-	/// </summary>
-	AccessScope? CallerAccessScope { get; set; }
-}
-
-/// <summary>
-/// Grant-aware cacheable point-read. Composes <see cref="IGrantedRead{TResponse}"/>
-/// with the <see cref="IGrantedCacheableReadBase"/> detection surface and
+/// Grant-aware cacheable point-lookup. Composes <see cref="IGrantLookupRequest{TResponse}"/>
+/// with the <see cref="IGrantableCacheableLookupBase"/> detection surface and
 /// <see cref="ICacheableQuery{TResponse}"/> caching contract. The framework composes
 /// the final cache key as
 /// <c>owner:{OwnerId}:scope:{CallerAccessScope}:{ScopedCacheKey}</c>, which isolates
@@ -30,7 +14,7 @@ public interface IGrantedCacheableReadBase : IGrantedReadBase {
 /// <remarks>
 /// <para>
 /// <b>Cache safety contract.</b> The handler's result MUST depend only on
-/// <see cref="IGrantedReadBase.OwnerId"/>, the discriminators inside
+/// <see cref="IGrantableLookupBase.OwnerId"/>, the discriminators inside
 /// <see cref="ScopedCacheKey"/>, and shared state — <b>never</b> on the caller's identity,
 /// roles, or per-caller authorization side-effects. Two callers resolving the same
 /// <c>OwnerId</c> and <see cref="ScopedCacheKey"/> must always get the same result.
@@ -47,10 +31,10 @@ public interface IGrantedCacheableReadBase : IGrantedReadBase {
 /// </para>
 /// </remarks>
 /// <typeparam name="TResponse">
-/// The type of response returned by the read. Must be immutable for safe caching.
+/// The type of response returned by the lookup. Must be immutable for safe caching.
 /// </typeparam>
-public interface IGrantedCacheableRead<TResponse>
-	: IGrantedRead<TResponse>, IGrantedCacheableReadBase, ICacheableQuery<TResponse> {
+public interface IGrantCacheableLookupRequest<TResponse>
+	: IGrantLookupRequest<TResponse>, IGrantableCacheableLookupBase, ICacheableQuery<TResponse> {
 
 	/// <summary>
 	/// The per-tenant portion of the cache key. Uniqueness is only required

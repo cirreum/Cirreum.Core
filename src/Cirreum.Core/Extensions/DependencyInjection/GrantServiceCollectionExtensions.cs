@@ -17,7 +17,7 @@ public static class GrantServiceCollectionExtensions {
 	/// Registers the access-grants (ReBAC) pipeline with a single universal grant resolver.
 	/// Registers the app-provided <see cref="IGrantResolver"/>, the Core-supplied
 	/// <see cref="GrantBasedAccessReachResolver"/> orchestrator, and the sealed
-	/// <see cref="GrantEvaluator"/> that enforces CRL (Command/Read/List) grant semantics
+	/// <see cref="GrantEvaluator"/> that enforces Mutate/Lookup/Search/Self grant semantics
 	/// as Stage 1 Step 0 of the authorization pipeline.
 	/// </summary>
 	/// <typeparam name="TGrantResolver">The app's grant-resolver implementation.</typeparam>

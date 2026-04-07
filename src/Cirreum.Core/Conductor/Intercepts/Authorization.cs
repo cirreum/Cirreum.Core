@@ -5,9 +5,8 @@ using Cirreum.Conductor;
 
 /// <summary>
 /// Intercept behavior that enforces authorization rules for any <see cref="IAuthorizableRequestBase"/>
-/// implementations. See <see cref="IAuthorizableCommand"/>, <see cref="IAuthorizableCommand{TResponse}"/>,
-/// <see cref="IAuthorizableQuery{TResponse}"/>, and their owner-scoped variants for the interfaces
-/// that should be implemented directly.
+/// implementations. See <see cref="IAuthorizableRequest"/>, <see cref="IAuthorizableRequest{TResponse}"/>,
+/// and the grant interfaces for the interfaces that should be implemented directly.
 /// </summary>
 /// <remarks>
 /// <para>
