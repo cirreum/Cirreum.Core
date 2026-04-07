@@ -61,3 +61,77 @@ public sealed class PingHandler :
 	}
 
 }
+
+// ---- Pass-through intercepts for pipeline benchmarks ----
+
+/// <summary>
+/// Pass-through intercept for Conductor. Calls next() immediately with zero overhead,
+/// simulating the minimal cost of pipeline traversal per interceptor level.
+/// </summary>
+public sealed class PassThroughIntercept1 : IIntercept<ConductorPing, PingResponse> {
+	public Task<Result<PingResponse>> HandleAsync(
+		RequestContext<ConductorPing> context,
+		RequestHandlerDelegate<ConductorPing, PingResponse> next,
+		CancellationToken cancellationToken) =>
+		next(context, cancellationToken);
+}
+
+public sealed class PassThroughIntercept2 : IIntercept<ConductorPing, PingResponse> {
+	public Task<Result<PingResponse>> HandleAsync(
+		RequestContext<ConductorPing> context,
+		RequestHandlerDelegate<ConductorPing, PingResponse> next,
+		CancellationToken cancellationToken) =>
+		next(context, cancellationToken);
+}
+
+public sealed class PassThroughIntercept3 : IIntercept<ConductorPing, PingResponse> {
+	public Task<Result<PingResponse>> HandleAsync(
+		RequestContext<ConductorPing> context,
+		RequestHandlerDelegate<ConductorPing, PingResponse> next,
+		CancellationToken cancellationToken) =>
+		next(context, cancellationToken);
+}
+
+public sealed class PassThroughIntercept4 : IIntercept<ConductorPing, PingResponse> {
+	public Task<Result<PingResponse>> HandleAsync(
+		RequestContext<ConductorPing> context,
+		RequestHandlerDelegate<ConductorPing, PingResponse> next,
+		CancellationToken cancellationToken) =>
+		next(context, cancellationToken);
+}
+
+/// <summary>
+/// Pass-through pipeline behavior for MediatR. Calls next() immediately with zero overhead,
+/// matching the Conductor intercepts for a fair comparison.
+/// </summary>
+public sealed class PassThroughBehavior1 : MediatR.IPipelineBehavior<MediatRPing, PingResponse> {
+	public Task<PingResponse> Handle(
+		MediatRPing request,
+		MediatR.RequestHandlerDelegate<PingResponse> next,
+		CancellationToken cancellationToken) =>
+		next(cancellationToken);
+}
+
+public sealed class PassThroughBehavior2 : MediatR.IPipelineBehavior<MediatRPing, PingResponse> {
+	public Task<PingResponse> Handle(
+		MediatRPing request,
+		MediatR.RequestHandlerDelegate<PingResponse> next,
+		CancellationToken cancellationToken) =>
+		next(cancellationToken);
+}
+
+public sealed class PassThroughBehavior3 : MediatR.IPipelineBehavior<MediatRPing, PingResponse> {
+	public Task<PingResponse> Handle(
+		MediatRPing request,
+		MediatR.RequestHandlerDelegate<PingResponse> next,
+		CancellationToken cancellationToken) =>
+		next(cancellationToken);
+}
+
+public sealed class PassThroughBehavior4 : MediatR.IPipelineBehavior<MediatRPing, PingResponse> {
+	public Task<PingResponse> Handle(
+		MediatRPing request,
+		MediatR.RequestHandlerDelegate<PingResponse> next,
+		CancellationToken cancellationToken) =>
+		next(cancellationToken);
+}

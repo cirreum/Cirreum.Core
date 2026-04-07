@@ -1,9 +1,14 @@
 ﻿using BenchmarkDotNet.Running;
 
+// Core dispatching benchmarks (no pipeline intercepts):
 BenchmarkSwitcher
 		   .FromAssembly(typeof(Program).Assembly)
-		   .Run(["-f*"]);
+		   .Run(["-f*mediator*"]);
 
+// With Pipeline intercepts (1, 2, and 4):
+//BenchmarkSwitcher
+//		   .FromAssembly(typeof(Program).Assembly)
+//		   .Run(["-f*pipeline*"]);
 
 //using Cirreum.Conductor.Benchmarks;
 //await Doit();

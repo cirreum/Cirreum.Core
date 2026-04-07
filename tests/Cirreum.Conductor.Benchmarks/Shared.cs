@@ -108,8 +108,11 @@ public class TestApplicationEnvironment : IDomainEnvironment {
 }
 
 public class MockUserStateAccessor : IUserStateAccessor {
+	private static readonly IUserState _cachedUser = TestUserState.CreateAuthenticated();
+
 	public ValueTask<IUserState> GetUser() {
-		// Return a mock user state
-		return new ValueTask<IUserState>(TestUserState.CreateAuthenticated());
+		// Return cached user state — mirrors production behavior where
+		// IUserStateAccessor reads from the per-request cache (zero alloc).
+		return new ValueTask<IUserState>(_cachedUser);
 	}
 }
