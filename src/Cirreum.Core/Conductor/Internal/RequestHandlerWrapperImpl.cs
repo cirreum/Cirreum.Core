@@ -1,7 +1,6 @@
 namespace Cirreum.Conductor.Internal;
 
 using Cirreum.Conductor;
-using Cirreum.Security;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics;
@@ -62,7 +61,7 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 			requestTypeName,
 			hasResponse: false);
 
-		var startTimestamp = activity is not null ? Timing.Start() : 0L;
+		var startTimestamp = Timing.Start();
 
 		try {
 
@@ -71,8 +70,7 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 			var interceptArray = intercepts as IIntercept<TRequest, Unit>[]
 				?? [.. intercepts];
 
-			var requestContext = await CreateRequestContext(
-				serviceProvider,
+			var requestContext = await serviceProvider.CreateRequestContext(
 				activity,
 				startTimestamp,
 				Unsafe.As<TRequest>(request),
@@ -122,33 +120,6 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 			RequestTelemetry.SetActivityError(activity, error!);
 			RequestTelemetry.RecordFailure(requestTypeName, null, elapsed, error!);
 		}
-	}
-
-	private static async Task<RequestContext<TRequest>> CreateRequestContext(
-		IServiceProvider serviceProvider,
-		Activity? activity,
-		long startTimestamp,
-		TRequest typedRequest,
-		string requestTypeName) {
-
-		// GetService<T>()! — IUserStateAccessor is registered by Cirreum bootstrap; skip
-		// GetRequiredService's null-guard + throw-helper overhead on the hot path.
-		var userState = await serviceProvider
-			.GetService<IUserStateAccessor>()!
-			.GetUser();
-
-		var requestId = activity?.SpanId.ToString()
-			?? Guid.NewGuid().ToString("N")[..16];
-		var correlationId = activity?.TraceId.ToString()
-			?? Guid.NewGuid().ToString("N");
-
-		return RequestContext<TRequest>.Create(
-			userState,
-			typedRequest,
-			requestTypeName,
-			requestId,
-			correlationId,
-			startTimestamp);
 	}
 
 }

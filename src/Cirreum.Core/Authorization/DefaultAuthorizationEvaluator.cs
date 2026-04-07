@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Immutable;
+using System.Diagnostics;
 
 /// <summary>
 /// The default implementation of the <see cref="IAuthorizationEvaluator"/>.
@@ -76,8 +77,8 @@ sealed class DefaultAuthorizationEvaluator(
 		var userState = await userAccessor.GetUser().ConfigureAwait(false);
 		var operation = OperationContext.Create(
 			userState,
-			operationId: Guid.NewGuid().ToString("N")[..16],
-			correlationId: Guid.NewGuid().ToString("N"),
+			operationId: ActivitySpanId.CreateRandom().ToHexString(),
+			correlationId: ActivityTraceId.CreateRandom().ToHexString(),
 			startTimestamp: Timing.Start());
 
 		// Delegate to the context-aware overload

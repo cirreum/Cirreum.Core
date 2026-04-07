@@ -1,30 +1,11 @@
 ﻿namespace Cirreum.Conductor.Benchmarks;
 
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Order;
 using Cirreum.Conductor;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
-public class StableCoreConfig : ManualConfig {
-	public StableCoreConfig() {
-		this.AddJob(Job.Default
-			.WithId("Core 1 Thread")
-			.WithEnvironmentVariable("DOTNET_PROCESSOR_COUNT", "1")
-			.WithAffinity(0b0001)); // pin to core 0
-	}
-}
-//[SimpleJob(
-//	RunStrategy.Throughput,
-//	RuntimeMoniker.Net10_0,
-//	launchCount: 1,
-//	warmupCount: 5,
-//	iterationCount: 100,
-//	invocationCount: 32768)]
-//[MinIterationTime(1000)]
-[SimpleJob]
 [Config(typeof(StableCoreConfig))]
 [MemoryDiagnoser]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]

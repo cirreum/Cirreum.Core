@@ -10,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 /// Conductor ships 4 default intercepts (Validation, Authorization, HandlerPerformance,
 /// QueryCaching), so <c>InterceptCount=4</c> is the production-equivalent scenario.
 /// </summary>
-[SimpleJob]
 [Config(typeof(StableCoreConfig))]
 [MemoryDiagnoser]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
