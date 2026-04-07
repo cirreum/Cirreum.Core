@@ -341,7 +341,7 @@ No parallel discovery mechanism is needed.
 
 ### Resource Discovery
 
-`AuthorizationModel` automatically detects granted resources during assembly scanning:
+`DomainModel` automatically detects granted resources during assembly scanning:
 
 - `ResourceTypeInfo.IsGranted` — whether the resource implements a Granted interface
 - `ResourceTypeInfo.GrantDomain` — the namespace-derived domain feature
@@ -352,7 +352,7 @@ the `DomainCatalog` for organized resource browsing.
 
 ### Grant Domain Summary
 
-`AuthorizationSnapshot.Capture()` produces `GrantDomainInfo` records:
+`DomainSnapshot.Capture()` produces `GrantDomainInfo` records:
 
 ```csharp
 public sealed record GrantDomainInfo(
@@ -376,7 +376,7 @@ The analyzer detects grant-specific misconfigurations:
 | Unused domains | Info | Namespace domains with no granted resources |
 | Mixed authorization | Info | Domain boundary with both granted and non-granted resources — possible incomplete migration |
 
-All metrics flow into the standard `AnalysisReport` and `AuthorizationSnapshot`:
+All metrics flow into the standard `AnalysisReport` and `DomainSnapshot`:
 
 ```text
 Granted Resources.GrantedResourceCount     = 12
