@@ -5,10 +5,6 @@
 /// </summary>
 public static class ConductorTelemetry {
 	// Metrics
-	/// <summary>
-	/// Metric: Cache operation duration in milliseconds.
-	/// </summary>
-	public const string CacheDurationMetric = "conductor.cache.duration";
 
 	/// <summary>
 	/// Metric: Total number of requests.
@@ -31,15 +27,6 @@ public static class ConductorTelemetry {
 	public const string RequestsDurationHistogram = "conductor.requests.duration";
 
 	// Tags/Attributes
-	/// <summary>
-	/// Tag: Query type name.
-	/// </summary>
-	public const string QueryNameTag = "query.name";
-
-	/// <summary>
-	/// Tag: Query status (success/failure).
-	/// </summary>
-	public const string QueryStatusTag = "query.status";
 
 	/// <summary>
 	/// Tag: Error type.

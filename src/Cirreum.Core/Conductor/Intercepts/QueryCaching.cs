@@ -3,20 +3,11 @@ namespace Cirreum.Conductor.Intercepts;
 using Cirreum.Caching;
 using Cirreum.Conductor;
 using Cirreum.Conductor.Configuration;
-using Cirreum.Diagnostics;
 using Microsoft.Extensions.Logging;
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
 
 sealed class QueryCaching<TRequest, TResponse>
   : IIntercept<TRequest, TResponse>
 	where TRequest : ICacheableQuery<TResponse> {
-
-	private static readonly Meter _meter = new(CirreumTelemetry.Meters.ConductorCache, CirreumTelemetry.Version);
-	private static readonly Histogram<double> _cacheOperationDuration = _meter.CreateHistogram<double>(
-		ConductorTelemetry.CacheDurationMetric,
-		unit: "ms",
-		description: "Cache operation duration");
 
 	private readonly ICacheService _cache;
 	private readonly ConductorSettings _conductorSettings;
@@ -63,9 +54,8 @@ sealed class QueryCaching<TRequest, TResponse>
 		var effectiveSettings = this.BuildEffectiveSettings(context.Request, context.RequestType);
 		var tags = context.Request.CacheTags;
 
-		var startTime = Timing.Start();
-
-		// Get from Cache, or Read from real Handler and store in Cache
+		// Get from Cache, or Read from real Handler and store in Cache.
+		// Telemetry (hit/miss, duration) is handled by the InstrumentedCacheService decorator.
 		var result = await this._cache.GetOrCreateAsync(
 			context.Request.CacheKey,
 			async (ct) => await next(context, ct), // actual handler that reads data
@@ -73,21 +63,11 @@ sealed class QueryCaching<TRequest, TResponse>
 			tags,
 			cancellationToken);
 
-		var elapsed = Timing.GetElapsedMilliseconds(startTime);
-
-		var telemetryTags = new TagList {
-			{ ConductorTelemetry.QueryNameTag, context.RequestType },
-			{ ConductorTelemetry.QueryStatusTag, result.IsSuccess ? "success" : "failure" }
-		};
-
-		_cacheOperationDuration.Record(elapsed, telemetryTags);
-
 		if (this._logger.IsEnabled(LogLevel.Debug)) {
 			this._logger.LogDebug(
-				"Query {QueryType} completed: Status={Status}, Duration={Duration}ms",
+				"Query {QueryType} completed: Status={Status}",
 				context.RequestType,
-				result.IsSuccess ? "Success" : "Failed",
-				Math.Round(elapsed, 2));
+				result.IsSuccess ? "Success" : "Failed");
 		}
 
 		return result;

@@ -317,6 +317,27 @@ Sorting is required for **cache correctness**: permissions use AND semantics, so
 | `reach:caller:{callerId}` | Invalidate all entries for a user |
 | `reach:domain:{domain}` | Invalidate all entries for a domain |
 
+### Reach Resolution Telemetry
+
+`GrantBasedAccessReachResolver` records reach resolution events via
+`AuthorizationTelemetry.RecordReachResolution()` at every decision point:
+
+| Decision Point | Cache Level Tag | Duration Recorded |
+|----------------|-----------------|-------------------|
+| Unauthenticated | `denied-early` | No |
+| Admin bypass | `bypass` | No |
+| No permissions | `denied-early` | No |
+| L1 scoped cache hit | `l1-hit` | No |
+| L2 cross-request path | `l2` | Yes (ms) |
+
+The L2 duration captures both cache hits (fast) and cold-path resolution
+(DB call), giving visibility into cache effectiveness. All instrumentation
+is zero-cost when OTel is not attached.
+
+Additionally, the underlying `ICacheService` is wrapped by the
+`InstrumentedCacheService` decorator, which separately records cache
+hit/miss counters and operation duration at the L2 boundary.
+
 ### What's Never Cached
 
 - **Bypass checks** (`ShouldBypassAsync`) — always live. Admin role promotion is immediate.

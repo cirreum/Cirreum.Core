@@ -155,6 +155,26 @@ If no Granted interface is present, the grant gate is a no-op pass with zero ove
   we've already confirmed Stage 1 and Stage 2 passed; aggregating their
   failures gives callers the complete picture without extra cost.
 
+## Telemetry
+
+The `DefaultAuthorizationEvaluator` records telemetry via `AuthorizationTelemetry`
+at every exit path:
+
+| Exit Path | Metrics Recorded |
+|-----------|-----------------|
+| Unauthenticated | `RecordDuration(deny, "unauthenticated")` |
+| No authorizers | `RecordDuration(deny, "no-authorizers")` |
+| No roles | `RecordDuration(deny, "no-roles")` |
+| Stage 1 grant gate deny | `RecordDuration(deny, stage=scope)` — GrantEvaluator also calls `RecordDecision` |
+| Stage 1 scope evaluator deny | `RecordDecision(scope, scope-evaluator, deny)` + `RecordDuration` |
+| Stage 2 resource authorizer deny | `RecordDecision(resource, resource-authorizer, deny)` + `RecordDuration` |
+| Stage 3 policy validator deny | `RecordDecision(policy, policy-validator, deny)` + `RecordDuration` |
+| Authorized (all stages pass) | `RecordDuration(pass, "pass")` |
+| Unexpected error | `RecordDuration(deny, "error")` |
+
+All instrumentation is zero-cost when OTel is not attached — `StartActivity()`
+returns null, counters/histograms are no-ops without listeners.
+
 ## Allocation Notes
 
 The hot path is engineered for minimal allocations:

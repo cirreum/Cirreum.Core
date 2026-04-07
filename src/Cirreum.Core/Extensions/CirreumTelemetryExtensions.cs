@@ -47,11 +47,13 @@ public static class CirreumTelemetryExtensions {
 			.WithTracing(tracing => tracing
 				.AddSource(CirreumTelemetry.ActivitySources.ConductorDispatcher)
 				.AddSource(CirreumTelemetry.ActivitySources.ConductorPublisher)
-				.AddSource(CirreumTelemetry.ActivitySources.RemoteServicesClient))
+				.AddSource(CirreumTelemetry.ActivitySources.RemoteServicesClient)
+				.AddSource(CirreumTelemetry.ActivitySources.Authorization))
 			.WithMetrics(metrics => metrics
 				.AddMeter(CirreumTelemetry.Meters.ConductorDispatcher)
 				.AddMeter(CirreumTelemetry.Meters.ConductorPublisher)
 				.AddMeter(CirreumTelemetry.Meters.ConductorCache)
-				.AddMeter(CirreumTelemetry.Meters.RemoteServicesClient));
+				.AddMeter(CirreumTelemetry.Meters.RemoteServicesClient)
+				.AddMeter(CirreumTelemetry.Meters.Authorization));
 	}
 }

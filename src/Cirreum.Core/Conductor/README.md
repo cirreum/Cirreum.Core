@@ -322,6 +322,53 @@ retry/loop/fan-out must snapshot state and build their own cursor.
 
 ---
 
+## 📊 Telemetry
+
+Conductor publishes metrics and distributed traces via OpenTelemetry. All
+instrumentation is zero-cost when no OTel listeners are attached.
+
+### Request Metrics (`RequestTelemetry`)
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `conductor.requests.total` | Counter | Total dispatched requests |
+| `conductor.requests.failed` | Counter | Failed requests (excludes cancellations) |
+| `conductor.requests.canceled` | Counter | Canceled requests |
+| `conductor.requests.duration` | Histogram (ms) | Pipeline processing duration |
+
+All metrics are tagged with `request.type`, `request.status` (success/failure/canceled),
+and `error.type` on failure.
+
+### Activity Tracing
+
+The dispatcher creates a child `Activity` per request (source: `Cirreum.Conductor.Dispatcher`).
+The activity carries `request.type`, `response.type`, and status tags. Authorization
+and cache operations appear as nested telemetry under the same trace.
+
+### Cache Metrics (`CacheTelemetry`)
+
+Query caching telemetry is handled by the `InstrumentedCacheService` decorator —
+not inline in the `QueryCaching` intercept. The decorator wraps any `ICacheService`
+implementation and records:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `cirreum.cache.operations` | Counter | Total cache operations (tagged hit/miss) |
+| `cirreum.cache.duration` | Histogram (ms) | Operation duration (tagged hit/miss) |
+
+This means all `ICacheService` consumers — query caching, grant reach resolution,
+and any future consumers — get cache metrics for free.
+
+### Wiring
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .AddCirreum()       // registers all Cirreum sources + meters
+    .UseOtlpExporter();
+```
+
+---
+
 ## 🧲 Handler Discovery
 
 Conductor automatically discovers handlers from assemblies via:

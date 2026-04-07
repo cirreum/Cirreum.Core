@@ -151,6 +151,37 @@ A high-performance mediator implementation with comprehensive pipeline support f
 **Discriminator**
 - `IAuthorizableRequestBase` - Single pipeline discriminator for authorization; inherits `IAuthorizableResource` so every request is its own authorizable resource (no wrapping required)
 
+### 📊 Observability
+
+Centralized telemetry with zero overhead when OpenTelemetry is not configured:
+
+**Telemetry Classes** (each owns an `ActivitySource` and/or `Meter`):
+- `RequestTelemetry` — Conductor dispatcher metrics (request counts, durations, failures/cancellations)
+- `AuthorizationTelemetry` — three-stage pipeline metrics (per-stage decision counters, pipeline duration histogram, reach resolution cache tracking)
+- `CacheTelemetry` — cache hit/miss counters and operation duration histograms
+
+**Cache Instrumentation** — `InstrumentedCacheService` decorator wraps any `ICacheService` implementation transparently via DI. All consumers (`QueryCaching`, `GrantBasedAccessReachResolver`, future consumers) get hit/miss tracking and duration metrics for free. The decorator detects hits vs misses via a `factoryExecuted` flag — no `ICacheService` API changes needed. `NoCacheService` is never wrapped (zero overhead when caching is disabled).
+
+**OTel Integration**:
+```csharp
+builder.Services.AddOpenTelemetry()
+    .AddCirreum()       // wires all Cirreum activity sources + meters
+    .UseOtlpExporter();
+```
+
+**Metrics Published**:
+
+| Metric | Type | Tags |
+|--------|------|------|
+| `conductor.requests.total` | Counter | request.type, request.status |
+| `conductor.requests.duration` | Histogram (ms) | request.type, request.status |
+| `cirreum.authz.decisions` | Counter | stage, step, decision, reason |
+| `cirreum.authz.duration` | Histogram (ms) | resource_type, decision |
+| `cirreum.authz.reach.cache` | Counter | cache_level (bypass/l1-hit/l2/denied-early) |
+| `cirreum.authz.reach.duration` | Histogram (ms) | domain, resource_type |
+| `cirreum.cache.operations` | Counter | status (hit/miss) |
+| `cirreum.cache.duration` | Histogram (ms) | status (hit/miss) |
+
 ### 🏗️ Primitives & Utilities
 
 Battle-tested building blocks:
@@ -245,7 +276,7 @@ All primitives and abstractions are unit-test-friendly with minimal dependencies
 Zero-allocation patterns where possible, computed properties over mutable state, and careful use of immutable records.
 
 ### 📊 Observable by Default
-Built-in support for OpenTelemetry, structured logging, and distributed tracing through context propagation.
+Built-in support for OpenTelemetry with centralized telemetry classes, zero-cost instrumentation when OTel is not configured, and decorator-based cache telemetry that instruments all `ICacheService` consumers automatically.
 
 ## Architecture
 
@@ -365,11 +396,13 @@ dotnet add package Cirreum.Core
 ### Basic Context Usage
 
 ```csharp
-// 1. Create operation context (done once in RequestHandlerWrapperImpl<T>)
+// 1. Create operation context (done once via RequestContextFactory)
 var operation = OperationContext.Create(
     userState: currentUserState,
-    operationId: Guid.NewGuid().ToString(),
-    correlationId: Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString(),
+    operationId: activity?.SpanId.ToString()
+        ?? ActivitySpanId.CreateRandom().ToHexString(),
+    correlationId: activity?.TraceId.ToString()
+        ?? ActivityTraceId.CreateRandom().ToHexString(),
     startTimestamp: Stopwatch.GetTimestamp()
 );
 

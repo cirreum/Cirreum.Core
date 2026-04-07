@@ -2,6 +2,7 @@ namespace Cirreum.Authorization.Grants;
 
 using Cirreum.Authorization.Grants.Caching;
 using Cirreum.Caching;
+using Cirreum.Diagnostics;
 
 /// <summary>
 /// Core's <see cref="IAccessReachResolver"/> implementation. Composes an
@@ -59,20 +60,29 @@ sealed class GrantBasedAccessReachResolver(
 
 		ArgumentNullException.ThrowIfNull(context);
 
+		var resourceType = typeof(TResource).Name;
+
 		if (!context.IsAuthenticated) {
+			AuthorizationTelemetry.RecordReachResolution(
+				domain: null, resourceType, AuthorizationTelemetry.ReachLevelDeniedEarly);
 			return AccessReach.Denied;
 		}
 
 		// Bypass is always live — never cached. Admin promotion is immediate.
 		if (await this._grantResolver.ShouldBypassAsync(context, cancellationToken).ConfigureAwait(false)) {
+			AuthorizationTelemetry.RecordReachResolution(
+				domain: null, resourceType, AuthorizationTelemetry.ReachLevelBypass);
 			return AccessReach.Unrestricted;
 		}
 
+		var domainFeature = context.DomainFeature ?? "unknown";
+
 		if (context.Permissions.Count == 0) {
+			AuthorizationTelemetry.RecordReachResolution(
+				domainFeature, resourceType, AuthorizationTelemetry.ReachLevelDeniedEarly);
 			return AccessReach.Denied;
 		}
 
-		var domainFeature = context.DomainFeature ?? "unknown";
 		var callerId = context.Operation.UserState.Id;
 		var cacheKey = ReachCacheKeys.BuildKey(
 			this._cacheSettings.Version,
@@ -82,13 +92,19 @@ sealed class GrantBasedAccessReachResolver(
 
 		// L1: scoped memoization
 		if (this._scopeCache.TryGetValue(cacheKey, out var cached)) {
+			AuthorizationTelemetry.RecordReachResolution(
+				domainFeature, resourceType, AuthorizationTelemetry.ReachLevelL1Hit);
 			return cached;
 		}
 
 		// L2: cross-request cache. When provider is None, NoCacheService
 		// executes the factory directly — no branching needed.
+		var l2Start = Timing.Start();
 		var reach = await this.ResolveWithL2CacheAsync(context, cacheKey, callerId, domainFeature, cancellationToken)
 			.ConfigureAwait(false);
+		AuthorizationTelemetry.RecordReachResolution(
+			domainFeature, resourceType, AuthorizationTelemetry.ReachLevelL2,
+			durationMs: Timing.GetElapsedMilliseconds(l2Start));
 
 		this._scopeCache[cacheKey] = reach;
 		return reach;

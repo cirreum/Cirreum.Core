@@ -4,6 +4,7 @@ using Cirreum.Caching;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using System.Linq;
 
 /// <summary>
 /// Extension methods for registering Cirreum's centralized cache infrastructure.
@@ -51,6 +52,12 @@ public static class CacheServiceCollectionExtensions {
 		// Register the cache service based on the provider
 		AddCacheableQueryService(services, settings);
 
+		// Wrap the concrete ICacheService with the telemetry decorator.
+		// By this point the app has already had a chance to register its
+		// infra cache implementation (e.g., Hybrid, Distributed), and
+		// AddCacheableQueryService above has applied the fallback.
+		DecorateWithInstrumentation(services);
+
 		return services;
 	}
 
@@ -77,5 +84,42 @@ public static class CacheServiceCollectionExtensions {
 				services.TryAddSingleton<ICacheService, NoCacheService>();
 				break;
 		}
+	}
+
+	/// <summary>
+	/// Replaces the current <see cref="ICacheService"/> descriptor with a factory
+	/// that wraps the concrete implementation in <see cref="InstrumentedCacheService"/>.
+	/// Skips wrapping <see cref="NoCacheService"/> — there's no cache to observe.
+	/// </summary>
+	private static void DecorateWithInstrumentation(IServiceCollection services) {
+		var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ICacheService));
+		if (descriptor is null) {
+			return;
+		}
+
+		services.Remove(descriptor);
+
+		services.Add(new ServiceDescriptor(
+			typeof(ICacheService),
+			sp => {
+				var inner = ResolveFromDescriptor(sp, descriptor);
+				return inner is NoCacheService
+					? inner
+					: new InstrumentedCacheService(inner);
+			},
+			descriptor.Lifetime));
+	}
+
+	private static ICacheService ResolveFromDescriptor(
+		IServiceProvider sp,
+		ServiceDescriptor descriptor) {
+
+		if (descriptor.ImplementationInstance is ICacheService instance) {
+			return instance;
+		}
+		if (descriptor.ImplementationFactory is not null) {
+			return (ICacheService)descriptor.ImplementationFactory(sp);
+		}
+		return (ICacheService)ActivatorUtilities.CreateInstance(sp, descriptor.ImplementationType!);
 	}
 }

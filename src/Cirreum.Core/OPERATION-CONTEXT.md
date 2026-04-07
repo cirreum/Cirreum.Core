@@ -145,14 +145,14 @@
                            ▼
               ┌────────────────────────────────────────────────────────────────────┐
               │                           OperationContext                         │
-              │        (Created ONCE in RequestHandlerWrapperImpl<T>)              │
+              │        (Created ONCE via RequestContextFactory)                    │
               │ • Environment                                                      │
               │ • RuntimeType                                                      │
               │ • Timestamp (DateTimeOffset)                                       │
               │ • StartTimestamp (long - for high-precision timing)                │
               │ • UserState                                                        │
-              │ • OperationId                                                      │
-              │ • CorrelationId                                                    │
+              │ • OperationId (from Activity.SpanId or ActivitySpanId)             │
+              │ • CorrelationId (from Activity.TraceId or ActivityTraceId)         │
               │ • Computed: Elapsed, ElapsedMilliseconds                           │
               └───────┬─────────────────────────────────────┬──────────────────────┘
                       │                                     │
@@ -176,7 +176,7 @@
 ### ✅ Single Creation
 
 ```text
-OperationContext created ONCE by RequestContext.Create (in the wrapper)
+OperationContext created ONCE via RequestContextFactory
     ├─> Composed into RequestContext
     └─> Composed into AuthorizationContext (later, inside the evaluator)
 ```
@@ -184,8 +184,9 @@ OperationContext created ONCE by RequestContext.Create (in the wrapper)
 ### ✅ Zero Rebuilding
 
 ```text
-1. RequestHandlerWrapperImpl<T> calls GetUser() then RequestContext.Create,
-   which internally builds the canonical OperationContext with StartTimestamp
+1. RequestHandlerWrapperImpl<T> calls RequestContextFactory.CreateRequestContext,
+   which calls GetUser() (sync fast-path when cached) and builds the canonical
+   OperationContext with ActivitySpanId/ActivityTraceId-based IDs
 2. RequestContext<T> composes it
 3. Pipeline cursor hands RequestContext to each intercept
 4. Authorization intercept extracts context.Operation

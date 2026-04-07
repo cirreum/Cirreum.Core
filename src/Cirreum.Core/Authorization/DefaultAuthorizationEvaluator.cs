@@ -100,6 +100,9 @@ sealed class DefaultAuthorizationEvaluator(
 		var resourceName = resourceRuntimeType.Name;
 		var resourceCompileTimeType = typeof(TResource);
 
+		using var activity = AuthorizationTelemetry.StartActivity(resourceName);
+		var startTimestamp = Timing.Start();
+
 		// Check authentication
 		if (!operation.IsAuthenticated) {
 			//******************************************
@@ -113,6 +116,12 @@ sealed class DefaultAuthorizationEvaluator(
 				operation.UserName,
 				resourceName,
 				ex.Message);
+
+			AuthorizationTelemetry.RecordDuration(
+				activity, resourceName,
+				Timing.GetElapsedMilliseconds(startTimestamp),
+				AuthorizationTelemetry.DecisionDeny,
+				reason: "unauthenticated");
 
 			return Result.Fail(ex);
 		}
@@ -167,6 +176,13 @@ sealed class DefaultAuthorizationEvaluator(
 				operation.UserName,
 				resourceName,
 				emptyAuthContainerEx.Message);
+
+			AuthorizationTelemetry.RecordDuration(
+				activity, resourceName,
+				Timing.GetElapsedMilliseconds(startTimestamp),
+				AuthorizationTelemetry.DecisionDeny,
+				reason: "no-authorizers");
+
 			return Result.Fail(emptyAuthContainerEx);
 		}
 
@@ -192,6 +208,12 @@ sealed class DefaultAuthorizationEvaluator(
 				operation.UserName,
 				resourceName,
 				noRolesEx.Message);
+
+			AuthorizationTelemetry.RecordDuration(
+				activity, resourceName,
+				Timing.GetElapsedMilliseconds(startTimestamp),
+				AuthorizationTelemetry.DecisionDeny,
+				reason: "no-roles");
 
 			return Result.Fail(noRolesEx);
 		}
@@ -230,6 +252,12 @@ sealed class DefaultAuthorizationEvaluator(
 					.ConfigureAwait(false);
 
 				if (!grantResult.IsValid) {
+					// GrantEvaluator already called RecordDecision() via EmitTelemetry()
+					AuthorizationTelemetry.RecordDuration(
+						activity, resourceName,
+						Timing.GetElapsedMilliseconds(startTimestamp),
+						AuthorizationTelemetry.DecisionDeny,
+						denyStage: AuthorizationTelemetry.StageScope);
 					return this.DenyFromStage(grantResult.Errors, operation.UserName, resourceName);
 				}
 			}
@@ -242,6 +270,18 @@ sealed class DefaultAuthorizationEvaluator(
 					.ConfigureAwait(false);
 
 				if (!scopeResult.IsValid) {
+					AuthorizationTelemetry.RecordDecision(
+						stage: AuthorizationTelemetry.StageScope,
+						step: AuthorizationTelemetry.StepScopeEvaluator,
+						decision: AuthorizationTelemetry.DecisionDeny,
+						reason: scopeResult.Errors.FirstOrDefault()?.ErrorCode ?? "UNKNOWN",
+						evaluator: evaluator.GetType().Name,
+						resourceType: resourceName);
+					AuthorizationTelemetry.RecordDuration(
+						activity, resourceName,
+						Timing.GetElapsedMilliseconds(startTimestamp),
+						AuthorizationTelemetry.DecisionDeny,
+						denyStage: AuthorizationTelemetry.StageScope);
 					return this.DenyFromStage(scopeResult.Errors, operation.UserName, resourceName);
 				}
 			}
@@ -285,6 +325,18 @@ sealed class DefaultAuthorizationEvaluator(
 			}
 
 			if (stageFailures is not null) {
+				AuthorizationTelemetry.RecordDecision(
+					stage: AuthorizationTelemetry.StageResource,
+					step: AuthorizationTelemetry.StepResourceAuthorizer,
+					decision: AuthorizationTelemetry.DecisionDeny,
+					reason: stageFailures[0].ErrorCode ?? "UNKNOWN",
+					evaluator: resourceAuthorizers[0].GetType().Name,
+					resourceType: resourceName);
+				AuthorizationTelemetry.RecordDuration(
+					activity, resourceName,
+					Timing.GetElapsedMilliseconds(startTimestamp),
+					AuthorizationTelemetry.DecisionDeny,
+					denyStage: AuthorizationTelemetry.StageResource);
 				return this.DenyFromStage(stageFailures, operation.UserName, resourceName);
 			}
 
@@ -314,6 +366,17 @@ sealed class DefaultAuthorizationEvaluator(
 			}
 
 			if (stageFailures is not null) {
+				AuthorizationTelemetry.RecordDecision(
+					stage: AuthorizationTelemetry.StagePolicy,
+					step: AuthorizationTelemetry.StepPolicyValidator,
+					decision: AuthorizationTelemetry.DecisionDeny,
+					reason: stageFailures[0].ErrorCode ?? "UNKNOWN",
+					resourceType: resourceName);
+				AuthorizationTelemetry.RecordDuration(
+					activity, resourceName,
+					Timing.GetElapsedMilliseconds(startTimestamp),
+					AuthorizationTelemetry.DecisionDeny,
+					denyStage: AuthorizationTelemetry.StagePolicy);
 				return this.DenyFromStage(stageFailures, operation.UserName, resourceName);
 			}
 
@@ -325,6 +388,12 @@ sealed class DefaultAuthorizationEvaluator(
 			logger.LogAuthorizingResourceAllowed(
 				operation.UserName,
 				resourceName);
+
+			AuthorizationTelemetry.RecordDuration(
+				activity, resourceName,
+				Timing.GetElapsedMilliseconds(startTimestamp),
+				AuthorizationTelemetry.DecisionPass,
+				reason: AuthorizationTelemetry.ReasonPass);
 
 			return Result.Success;
 
@@ -340,6 +409,13 @@ sealed class DefaultAuthorizationEvaluator(
 				operation.UserName,
 				resourceName,
 				ex.Message);
+
+			AuthorizationTelemetry.RecordDuration(
+				activity, resourceName,
+				Timing.GetElapsedMilliseconds(startTimestamp),
+				AuthorizationTelemetry.DecisionDeny,
+				reason: "error");
+
 			return Result.Fail(ex);
 		}
 	}
