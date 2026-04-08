@@ -1,7 +1,7 @@
 namespace Cirreum.Authorization.Operations.Grants;
 
 /// <summary>
-/// Base detection interface for self-scoped authorization targets. Carries the resource <c>Id</c>
+/// Base detection interface for self-scoped authorization targets. Carries the authorizable object <c>Id</c>
 /// from which the grant evaluator extracts the <see cref="ExternalId"/> to compare
 /// against the calling user's identity.
 /// </summary>
@@ -10,11 +10,11 @@ namespace Cirreum.Authorization.Operations.Grants;
 /// Unlike owner-scoped kinds (Mutate/Lookup/Search) that resolve tenant-level
 /// <see cref="OperationGrant"/>, Self-scoped requests perform a direct identity match:
 /// <c>ExternalId == context.UserId</c>. No reach resolution is needed for the
-/// happy path (owner accessing their own resource).
+/// happy path (owner accessing their own data).
 /// </para>
 /// <para>
 /// Admin/privilege bypass is supported via <see cref="IOperationGrantProvider.ShouldBypassAsync"/>:
-/// if the caller has bypass rights, they can access any user's resources regardless of
+/// if the caller has bypass rights, they can access any user's data regardless of
 /// the identity match.
 /// </para>
 /// <para>
@@ -32,14 +32,14 @@ namespace Cirreum.Authorization.Operations.Grants;
 public interface IGrantableSelfBase {
 
 	/// <summary>
-	/// The resource identifier as supplied by the caller. May be a simple external ID
+	/// The authorizable object identifier as supplied by the caller. May be a simple external ID
 	/// or a composite key depending on the persistence layer.
 	/// </summary>
 	string? Id { get; set; }
 
 	/// <summary>
 	/// The external identity (IdP identifier) extracted from <see cref="Id"/>. The grant
-	/// evaluator compares this value against <see cref="AuthorizationContext{TResource}.UserId"/>
+	/// evaluator compares this value against <see cref="AuthorizationContext{TAuthorizableObject}.UserId"/>
 	/// (which originates from <c>IUserState.Id</c>).
 	/// Override when <see cref="Id"/> is a composite key to extract the identity portion.
 	/// Defaults to <see cref="Id"/>.

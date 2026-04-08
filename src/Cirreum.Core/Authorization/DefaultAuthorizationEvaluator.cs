@@ -37,12 +37,12 @@ using System.Diagnostics;
 /// First failure in Stage 1 short-circuits the pipeline.
 /// </description></item>
 /// <item><description>
-/// <b>Stage 2 — Resource</b>: resource authorizers (<see cref="IAuthorizer{TResource}"/>).
+/// <b>Stage 2 — Authorizer</b>: object authorizers (<see cref="IAuthorizer{TAuthorizableObject}"/>).
 /// All authorizers run; failures are aggregated.
 /// </description></item>
 /// <item><description>
 /// <b>Stage 3 — Policy</b>: policy validators (<see cref="IPolicyValidator"/>) whose
-/// <see cref="IPolicyValidator.AppliesTo{TResource}(TResource, DomainRuntimeType, DateTimeOffset)"/>
+/// <see cref="IPolicyValidator.AppliesTo{TAuthorizableObject}(TAuthorizableObject, DomainRuntimeType, DateTimeOffset)"/>
 /// returns true. Run in <see cref="IPolicyValidator.Order"/>; failures are aggregated.
 /// </description></item>
 /// </list>
@@ -52,7 +52,7 @@ using System.Diagnostics;
 /// <param name="services">The service provider for resolving validators.</param>
 /// <param name="logger">The logger for authorization events.</param>
 /// <param name="grantEvaluator">
-/// Optional grant evaluator. When present and the resource implements a Granted
+/// Optional grant evaluator. When present and the authorizable object implements a Granted
 /// interface (<see cref="IGrantableMutateBase"/>/<see cref="IGrantableLookupBase"/>/<see cref="IGrantableSearchBase"/>),
 /// runs as Stage 1 Step 0.
 /// </param>
@@ -66,46 +66,38 @@ sealed class DefaultAuthorizationEvaluator(
 
 	/// <inheritdoc/>
 	/// <remarks>
-	/// Ad-hoc evaluation entry point. Builds the OperationContext from scratch
-	/// and delegates to the context-aware overload.
+	/// Ad-hoc evaluation entry point. Retrieves user state from
+	/// <see cref="IUserStateAccessor"/> and delegates to the context-aware overload.
 	/// </remarks>
-	public async ValueTask<Result> Evaluate<TResource>(
-		TResource resource,
+	public async ValueTask<Result> Evaluate<TAuthorizableObject>(
+		TAuthorizableObject authorizableObject,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
-		// Build OperationContext for ad-hoc evaluation
 		var userState = await userAccessor.GetUser().ConfigureAwait(false);
-		var operation = OperationContext.Create(
-			userState,
-			operationId: ActivitySpanId.CreateRandom().ToHexString(),
-			correlationId: ActivityTraceId.CreateRandom().ToHexString(),
-			startTimestamp: Timing.Start());
-
-		// Delegate to the context-aware overload
-		return await this.Evaluate(resource, operation, cancellationToken).ConfigureAwait(false);
+		return await this.Evaluate(authorizableObject, userState, cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <inheritdoc/>
 	/// <remarks>
-	/// Context-aware evaluation entry point. Uses the provided OperationContext
-	/// to avoid rebuilding user state and environment information.
+	/// Context-aware evaluation entry point. Uses the provided <see cref="IUserState"/>
+	/// to avoid a redundant <see cref="IUserStateAccessor.GetUser"/> call.
 	/// </remarks>
-	public async ValueTask<Result> Evaluate<TResource>(
-		TResource resource,
-		OperationContext operation,
+	public async ValueTask<Result> Evaluate<TAuthorizableObject>(
+		TAuthorizableObject authorizableObject,
+		IUserState userState,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
-		var resourceRuntimeType = resource.GetType();
-		var resourceName = resourceRuntimeType.Name;
-		var resourceCompileTimeType = typeof(TResource);
+		var objectRuntimeType = authorizableObject.GetType();
+		var objectName = objectRuntimeType.Name;
+		var objectCompileTimeType = typeof(TAuthorizableObject);
 
-		using var activity = AuthorizationTelemetry.StartActivity(resourceName);
+		using var activity = AuthorizationTelemetry.StartActivity(objectName);
 		var startTimestamp = Timing.Start();
 
 		// Check authentication
-		if (!operation.IsAuthenticated) {
+		if (!userState.IsAuthenticated) {
 			//******************************************
 			//
 			// NOT AUTHENTICATED
@@ -113,13 +105,13 @@ sealed class DefaultAuthorizationEvaluator(
 			//******************************************
 			var ex = new UnauthenticatedAccessException("User is not authenticated.");
 
-			logger.LogAuthorizingResourceDenied(
-				operation.UserName,
-				resourceName,
+			logger.LogAuthorizingDenied(
+				userState.Name,
+				objectName,
 				ex.Message);
 
 			AuthorizationTelemetry.RecordDuration(
-				activity, resourceName,
+				activity, objectName,
 				Timing.GetElapsedMilliseconds(startTimestamp),
 				AuthorizationTelemetry.DecisionDeny,
 				reason: "unauthenticated");
@@ -131,11 +123,11 @@ sealed class DefaultAuthorizationEvaluator(
 		cancellationToken.ThrowIfCancellationRequested();
 
 		// Check if the runtime type matches the compile-time type
-		if (resourceRuntimeType != resourceCompileTimeType) {
+		if (objectRuntimeType != objectCompileTimeType) {
 			throw new ArgumentException(
-				$"Resource must be a concrete type. Expected {resourceCompileTimeType.Name} but got {resourceRuntimeType.Name}. " +
+				$"Authorizable object must be a concrete type. Expected {objectCompileTimeType.Name} but got {objectRuntimeType.Name}. " +
 				"Do not pass casted instances.",
-				nameof(resource));
+				nameof(authorizableObject));
 		}
 
 		// MS.DI's GetServices<T>() materializes as T[] internally; cast to avoid a second
@@ -146,8 +138,8 @@ sealed class DefaultAuthorizationEvaluator(
 		var rawScope = services.GetService<IEnumerable<IScopeEvaluator>>()!;
 		var scopeEvaluators = rawScope as IScopeEvaluator[] ?? [.. rawScope];
 
-		var rawResource = services.GetService<IEnumerable<IAuthorizer<TResource>>>()!;
-		var resourceAuthorizers = rawResource as IAuthorizer<TResource>[] ?? [.. rawResource];
+		var rawAuthorizer = services.GetService<IEnumerable<IAuthorizer<TAuthorizableObject>>>()!;
+		var objectAuthorizers = rawAuthorizer as IAuthorizer<TAuthorizableObject>[] ?? [.. rawAuthorizer];
 
 		// Policy runtime-type filter is deferred into the foreach below — combined with
 		// AppliesTo so we walk the array once instead of materializing a filtered copy here
@@ -156,31 +148,31 @@ sealed class DefaultAuthorizationEvaluator(
 		var policyAuthorizers = rawPolicy as IPolicyValidator[] ?? [.. rawPolicy];
 
 		var grantGateApplies = grantEvaluator is not null
-			&& (resource is IGrantableMutateBase
-				|| resource is IGrantableLookupBase
-				|| resource is IGrantableSearchBase
-				|| resource is IGrantableSelfBase);
+			&& (authorizableObject is IGrantableMutateBase
+				|| authorizableObject is IGrantableLookupBase
+				|| authorizableObject is IGrantableSearchBase
+				|| authorizableObject is IGrantableSelfBase);
 
 		if (scopeEvaluators.Length == 0
-			&& resourceAuthorizers.Length == 0
+			&& objectAuthorizers.Length == 0
 			&& policyAuthorizers.Length == 0
 			&& !grantGateApplies) {
 			//******************************************
 			//
-			// RESOURCE HAS NO AUTHORIZERS AND
-			// RUNTIME HAS NO POLICY AUTHORIZERS
+			// OBJECT HAS NO AUTHORIZERS AND
+			// RUNTIME HAS NO POLICY VALIDATORS
 			// AND NO SCOPE CHECKS APPLY
 			//
 			//******************************************
 			var emptyAuthContainerEx = new InvalidOperationException(
-				$"Resource '{resourceName}' has no authorizers or applicable policies.");
-			logger.LogAuthorizingResourceDenied(
-				operation.UserName,
-				resourceName,
+				$"'{objectName}' has no authorizers or applicable policies.");
+			logger.LogAuthorizingDenied(
+				userState.Name,
+				objectName,
 				emptyAuthContainerEx.Message);
 
 			AuthorizationTelemetry.RecordDuration(
-				activity, resourceName,
+				activity, objectName,
 				Timing.GetElapsedMilliseconds(startTimestamp),
 				AuthorizationTelemetry.DecisionDeny,
 				reason: "no-authorizers");
@@ -192,7 +184,7 @@ sealed class DefaultAuthorizationEvaluator(
 		cancellationToken.ThrowIfCancellationRequested();
 
 		// Get the user's roles
-		var roles = operation.UserState.Profile.Roles
+		var roles = userState.Profile.Roles
 			.Select(registry.GetRoleFromString)
 			.OfType<Role>()
 			.ToImmutableList();
@@ -204,15 +196,15 @@ sealed class DefaultAuthorizationEvaluator(
 			//
 			//******************************************
 			var noRolesEx = new ForbiddenAccessException(
-				$"User '{operation.UserName}' has no assigned roles.");
+				$"User '{userState.Name}' has no assigned roles.");
 
-			logger.LogAuthorizingResourceDenied(
-				operation.UserName,
-				resourceName,
+			logger.LogAuthorizingDenied(
+				userState.Name,
+				objectName,
 				noRolesEx.Message);
 
 			AuthorizationTelemetry.RecordDuration(
-				activity, resourceName,
+				activity, objectName,
 				Timing.GetElapsedMilliseconds(startTimestamp),
 				AuthorizationTelemetry.DecisionDeny,
 				reason: "no-roles");
@@ -223,8 +215,8 @@ sealed class DefaultAuthorizationEvaluator(
 		// Check cancellation before entering validation logic
 		cancellationToken.ThrowIfCancellationRequested();
 
-		const string scopeTemplate = "Authorizing user '{UserName}' for Resource '{ResourceName}'";
-		using var logScope = logger.BeginScope(scopeTemplate, operation.UserName, resourceName);
+		const string scopeTemplate = "Authorizing user '{UserName}' for '{ObjectName}'";
+		using var logScope = logger.BeginScope(scopeTemplate, userState.Name, objectName);
 
 		try {
 
@@ -232,10 +224,10 @@ sealed class DefaultAuthorizationEvaluator(
 			var effectiveRoles = registry.GetEffectiveRoles(roles);
 
 			// Build the canonical AuthorizationContext that validators will use
-			var authorizationContext = new AuthorizationContext<TResource>(
-				operation,
+			var authorizationContext = new AuthorizationContext<TAuthorizableObject>(
+				userState,
 				effectiveRoles,
-				resource);
+				authorizableObject);
 
 			//******************************************
 			//
@@ -256,11 +248,11 @@ sealed class DefaultAuthorizationEvaluator(
 				if (!grantResult.IsValid) {
 					// OperationGrantEvaluator already called RecordDecision() via EmitTelemetry()
 					AuthorizationTelemetry.RecordDuration(
-						activity, resourceName,
+						activity, objectName,
 						Timing.GetElapsedMilliseconds(startTimestamp),
 						AuthorizationTelemetry.DecisionDeny,
 						denyStage: AuthorizationTelemetry.StageScope);
-					return this.DenyFromStage(grantResult.Errors, operation.UserName, resourceName);
+					return this.DenyFromStage(grantResult.Errors, userState.Name, objectName);
 				}
 			}
 
@@ -278,44 +270,44 @@ sealed class DefaultAuthorizationEvaluator(
 						decision: AuthorizationTelemetry.DecisionDeny,
 						reason: scopeResult.Errors.FirstOrDefault()?.ErrorCode ?? "UNKNOWN",
 						evaluator: evaluator.GetType().Name,
-						resourceType: resourceName);
+						resourceType: objectName);
 					AuthorizationTelemetry.RecordDuration(
-						activity, resourceName,
+						activity, objectName,
 						Timing.GetElapsedMilliseconds(startTimestamp),
 						AuthorizationTelemetry.DecisionDeny,
 						denyStage: AuthorizationTelemetry.StageScope);
-					return this.DenyFromStage(scopeResult.Errors, operation.UserName, resourceName);
+					return this.DenyFromStage(scopeResult.Errors, userState.Name, objectName);
 				}
 			}
 
 			//******************************************
 			//
-			// STAGE 2 — RESOURCE VALIDATORS
+			// STAGE 2 — OBJECT AUTHORIZERS
 			//
-			// Aggregate failures within the stage. If any resource authorizer
+			// Aggregate failures within the stage. If any object authorizer
 			// denies, short-circuit before Stage 3 — policy checks are
-			// irrelevant (and often expensive) once resource-level access is
+			// irrelevant (and often expensive) once object-level access is
 			// denied.
 			//
 			//******************************************
 
 			// Create FluentValidation context
-			var validationContext = new ValidationContext<AuthorizationContext<TResource>>(authorizationContext);
+			var validationContext = new ValidationContext<AuthorizationContext<TAuthorizableObject>>(authorizationContext);
 
 			List<ValidationFailure>? stageFailures = null;
 
-			// Run the Resource Authorizer. By contract each TResource has exactly one
-			// AuthorizerBase<TResource> registered (mirrors AbstractValidator<T>
+			// Run the Object Authorizer. By contract each TAuthorizableObject has exactly one
+			// AuthorizerBase<TAuthorizableObject> registered (mirrors AbstractValidator<T>
 			// per T in FluentValidation). Extra registrations are a misconfiguration and
 			// fail loud at evaluation time.
-			if (resourceAuthorizers.Length > 1) {
+			if (objectAuthorizers.Length > 1) {
 				throw new InvalidOperationException(
-					$"Multiple IAuthorizer<{typeof(TResource).Name}> registrations detected "
-					+ $"({resourceAuthorizers.Length}). Exactly one AuthorizerBase<T> per "
-					+ "resource type is the expected contract.");
+					$"Multiple IAuthorizer<{typeof(TAuthorizableObject).Name}> registrations detected "
+					+ $"({objectAuthorizers.Length}). Exactly one AuthorizerBase<T> per "
+					+ "authorizable type is the expected contract.");
 			}
-			if (resourceAuthorizers.Length == 1
-				&& resourceAuthorizers[0] is AuthorizerBase<TResource> authorizer) {
+			if (objectAuthorizers.Length == 1
+				&& objectAuthorizers[0] is AuthorizerBase<TAuthorizableObject> authorizer) {
 				var authResult = await authorizer
 					.ValidateAsync(validationContext, cancellationToken)
 					.ConfigureAwait(false);
@@ -332,14 +324,14 @@ sealed class DefaultAuthorizationEvaluator(
 					step: AuthorizationTelemetry.StepResourceAuthorizer,
 					decision: AuthorizationTelemetry.DecisionDeny,
 					reason: stageFailures[0].ErrorCode ?? "UNKNOWN",
-					evaluator: resourceAuthorizers[0].GetType().Name,
-					resourceType: resourceName);
+					evaluator: objectAuthorizers[0].GetType().Name,
+					resourceType: objectName);
 				AuthorizationTelemetry.RecordDuration(
-					activity, resourceName,
+					activity, objectName,
 					Timing.GetElapsedMilliseconds(startTimestamp),
 					AuthorizationTelemetry.DecisionDeny,
 					denyStage: AuthorizationTelemetry.StageResource);
-				return this.DenyFromStage(stageFailures, operation.UserName, resourceName);
+				return this.DenyFromStage(stageFailures, userState.Name, objectName);
 			}
 
 			//******************************************
@@ -353,7 +345,7 @@ sealed class DefaultAuthorizationEvaluator(
 			// Run applicable Policy Authorizers. Combine runtime-support + AppliesTo filters
 			// in one pass; sort only the applicable subset.
 			var applicablePolicies = FilterAndOrderPolicies(
-				policyAuthorizers, resource, operation.RuntimeType, operation.Timestamp);
+				policyAuthorizers, authorizableObject, DomainContext.RuntimeType, authorizationContext.Timestamp);
 
 			foreach (var policyValidator in applicablePolicies) {
 				cancellationToken.ThrowIfCancellationRequested();
@@ -373,13 +365,13 @@ sealed class DefaultAuthorizationEvaluator(
 					step: AuthorizationTelemetry.StepPolicyValidator,
 					decision: AuthorizationTelemetry.DecisionDeny,
 					reason: stageFailures[0].ErrorCode ?? "UNKNOWN",
-					resourceType: resourceName);
+					resourceType: objectName);
 				AuthorizationTelemetry.RecordDuration(
-					activity, resourceName,
+					activity, objectName,
 					Timing.GetElapsedMilliseconds(startTimestamp),
 					AuthorizationTelemetry.DecisionDeny,
 					denyStage: AuthorizationTelemetry.StagePolicy);
-				return this.DenyFromStage(stageFailures, operation.UserName, resourceName);
+				return this.DenyFromStage(stageFailures, userState.Name, objectName);
 			}
 
 			//******************************************
@@ -387,12 +379,12 @@ sealed class DefaultAuthorizationEvaluator(
 			// AUTHORIZED
 			//
 			//******************************************
-			logger.LogAuthorizingResourceAllowed(
-				operation.UserName,
-				resourceName);
+			logger.LogAuthorizingAllowed(
+				userState.Name,
+				objectName);
 
 			AuthorizationTelemetry.RecordDuration(
-				activity, resourceName,
+				activity, objectName,
 				Timing.GetElapsedMilliseconds(startTimestamp),
 				AuthorizationTelemetry.DecisionPass,
 				reason: AuthorizationTelemetry.ReasonPass);
@@ -406,14 +398,14 @@ sealed class DefaultAuthorizationEvaluator(
 		} catch (Exception ex) {
 			// Unexpected runtime errors during validation
 			// (e.g., database failures, network issues in validators)
-			logger.LogAuthorizingResourceUnknownError(
+			logger.LogAuthorizingUnknownError(
 				ex,
-				operation.UserName,
-				resourceName,
+				userState.Name,
+				objectName,
 				ex.Message);
 
 			AuthorizationTelemetry.RecordDuration(
-				activity, resourceName,
+				activity, objectName,
 				Timing.GetElapsedMilliseconds(startTimestamp),
 				AuthorizationTelemetry.DecisionDeny,
 				reason: "error");
@@ -422,19 +414,19 @@ sealed class DefaultAuthorizationEvaluator(
 		}
 	}
 
-	private static List<IPolicyValidator> FilterAndOrderPolicies<TResource>(
+	private static List<IPolicyValidator> FilterAndOrderPolicies<TAuthorizableObject>(
 		IPolicyValidator[] all,
-		TResource resource,
+		TAuthorizableObject authorizableObject,
 		DomainRuntimeType runtimeType,
 		DateTimeOffset timestamp)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
 		// Walk once, keep applicable, sort by Order. Typical sizes are small (2-8) so
 		// List.Sort with the delegate comparer is cheaper than LINQ's OrderBy + stable sort.
 		var applicable = new List<IPolicyValidator>(all.Length);
 		foreach (var pv in all) {
 			if (pv.SupportedRuntimeTypes.Contains(runtimeType)
-				&& pv.AppliesTo(resource, runtimeType, timestamp)) {
+				&& pv.AppliesTo(authorizableObject, runtimeType, timestamp)) {
 				applicable.Add(pv);
 			}
 		}
@@ -444,9 +436,9 @@ sealed class DefaultAuthorizationEvaluator(
 		return applicable;
 	}
 
-	private Result DenyFromStage(List<ValidationFailure> failures, string userName, string resourceName) {
+	private Result DenyFromStage(List<ValidationFailure> failures, string userName, string objectName) {
 		var message = string.Join(',', failures.Select(f => f.ErrorMessage));
-		logger.LogAuthorizingResourceDenied(userName, resourceName, message);
+		logger.LogAuthorizingDenied(userName, objectName, message);
 		return Result.Fail(new ForbiddenAccessException(message));
 	}
 }

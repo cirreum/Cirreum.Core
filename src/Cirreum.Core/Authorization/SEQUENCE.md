@@ -16,10 +16,10 @@ sequenceDiagram
     participant RA as IAuthorizer[T]
     participant PV as IPolicyValidator[]
 
-    AI->>AE: Evaluate(resource, operation)
+    AI->>AE: Evaluate(authorizableObject, userState)
 
     Note over AE: Preflight
-    AE->>AE: Check operation.IsAuthenticated
+    AE->>AE: Check userState.IsAuthenticated
     alt Not authenticated
         AE-->>AI: Result.Fail(Unauthenticated)
     end
@@ -33,12 +33,12 @@ sequenceDiagram
     end
     AE->>RR: GetEffectiveRoles(roles)
     RR-->>AE: Effective roles (inheritance expanded)
-    AE->>AE: Build AuthorizationContext[TResource]
+    AE->>AE: Build AuthorizationContext[TAuthorizableObject]
 
     rect rgba(80, 140, 240, 0.25)
     Note over AE,SE: Stage 1 — Scope (first-failure short-circuit)
 
-    alt Resource is IGrantableMutateBase / IGrantableLookupBase / IGrantableSearchBase / IGrantableSelfBase
+    alt Object is IGrantableMutateBase / IGrantableLookupBase / IGrantableSearchBase / IGrantableSelfBase
         Note over AE,AR: Step 0a — Grant Evaluation
         AE->>GE: EvaluateAsync(authContext)
         GE->>GE: Check ApplicationUser.IsEnabled
@@ -57,7 +57,7 @@ sequenceDiagram
         end
     end
 
-    alt Resource is IAuthorizableOwnerScopedResource<br/>and OwnerScopeEvaluator registered
+    alt Object is IAuthorizableOwnerScopedResource<br/>and OwnerScopeEvaluator registered
         Note over AE,OE: Step 0b — Owner Gate
         AE->>OE: EvaluateAsync(authContext)
         OE-->>AE: ValidationResult
@@ -76,7 +76,7 @@ sequenceDiagram
     end
 
     rect rgba(240, 160, 60, 0.25)
-    Note over AE,RA: Stage 2 — Resource (aggregate, then short-circuit)
+    Note over AE,RA: Stage 2 — Object Authorizers (aggregate, then short-circuit)
 
     alt Multiple registered (misconfiguration)
         AE-->>AI: throw InvalidOperationException
@@ -118,12 +118,12 @@ sequenceDiagram
 | **1 Step 0a** — Grant gate | Resolve `OperationGrant` and enforce grant timing for `IGrantMutateRequest`, `IGrantLookupRequest`, `IGrantSearchRequest`, `IGrantMutateSelfRequest`, `IGrantLookupSelfRequest` | First failure | Within Stage 1 |
 | **1 Step 0b** — Owner gate | Enforce `OwnerId` presence + match for `IAuthorizableOwnerScopedResource` | First failure | Within Stage 1 |
 | **1 Step 1** — Scope evaluators | Tenant / access-scope / ambient constraints | First failure, registration order | Within Stage 1 |
-| **2** — Resource authorizer | Role and rule checks specific to this resource type | Single `AuthorizerBase<T>` per `T`; multiple FluentValidation rules aggregate within it | Stage 2 → Stage 3 |
+| **2** — Object authorizer | Role and rule checks specific to this authorizable object type | Single `AuthorizerBase<T>` per `T`; multiple FluentValidation rules aggregate within it | Stage 2 → Stage 3 |
 | **3** — Policy validators | Cross-cutting runtime policies (hours, quotas, kill-switches) | Sequential by `Order`, aggregate within stage | End of pipeline |
 
 ## Grant Evaluation Detail
 
-When a resource implements a Granted interface, the `OperationGrantEvaluator` runs as the
+When an authorizable object implements a Granted interface, the `OperationGrantEvaluator` runs as the
 first sub-step of Stage 1. Its internal flow:
 
 1. **User enabled check** — `IOwnedApplicationUser.IsEnabled` (immediate deny if disabled)
@@ -133,22 +133,22 @@ first sub-step of Stage 1. Its internal flow:
    - L1 scoped cache lookup (per-request dedup)
    - L2 cross-request cache lookup (`ICacheService`)
    - Cold path: `ResolveGrantsAsync` + `ResolveHomeOwnerAsync` + merge
-4. **Grant enforcement** — operation-kind-specific rules (see [Grants README](Grants/README.md))
+4. **Grant enforcement** — operation-kind-specific rules (see [Grants README](Operations/Grants/README.md))
 5. **Grant stashing** — `OperationGrant` set on `IOperationGrantAccessor` for handler access
 
-If no Granted interface is present, the grant gate is a no-op pass with zero overhead.
+If no Granted interface is present on the authorizable object, the grant gate is a no-op pass with zero overhead.
 
 ## Why the Strategy Differs Per Stage
 
 - **Stage 1 short-circuits aggressively** because scope failures ("wrong
   tenant", "not the owner", "no granted access") make every downstream check
   meaningless.
-- **Stage 2 has a single authorizer per resource type** (by contract),
+- **Stage 2 has a single authorizer per authorizable object type** (by contract),
   but its FluentValidation rules aggregate all failures so developers
   see *every* denial at once (useful during dev/UI iteration). On
   denial, the pipeline **short-circuits** — policies (Stage 3) are
   irrelevant and often expensive (DB / external state) once
-  resource-level access is denied.
+  object-level access is denied.
 - **Stage 3 aggregates** to report all failing policies together. Policy
   checks are typically the expensive ones, so by the time we run them
   we've already confirmed Stage 1 and Stage 2 passed; aggregating their
@@ -166,7 +166,7 @@ at every exit path:
 | No roles | `RecordDuration(deny, "no-roles")` |
 | Stage 1 grant gate deny | `RecordDuration(deny, stage=scope)` — OperationGrantEvaluator also calls `RecordDecision` |
 | Stage 1 scope evaluator deny | `RecordDecision(scope, scope-evaluator, deny)` + `RecordDuration` |
-| Stage 2 resource authorizer deny | `RecordDecision(resource, resource-authorizer, deny)` + `RecordDuration` |
+| Stage 2 object authorizer deny | `RecordDecision(object-authorizer, object-authorizer, deny)` + `RecordDuration` |
 | Stage 3 policy validator deny | `RecordDecision(policy, policy-validator, deny)` + `RecordDuration` |
 | Authorized (all stages pass) | `RecordDuration(pass, "pass")` |
 | Unexpected error | `RecordDuration(deny, "error")` |

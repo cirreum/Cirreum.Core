@@ -20,7 +20,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Non_granted_resource_passes_through() {
 		var evaluator = BuildEvaluator(OperationGrant.Denied);
 		var ctx = BuildContext(
-			resource: new NonOwnedResource(),
+			authorizableObject: new NonOwnedResource(),
 			accessScope: AccessScope.None,
 			appUser: null);
 
@@ -36,7 +36,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Loaded_disabled_user_denies_with_UserDisabled() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
-			resource: new GrantedCommand(),
+			authorizableObject: new GrantedCommand(),
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: false));
 
@@ -49,7 +49,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Loaded_non_owned_app_user_denies_with_UserDisabled() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
-			resource: new GrantedCommand(),
+			authorizableObject: new GrantedCommand(),
 			accessScope: AccessScope.Tenant,
 			appUser: new PlainAppUser(isEnabled: true));
 
@@ -65,7 +65,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Denied_grant_denies_with_GrantDenied() {
 		var evaluator = BuildEvaluator(OperationGrant.Denied);
 		var ctx = BuildContext(
-			resource: new GrantedCommand { OwnerId = CallerTenantId },
+			authorizableObject: new GrantedCommand { OwnerId = CallerTenantId },
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
@@ -81,7 +81,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Command_with_OwnerId_in_grant_passes() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
-			resource: new GrantedCommand { OwnerId = CallerTenantId },
+			authorizableObject: new GrantedCommand { OwnerId = CallerTenantId },
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
@@ -94,7 +94,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Command_with_OwnerId_not_in_grant_denies_with_OwnerNotInReach() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
-			resource: new GrantedCommand { OwnerId = OtherTenantId },
+			authorizableObject: new GrantedCommand { OwnerId = OtherTenantId },
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
@@ -107,7 +107,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Global_command_without_OwnerId_denies_with_OwnerIdRequired() {
 		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
 		var ctx = BuildContext(
-			resource: new GrantedCommand { OwnerId = null },
+			authorizableObject: new GrantedCommand { OwnerId = null },
 			accessScope: AccessScope.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
@@ -119,24 +119,24 @@ public class OperationGrantEvaluatorTests {
 	[TestMethod]
 	public async Task Command_enriches_OwnerId_from_single_element_grant() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
-		var resource = new GrantedCommand { OwnerId = null };
+		var authorizableObject =new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(CallerTenantId, resource.OwnerId);
+		Assert.AreEqual(CallerTenantId, authorizableObject.OwnerId);
 	}
 
 	[TestMethod]
 	public async Task Command_without_OwnerId_and_multi_element_grant_denies_with_OwnerAmbiguous() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId, OtherTenantId]));
-		var resource = new GrantedCommand { OwnerId = null };
+		var authorizableObject =new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
@@ -148,9 +148,9 @@ public class OperationGrantEvaluatorTests {
 	[TestMethod]
 	public async Task Command_with_unrestricted_grant_and_no_OwnerId_denies_with_OwnerIdRequired() {
 		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
-		var resource = new GrantedCommand { OwnerId = null };
+		var authorizableObject =new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
@@ -166,7 +166,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Read_with_OwnerId_in_grant_passes() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
-			resource: new GrantedRead { OwnerId = CallerTenantId },
+			authorizableObject: new GrantedRead { OwnerId = CallerTenantId },
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
@@ -179,7 +179,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Read_with_OwnerId_not_in_grant_denies() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
-			resource: new GrantedRead { OwnerId = OtherTenantId },
+			authorizableObject: new GrantedRead { OwnerId = OtherTenantId },
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
@@ -192,7 +192,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Read_without_OwnerId_passes_deferred_Pattern_C() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
-			resource: new GrantedRead { OwnerId = null },
+			authorizableObject: new GrantedRead { OwnerId = null },
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
@@ -205,7 +205,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Global_read_without_OwnerId_passes_deferred_Pattern_C() {
 		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
 		var ctx = BuildContext(
-			resource: new GrantedRead { OwnerId = null },
+			authorizableObject: new GrantedRead { OwnerId = null },
 			accessScope: AccessScope.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
@@ -221,7 +221,7 @@ public class OperationGrantEvaluatorTests {
 	public async Task Global_cacheable_read_without_OwnerId_denies_with_CacheableReadOwnerIdRequired() {
 		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
 		var ctx = BuildContext(
-			resource: new GrantedCacheableRead { OwnerId = null },
+			authorizableObject: new GrantedCacheableRead { OwnerId = null },
 			accessScope: AccessScope.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
@@ -233,61 +233,61 @@ public class OperationGrantEvaluatorTests {
 	[TestMethod]
 	public async Task Global_cacheable_read_with_OwnerId_passes_and_stamps_Global_scope() {
 		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
-		var resource = new GrantedCacheableRead { OwnerId = OtherTenantId };
+		var authorizableObject =new GrantedCacheableRead { OwnerId = OtherTenantId };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(AccessScope.Global, resource.CallerAccessScope);
+		Assert.AreEqual(AccessScope.Global, authorizableObject.CallerAccessScope);
 	}
 
 	[TestMethod]
 	public async Task Tenant_cacheable_read_passes_and_stamps_Tenant_scope() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
-		var resource = new GrantedCacheableRead { OwnerId = CallerTenantId };
+		var authorizableObject =new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(AccessScope.Tenant, resource.CallerAccessScope);
+		Assert.AreEqual(AccessScope.Tenant, authorizableObject.CallerAccessScope);
 	}
 
 	[TestMethod]
 	public async Task Tenant_cacheable_read_defers_null_OwnerId_and_stamps_scope() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
-		var resource = new GrantedCacheableRead { OwnerId = null };
+		var authorizableObject =new GrantedCacheableRead { OwnerId = null };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(AccessScope.Tenant, resource.CallerAccessScope);
+		Assert.AreEqual(AccessScope.Tenant, authorizableObject.CallerAccessScope);
 	}
 
 	[TestMethod]
 	public async Task CallerAccessScope_is_not_stamped_on_denied_evaluation() {
 		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
-		var resource = new GrantedCacheableRead { OwnerId = null };
+		var authorizableObject =new GrantedCacheableRead { OwnerId = null };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsFalse(result.IsValid);
-		Assert.IsNull(resource.CallerAccessScope);
+		Assert.IsNull(authorizableObject.CallerAccessScope);
 	}
 
 	[TestMethod]
@@ -296,7 +296,7 @@ public class OperationGrantEvaluatorTests {
 
 		var globalResource = new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var globalCtx = BuildContext(
-			resource: globalResource,
+			authorizableObject: globalResource,
 			accessScope: AccessScope.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 		var globalResult = await evaluator.EvaluateAsync(globalCtx);
@@ -304,7 +304,7 @@ public class OperationGrantEvaluatorTests {
 		var tenantEvaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var tenantResource = new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var tenantCtx = BuildContext(
-			resource: tenantResource,
+			authorizableObject: tenantResource,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 		var tenantResult = await tenantEvaluator.EvaluateAsync(tenantCtx);
@@ -320,37 +320,37 @@ public class OperationGrantEvaluatorTests {
 	[TestMethod]
 	public async Task Composed_CacheKey_contains_owner_scope_and_scoped_key() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
-		var resource = new GrantedCacheableRead { OwnerId = CallerTenantId };
+		var authorizableObject =new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 		Assert.IsTrue(result.IsValid);
 
-		var cacheKey = ((ICacheableQuery<string>)resource).CacheKey;
+		var cacheKey = ((ICacheableQuery<string>)authorizableObject).CacheKey;
 		StringAssert.Contains(cacheKey, $"owner:{CallerTenantId}");
 		StringAssert.Contains(cacheKey, "scope:Tenant");
-		StringAssert.Contains(cacheKey, resource.ScopedCacheKey);
+		StringAssert.Contains(cacheKey, authorizableObject.ScopedCacheKey);
 	}
 
 	[TestMethod]
 	public async Task CacheTags_includes_automatic_tenant_tag_and_preserves_extras() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
-		var resource = new GrantedCacheableRead {
+		var authorizableObject =new GrantedCacheableRead {
 			OwnerId = CallerTenantId,
 			ExtraTags = ["dashboard", "section:sales"]
 		};
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 		Assert.IsTrue(result.IsValid);
 
-		var tags = ((ICacheableQuery<string>)resource).CacheTags;
+		var tags = ((ICacheableQuery<string>)authorizableObject).CacheTags;
 		Assert.IsNotNull(tags);
 		CollectionAssert.Contains(tags, $"tenant:{CallerTenantId}");
 		CollectionAssert.Contains(tags, "dashboard");
@@ -360,16 +360,16 @@ public class OperationGrantEvaluatorTests {
 	[TestMethod]
 	public async Task CacheTags_returns_only_tenant_tag_when_no_extras_supplied() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
-		var resource = new GrantedCacheableRead { OwnerId = CallerTenantId };
+		var authorizableObject =new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 		Assert.IsTrue(result.IsValid);
 
-		var tags = ((ICacheableQuery<string>)resource).CacheTags;
+		var tags = ((ICacheableQuery<string>)authorizableObject).CacheTags;
 		Assert.IsNotNull(tags);
 		Assert.HasCount(1, tags);
 		Assert.AreEqual($"tenant:{CallerTenantId}", tags[0]);
@@ -381,40 +381,40 @@ public class OperationGrantEvaluatorTests {
 	[TestMethod]
 	public async Task List_with_null_OwnerIds_stamps_from_grant() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId, OtherTenantId]));
-		var resource = new GrantedList { OwnerIds = null };
+		var authorizableObject =new GrantedList { OwnerIds = null };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.IsNotNull(resource.OwnerIds);
-		Assert.HasCount(2, resource.OwnerIds);
+		Assert.IsNotNull(authorizableObject.OwnerIds);
+		Assert.HasCount(2, authorizableObject.OwnerIds);
 	}
 
 	[TestMethod]
 	public async Task List_with_null_OwnerIds_and_unrestricted_grant_stamps_null() {
 		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
-		var resource = new GrantedList { OwnerIds = null };
+		var authorizableObject =new GrantedList { OwnerIds = null };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.IsNull(resource.OwnerIds);
+		Assert.IsNull(authorizableObject.OwnerIds);
 	}
 
 	[TestMethod]
 	public async Task List_with_OwnerIds_subset_of_grant_passes() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId, OtherTenantId]));
-		var resource = new GrantedList { OwnerIds = [CallerTenantId] };
+		var authorizableObject =new GrantedList { OwnerIds = [CallerTenantId] };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
@@ -426,9 +426,9 @@ public class OperationGrantEvaluatorTests {
 	[TestMethod]
 	public async Task List_with_OwnerIds_not_subset_of_grant_denies() {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
-		var resource = new GrantedList { OwnerIds = [CallerTenantId, OtherTenantId] };
+		var authorizableObject =new GrantedList { OwnerIds = [CallerTenantId, OtherTenantId] };
 		var ctx = BuildContext(
-			resource: resource,
+			authorizableObject: authorizableObject,
 			accessScope: AccessScope.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
@@ -446,26 +446,17 @@ public class OperationGrantEvaluatorTests {
 		return new OperationGrantEvaluator(factory, accessor);
 	}
 
-	private static AuthorizationContext<TResource> BuildContext<TResource>(
-		TResource resource,
+	private static AuthorizationContext<TAuthorizableObject> BuildContext<TAuthorizableObject>(
+		TAuthorizableObject authorizableObject,
 		AccessScope accessScope,
 		IApplicationUser? appUser)
-		where TResource : notnull, IAuthorizableObject {
+		where TAuthorizableObject : notnull, IAuthorizableObject {
 
 		var userState = new OperationGrantEvaluatorTestUserState(accessScope, appUser);
-		var op = new OperationContext(
-			Environment: "Test",
-			RuntimeType: DomainRuntimeType.UnitTest,
-			Timestamp: DateTimeOffset.UtcNow,
-			StartTimestamp: System.Diagnostics.Stopwatch.GetTimestamp(),
+		return new AuthorizationContext<TAuthorizableObject>(
 			UserState: userState,
-			OperationId: Guid.NewGuid().ToString(),
-			CorrelationId: Guid.NewGuid().ToString());
-
-		return new AuthorizationContext<TResource>(
-			Operation: op,
 			EffectiveRoles: ImmutableHashSet<Role>.Empty,
-			Resource: resource);
+			AuthorizableObject: authorizableObject);
 	}
 
 	private static void AssertDeniedWith(FluentValidation.Results.ValidationResult result, string expectedCode) {
@@ -515,10 +506,10 @@ public class OperationGrantEvaluatorTests {
 
 	private sealed class StubOperationGrantFactory(OperationGrant grant) : IOperationGrantFactory {
 
-		public ValueTask<OperationGrant> CreateAsync<TResource>(
-			AuthorizationContext<TResource> context,
+		public ValueTask<OperationGrant> CreateAsync<TAuthorizableObject>(
+			AuthorizationContext<TAuthorizableObject> context,
 			CancellationToken cancellationToken)
-			where TResource : IAuthorizableObject {
+			where TAuthorizableObject : IAuthorizableObject {
 			return ValueTask.FromResult(grant);
 		}
 	}

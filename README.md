@@ -31,27 +31,22 @@ Its mission is to centralize building blocks that must be **universally accessib
 
 ### 🎯 Context Architecture
 
-A composable context system that provides single-source-of-truth operational context throughout your application:
+A flat context system where each context owns its fields directly and delegates to `IUserState` for identity:
 
-- **OperationContext** - Canonical WHO/WHEN/WHERE/TIMING information
-- **RequestContext** - Pipeline-aware request context with delegation
-- **AuthorizationContext** - Authorization decisions with effective roles
+- **RequestContext&lt;T&gt;** - Pipeline request envelope: `IUserState`, request payload, timing, correlation IDs
+- **AuthorizationContext&lt;T&gt;** - Authorization decisions: `IUserState`, effective roles, authorizable object, permissions
 
 ```csharp
 // Created once in RequestHandlerWrapperImpl<T> (typical path)
-var operation = OperationContext.Create(
-    userState, operationId, correlationId, startTimestamp);
+var requestContext = RequestContext<TRequest>.Create(
+    userState, request, requestType, requestId, correlationId, startTimestamp);
 
-// Composed into request context
-var requestContext = new RequestContext<TRequest>(
-    operation, request, requestType);
-
-// Composed into authorization context (inside the evaluator)
-var authContext = new AuthorizationContext<TResource>(
-    operation, effectiveRoles, resource);
+// Built inside DefaultAuthorizationEvaluator
+var authContext = new AuthorizationContext<TAuthorizableObject>(
+    userState, effectiveRoles, authorizableObject);
 ```
 
-[See detailed context documentation](src/Cirreum.Core/OPERATION-CONTEXT.md)
+[See detailed context documentation](src/Cirreum.Core/CONTEXT.md)
 
 ### 🔐 Authorization Abstractions
 
@@ -62,9 +57,9 @@ Flexible, policy-based authorization with support for RBAC, ABAC, and grant-base
 - **Owner-scope** — owner→resource and tenant→resource relationships enforced by `OwnerScopeEvaluatorBase` (Stage 1 Step 0) and custom `IScopeEvaluator` implementations (Stage 1 Step 1)
 - **Grants** — opt-in grant-based access control answering *"which owners can this caller access?"* via `IOperationGrantProvider`, with L1/L2 grant caching and Mutate/Lookup/Search/Self enforcement semantics
 
-- `IAuthorizationEvaluator` - Pluggable, three-stage authorization evaluator (Scope → Resource → Policy)
-- `IAuthorizableObject` - Resources that can be authorized
-- `AuthorizerBase<TResource>` - FluentValidation-backed resource authorizer (one per resource type)
+- `IAuthorizationEvaluator` - Pluggable, three-stage authorization evaluator (Scope → Object Authorizers → Policy)
+- `IAuthorizableObject` - Objects that can be authorized
+- `AuthorizerBase<T>` - FluentValidation-backed object authorizer (one per authorizable object type)
 - `IScopeEvaluator` / `OwnerScopeEvaluatorBase` - Stage 1 scope gates (tenant, owner, access-scope)
 - `OperationGrantEvaluator` / `IOperationGrantProvider` - Stage 1 grant-aware scope gate with Mutate/Lookup/Search/Self enforcement
 - `IPolicyValidator` - Stage 3 cross-cutting policy validators (hours, quotas, kill-switches)
@@ -205,9 +200,9 @@ Base interfaces and extensibility points for:
 
 Foundational building blocks including:
 
-- Context structures (`OperationContext`, `RequestContext`, `AuthorizationContext`)
+- Context structures (`RequestContext<T>`, `AuthorizationContext<T>`)
 - Identifiers, markers, and metadata carriers
-- Base implementations for validators, handlers, and authorizable resources
+- Base implementations for validators, handlers, and authorizable objects
 - High-precision timing infrastructure
 
 ### 3. Shared Patterns
@@ -280,52 +275,46 @@ Built-in support for OpenTelemetry with centralized telemetry classes, zero-cost
 
 ## Architecture
 
-### Context Composition
+### Context Architecture
 
 ```text
-OperationContext (Single Source of Truth)
-    ├─> WHO: UserState, UserId, UserName, TenantId, Provider, AccessScope
-    ├─> WHEN: Timestamp, StartTimestamp, Elapsed
-    ├─> WHERE: Environment, RuntimeType
-    └─> TIMING: High-precision duration calculation
+RequestContext<T> (Pipeline Context)
+    ├─> WHO: UserState (IUserState) — delegates UserId, UserName, etc.
+    ├─> WHAT: Request, RequestType
+    ├─> WHEN: Timestamp, StartTimestamp, ElapsedDuration
+    ├─> WHERE: Environment, RuntimeType (from DomainContext)
+    └─> TRACING: RequestId, CorrelationId (from Activity)
 
-RequestContext (Pipeline Context)
-    ├─> Composes: OperationContext
-    ├─> Adds: Request, RequestType
-    └─> Delegates: All user/timing properties to Operation
-
-AuthorizationContext (Authorization Decisions)
-    ├─> Composes: OperationContext
-    ├─> Adds: EffectiveRoles, Resource
-    └─> Delegates: All user/scope/timing properties to Operation
+AuthorizationContext<T> (Authorization Decisions)
+    ├─> WHO: UserState (IUserState) — delegates UserId, UserName, etc.
+    ├─> ROLES: EffectiveRoles (inheritance-expanded)
+    ├─> TARGET: AuthorizableObject
+    ├─> PERMISSIONS: PermissionSet (from RequiredPermissionCache)
+    └─> DOMAIN: DomainFeature (from DomainFeatureResolver)
 ```
 
 ### Zero-Allocation Timing
 
 ```csharp
-// Captured once at operation start
+// Captured once at request start
 long startTimestamp = Stopwatch.GetTimestamp();
 
 // Computed on demand, zero allocation
-TimeSpan elapsed = operation.Elapsed;
-double milliseconds = operation.ElapsedMilliseconds;
-
-// Available throughout pipeline via delegation
-TimeSpan requestElapsed = requestContext.ElapsedDuration;
+TimeSpan elapsed = requestContext.ElapsedDuration;
 ```
 
 ### Authorization Flow
 
 ```csharp
-// Ad-hoc authorization (evaluator builds OperationContext)
-var result = await evaluator.Evaluate(resource);
+// Ad-hoc authorization (evaluator gets UserState from IUserStateAccessor)
+var result = await evaluator.Evaluate(authorizableObject);
 
-// Pipeline authorization (reuses OperationContext built by RequestHandlerWrapperImpl<T>)
-var result = await evaluator.Evaluate(resource, operationContext);
+// Pipeline authorization (passes UserState from RequestContext)
+var result = await evaluator.Evaluate(authorizableObject, userState);
 ```
 
-Resource authorizers derive from `AuthorizerBase<TResource>`, which
-is an `AbstractValidator<AuthorizationContext<TResource>>`. Each resource
+Object authorizers derive from `AuthorizerBase<TAuthorizableObject>`, which
+is an `AbstractValidator<AuthorizationContext<TAuthorizableObject>>`. Each authorizable object
 type has **exactly one** registered authorizer (mirroring FluentValidation's
 one-validator-per-type contract):
 
@@ -338,7 +327,7 @@ public sealed class DocumentAuthorizer
         // Owner can always access; otherwise admin-role required
         this.RuleFor(context => context)
             .Must(context =>
-                context.Resource.OwnerId == context.UserId
+                context.AuthorizableObject.OwnerId == context.UserId
                 || context.EffectiveRoles.Any(r => r.Name == "Admin"))
             .WithMessage("You don't have permission to access this document");
     }
@@ -365,9 +354,9 @@ public sealed record DeleteIssue(string Id) : IGrantMutateRequest {
 
 // 2. Implement a grant resolver (the only app code)
 public class AppOperationGrantProvider : IOperationGrantProvider {
-    public async ValueTask<OperationGrantResult> ResolveGrantsAsync<TResource>(
-        AuthorizationContext<TResource> context, CancellationToken ct)
-        where TResource : IAuthorizableObject {
+    public async ValueTask<OperationGrantResult> ResolveGrantsAsync<TAuthorizableObject>(
+        AuthorizationContext<TAuthorizableObject> context, CancellationToken ct)
+        where TAuthorizableObject : IAuthorizableObject {
         // Query your grants table
         var ownerIds = await db.GetGrantedOwners(context.UserId, context.Permissions);
         return new OperationGrantResult(ownerIds);
@@ -378,7 +367,7 @@ public class AppOperationGrantProvider : IOperationGrantProvider {
 services.AddOperationGrants<AppOperationGrantProvider>();
 ```
 
-See [Grants README](src/Cirreum.Core/Authorization/Grants/README.md) for the
+See [Grants README](src/Cirreum.Core/Authorization/Operations/Grants/README.md) for the
 full architecture, Mutate/Lookup/Search/Self enforcement rules, caching strategy, and configuration.
 
 ## Usage
@@ -392,24 +381,16 @@ dotnet add package Cirreum.Core
 ### Basic Context Usage
 
 ```csharp
-// 1. Create operation context (done once via RequestContextFactory)
-var operation = OperationContext.Create(
-    userState: currentUserState,
-    operationId: activity?.SpanId.ToString()
-        ?? ActivitySpanId.CreateRandom().ToHexString(),
-    correlationId: activity?.TraceId.ToString()
-        ?? ActivityTraceId.CreateRandom().ToHexString(),
-    startTimestamp: Stopwatch.GetTimestamp()
-);
-
-// 2. Use in request pipeline
+// 1. Create request context (done once via RequestContextFactory)
 var requestContext = RequestContext<MyRequest>.Create(
     userState: currentUserState,
     request: myRequest,
     requestType: nameof(MyRequest),
-    requestId: operation.OperationId,
-    correlationId: operation.CorrelationId,
-    startTimestamp: operation.StartTimestamp
+    requestId: activity?.SpanId.ToString()
+        ?? ActivitySpanId.CreateRandom().ToHexString(),
+    correlationId: activity?.TraceId.ToString()
+        ?? ActivityTraceId.CreateRandom().ToHexString(),
+    startTimestamp: Stopwatch.GetTimestamp()
 );
 
 // 3. Access context throughout pipeline
@@ -424,14 +405,14 @@ logger.LogInformation(
 ### Authorization
 
 ```csharp
-// Define authorizable resource (often the request itself via IAuthorizableRequestBase)
+// Define authorizable object (often the request itself via IAuthorizableRequestBase)
 public sealed record GetDocumentQuery : IAuthorizableQuery<DocumentDto>
 {
     public required string DocumentId { get; init; }
     public required string OwnerId { get; init; }
 }
 
-// Exactly one AuthorizerBase<T> per resource type (FluentValidation-style)
+// Exactly one AuthorizerBase<T> per authorizable object type (FluentValidation-style)
 public sealed class GetDocumentQueryAuthorizer
     : AuthorizerBase<GetDocumentQuery>
 {
@@ -440,7 +421,7 @@ public sealed class GetDocumentQueryAuthorizer
         // Owner can always access; otherwise Admin role required
         this.RuleFor(context => context)
             .Must(context =>
-                context.Resource.OwnerId == context.UserId
+                context.AuthorizableObject.OwnerId == context.UserId
                 || context.EffectiveRoles.Any(r => r.Name == "Admin"))
             .WithMessage("You don't have permission to access this document");
     }
@@ -472,10 +453,10 @@ This library:
 
 ## Documentation
 
-- [Context Architecture](src/Cirreum.Core/OPERATION-CONTEXT.md) - Detailed context composition guide
+- [Context Architecture](src/Cirreum.Core/CONTEXT.md) - Request & authorization context architecture
 - [Authorization Flow](src/Cirreum.Core/Authorization/FLOW.md) - High-level request → authorization flow
 - [Authorization Sequence](src/Cirreum.Core/Authorization/SEQUENCE.md) - Detailed three-stage pipeline
-- [Grants](src/Cirreum.Core/Authorization/Grants/README.md) - Grant-based access control with Mutate/Lookup/Search/Self enforcement
+- [Grants](src/Cirreum.Core/Authorization/Operations/Grants/README.md) - Grant-based access control with Mutate/Lookup/Search/Self enforcement
 - [Conductor](src/Cirreum.Core/Conductor/README.md) - In-process dispatcher + intercept pipeline
 
 ## Contribution Guidelines

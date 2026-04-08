@@ -31,7 +31,7 @@ sealed class Authorization<TRequest, TResponse>(
 		var authResult = await authorizer
 			.Evaluate(
 				context.Request,
-				context.Operation,
+				context.UserState,
 				cancellationToken)
 			.ConfigureAwait(false);
 

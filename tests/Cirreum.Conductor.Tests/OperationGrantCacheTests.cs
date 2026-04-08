@@ -242,42 +242,24 @@ public class OperationGrantCacheTests {
 			cacheSettings ?? new OperationGrantCacheSettings());
 	}
 
-	private static AuthorizationContext<TResource> BuildContext<TResource>(TResource resource)
-		where TResource : IAuthorizableObject {
+	private static AuthorizationContext<TAuthorizableObject> BuildContext<TAuthorizableObject>(TAuthorizableObject authorizableObject)
+		where TAuthorizableObject : IAuthorizableObject {
 
 		var userState = TestUserState.CreateAuthenticated(id: CallerId);
-		var op = new OperationContext(
-			Environment: "Test",
-			RuntimeType: DomainRuntimeType.UnitTest,
-			Timestamp: DateTimeOffset.UtcNow,
-			StartTimestamp: System.Diagnostics.Stopwatch.GetTimestamp(),
+		return new AuthorizationContext<TAuthorizableObject>(
 			UserState: userState,
-			OperationId: Guid.NewGuid().ToString(),
-			CorrelationId: Guid.NewGuid().ToString());
-
-		return new AuthorizationContext<TResource>(
-			Operation: op,
 			EffectiveRoles: ImmutableHashSet<Role>.Empty,
-			Resource: resource);
+			AuthorizableObject: authorizableObject);
 	}
 
-	private static AuthorizationContext<TResource> BuildUnauthenticatedContext<TResource>(TResource resource)
-		where TResource : IAuthorizableObject {
+	private static AuthorizationContext<TAuthorizableObject> BuildUnauthenticatedContext<TAuthorizableObject>(TAuthorizableObject authorizableObject)
+		where TAuthorizableObject : IAuthorizableObject {
 
 		var userState = new TestUserState();
-		var op = new OperationContext(
-			Environment: "Test",
-			RuntimeType: DomainRuntimeType.UnitTest,
-			Timestamp: DateTimeOffset.UtcNow,
-			StartTimestamp: System.Diagnostics.Stopwatch.GetTimestamp(),
+		return new AuthorizationContext<TAuthorizableObject>(
 			UserState: userState,
-			OperationId: Guid.NewGuid().ToString(),
-			CorrelationId: Guid.NewGuid().ToString());
-
-		return new AuthorizationContext<TResource>(
-			Operation: op,
 			EffectiveRoles: ImmutableHashSet<Role>.Empty,
-			Resource: resource);
+			AuthorizableObject: authorizableObject);
 	}
 
 	/// <summary>
@@ -374,28 +356,28 @@ namespace Cirreum.Conductor.Tests.Domain.TestGrant {
 		public bool AlwaysBypass;
 		public string? HomeOwnerId;
 
-		public ValueTask<OperationGrantResult> ResolveGrantsAsync<TResource>(
-			AuthorizationContext<TResource> context,
+		public ValueTask<OperationGrantResult> ResolveGrantsAsync<TAuthorizableObject>(
+			AuthorizationContext<TAuthorizableObject> context,
 			CancellationToken cancellationToken)
-			where TResource : IAuthorizableObject {
+			where TAuthorizableObject : IAuthorizableObject {
 
 			Interlocked.Increment(ref this.ResolveCount);
 			return ValueTask.FromResult(new OperationGrantResult(ownerIds));
 		}
 
-		public ValueTask<bool> ShouldBypassAsync<TResource>(
-			AuthorizationContext<TResource> context,
+		public ValueTask<bool> ShouldBypassAsync<TAuthorizableObject>(
+			AuthorizationContext<TAuthorizableObject> context,
 			CancellationToken cancellationToken)
-			where TResource : IAuthorizableObject {
+			where TAuthorizableObject : IAuthorizableObject {
 
 			Interlocked.Increment(ref this.BypassCount);
 			return ValueTask.FromResult(this.AlwaysBypass);
 		}
 
-		public ValueTask<string?> ResolveHomeOwnerAsync<TResource>(
-			AuthorizationContext<TResource> context,
+		public ValueTask<string?> ResolveHomeOwnerAsync<TAuthorizableObject>(
+			AuthorizationContext<TAuthorizableObject> context,
 			CancellationToken cancellationToken)
-			where TResource : IAuthorizableObject {
+			where TAuthorizableObject : IAuthorizableObject {
 
 			return ValueTask.FromResult(this.HomeOwnerId);
 		}

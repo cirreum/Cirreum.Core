@@ -4,13 +4,13 @@
 
 Grants is Cirreum's opt-in grant-based access control system that
 **augments the existing authorization pipeline** — it does not replace RBAC or ABAC.
-The base authorization system (roles, resource authorizers, policy validators) continues
+The base authorization system (roles, object authorizers, policy validators) continues
 to work exactly as before. Grants adds a new dimension: *"for this operation, which
 owners can this caller access?"* — answered before the handler runs, without the handler
 knowing anything about grant tables or relationships.
 
 Grants integrates into the existing three-stage authorization pipeline as **Stage 1 Step 0**,
-running before scope evaluators, resource authorizers, and policy validators. Resources
+running before scope evaluators, object authorizers, and policy validators. Resources
 that don't implement a Granted interface are completely unaffected — the grant gate is
 a no-op pass with zero overhead.
 
@@ -45,7 +45,7 @@ a no-op pass with zero overhead.
 
 ### What Grants Is Not
 
-- **Not RBAC** — roles live in Stage 2 resource authorizers. Grants don't replace roles;
+- **Not RBAC** — roles live in Stage 2 object authorizers. Grants don't replace roles;
   they answer *"which owners"*, not *"which actions"*.
 - **Not a grant store** — Core defines the pipeline and contracts. The app implements
   `IOperationGrantProvider` to query its own grants table.
@@ -65,7 +65,7 @@ a no-op pass with zero overhead.
                          │   Step 0: OwnerScopeEvaluator (if Owner-Scoped)      │
                          │   Step 1: IScopeEvaluator[] (app-provided, optional)  │
                          │                                                      │
-                         │ Stage 2 — Resource (aggregate, then short-circuit)   │
+                         │ Stage 2 — Object Authorizers (aggregate, short-circuit)│
                          │   AuthorizerBase<T> (roles, ABAC rules)      │
                          │                                                      │
                          │ Stage 3 — Policy (aggregate)                         │
@@ -242,7 +242,7 @@ via `IOwnedApplicationUser.IsEnabled`. Disabled users are denied regardless of g
 
 ### Declaration
 
-Permissions are declared on any authorizable resource via `[RequiresPermission]`.
+Permissions are declared on any authorizable object via `[RequiresPermission]`.
 On granted resources, permissions drive grant resolution (Stage 1). On non-granted
 resources, permissions are available on `ctx.Permissions` for use in resource
 authorizers (Stage 2) and policy validators (Stage 3).
@@ -428,8 +428,8 @@ The analyzer detects grant-specific misconfigurations:
 | Check | Severity | Description |
 |-------|----------|-------------|
 | Missing permissions | Warning | Granted resource without `[RequiresPermission]` — no permission gate |
-| Permissions without grants | Info | `[RequiresPermission]` on non-granted resource — permissions available on `ctx.Permissions` for resource authorizers |
-| No resource authorizer | Info | Granted resource without Stage 2 authorizer — grants-only is valid but flagged |
+| Permissions without grants | Info | `[RequiresPermission]` on non-granted resource — permissions available on `ctx.Permissions` for object authorizers |
+| No object authorizer | Info | Granted resource without Stage 2 authorizer — grants-only is valid but flagged |
 | Unused domains | Info | Namespace domains with no granted resources |
 | Mixed authorization | Info | Domain boundary with both granted and non-granted resources — possible incomplete migration |
 
@@ -518,17 +518,17 @@ The app implements a single `IOperationGrantProvider` that handles all domains. 
 public class AppOperationGrantProvider : IOperationGrantProvider {
 
     // Shared bypass: app-wide super-admin skips grants in every domain
-    public ValueTask<bool> ShouldBypassAsync<TResource>(
-        AuthorizationContext<TResource> context,
+    public ValueTask<bool> ShouldBypassAsync<TAuthorizableObject>(
+        AuthorizationContext<TAuthorizableObject> context,
         CancellationToken cancellationToken)
-        where TResource : IAuthorizableObject =>
+        where TAuthorizableObject : IAuthorizableObject =>
         new(context.EffectiveRoles.Any(r => r.Name == "SuperAdmin"));
 
     // Domain-aware grant lookup
-    public async ValueTask<OperationGrantResult> ResolveGrantsAsync<TResource>(
-        AuthorizationContext<TResource> context,
+    public async ValueTask<OperationGrantResult> ResolveGrantsAsync<TAuthorizableObject>(
+        AuthorizationContext<TAuthorizableObject> context,
         CancellationToken cancellationToken)
-        where TResource : IAuthorizableObject {
+        where TAuthorizableObject : IAuthorizableObject {
 
         var ownerIds = await db.GetGrantedOwners(
             context.UserId,
@@ -538,10 +538,10 @@ public class AppOperationGrantProvider : IOperationGrantProvider {
     }
 
     // Home-owner with suspension check
-    public ValueTask<string?> ResolveHomeOwnerAsync<TResource>(
-        AuthorizationContext<TResource> context,
+    public ValueTask<string?> ResolveHomeOwnerAsync<TAuthorizableObject>(
+        AuthorizationContext<TAuthorizableObject> context,
         CancellationToken cancellationToken)
-        where TResource : IAuthorizableObject {
+        where TAuthorizableObject : IAuthorizableObject {
 
         if (context.UserState.ApplicationUser is IOwnedApplicationUser { IsEnabled: true } user) {
             return new(user.OwnerId);
@@ -556,10 +556,10 @@ public class AppOperationGrantProvider : IOperationGrantProvider {
 `OperationGrant.Extensions` carries app-specific auxiliary dimensions through the pipeline:
 
 ```csharp
-public async ValueTask<OperationGrantResult> ResolveGrantsAsync<TResource>(
-    AuthorizationContext<TResource> context,
+public async ValueTask<OperationGrantResult> ResolveGrantsAsync<TAuthorizableObject>(
+    AuthorizationContext<TAuthorizableObject> context,
     CancellationToken ct)
-    where TResource : IAuthorizableObject {
+    where TAuthorizableObject : IAuthorizableObject {
 
     var (ownerIds, tiers) = await db.GetGrantsWithTiers(context.UserId, ...);
 
@@ -640,5 +640,5 @@ cache keys and miss each other's entries — causing unnecessary cold-path resol
 
 - [Authorization Flow](../FLOW.md) — high-level request → authorization flow
 - [Authorization Sequence](../SEQUENCE.md) — detailed three-stage pipeline
-- [Operational Context](../../OPERATION-CONTEXT.md) — context composition and AccessScope
+- [Request & Authorization Context](../../CONTEXT.md) — context architecture and AccessScope
 - [Conductor](../../Conductor/README.md) — in-process dispatcher + intercept pipeline

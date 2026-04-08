@@ -1,25 +1,31 @@
-﻿namespace Cirreum.Conductor;
+namespace Cirreum.Conductor;
 
 using Cirreum.Security;
 using System;
 
 /// <summary>
-/// Encapsulates contextual information about a request in the Conductor pipeline,
-/// including the core operation context plus request-specific information.
+/// Encapsulates contextual information about a request in the Conductor pipeline:
+/// the caller identity, the request payload, timing, and correlation identifiers.
 /// </summary>
 /// <remarks>
 /// Use this record to capture and propagate request metadata throughout the application, enabling
-/// auditing, diagnostics, and tracing. This context composes <see cref="OperationContext"/> which
-/// contains the canonical WHO/WHEN/WHERE/TIMING information.
+/// auditing, diagnostics, and tracing. Created once per pipeline invocation by
+/// <see cref="Internal.RequestContextFactory"/>.
 /// </remarks>
 /// <typeparam name="TRequest">The type of the request payload associated with this context.</typeparam>
-/// <param name="Operation">The core operational context containing user, environment, timing, and correlation information.</param>
+/// <param name="UserState">The current user's state, including identity and authentication information.</param>
 /// <param name="Request">The request payload containing the data or command to be processed.</param>
 /// <param name="RequestType">The type name of the request, useful for logging and diagnostics.</param>
+/// <param name="RequestId">A unique identifier for this request (typically the <c>Activity.SpanId</c>).</param>
+/// <param name="CorrelationId">An identifier used to correlate this request with related operations (typically the <c>Activity.TraceId</c>).</param>
+/// <param name="StartTimestamp">The high-precision timestamp for accurate duration calculation.</param>
 public sealed record RequestContext<TRequest>(
-	OperationContext Operation,
+	IUserState UserState,
 	TRequest Request,
-	string RequestType)
+	string RequestType,
+	string RequestId,
+	string CorrelationId,
+	long StartTimestamp)
 	where TRequest : notnull {
 
 	/// <summary>
@@ -28,31 +34,35 @@ public sealed record RequestContext<TRequest>(
 	/// </summary>
 	public string? DomainFeature => DomainFeatureResolver.Resolve<TRequest>();
 
-	// Delegate to Operation for convenience
-	public string Environment => this.Operation.Environment;
-	public DomainRuntimeType RuntimeType => this.Operation.RuntimeType;
-	public IUserState UserState => this.Operation.UserState;
-	public DateTimeOffset Timestamp => this.Operation.Timestamp;
-	public long StartTimestamp => this.Operation.StartTimestamp;
-	public string RequestId => this.Operation.OperationId;
-	public string CorrelationId => this.Operation.CorrelationId;
-	public string UserId => this.Operation.UserId;
-	public string UserName => this.Operation.UserName;
-	public string? TenantId => this.Operation.TenantId;
-	public IdentityProviderType Provider => this.Operation.Provider;
-	public bool IsAuthenticated => this.Operation.IsAuthenticated;
-	public UserProfile Profile => this.Operation.Profile;
-	public bool HasEnrichedProfile => this.Operation.HasEnrichedProfile;
+	// Static environment — set once at startup via DomainContext
+	public string Environment => DomainContext.Environment;
+	public DomainRuntimeType RuntimeType => DomainContext.RuntimeType;
 
-	// Timing - delegate to Operation
-	public TimeSpan ElapsedDuration => this.Operation.Elapsed;
+	// Timestamp captured at creation
+	public DateTimeOffset Timestamp { get; } = DateTimeOffset.UtcNow;
 
-	public bool HasActiveTenant() => this.Operation.HasActiveTenant();
-	public bool IsFromProvider(IdentityProviderType provider) => this.Operation.IsFromProvider(provider);
-	public bool IsInDepartment(string department) => this.Operation.IsInDepartment(department);
+	// User convenience properties
+	public string UserId => this.UserState.Id;
+	public string UserName => this.UserState.Name;
+	public string? TenantId => this.UserState.Profile.Organization.OrganizationId;
+	public IdentityProviderType Provider => this.UserState.Provider;
+	public AccessScope AccessScope => this.UserState.AccessScope;
+	public bool IsAuthenticated => this.UserState.IsAuthenticated;
+	public UserProfile Profile => this.UserState.Profile;
+	public bool HasEnrichedProfile => this.UserState.Profile.IsEnriched;
+
+	// Timing
+	public TimeSpan ElapsedDuration => Timing.GetElapsedTime(this.StartTimestamp);
+
+	// Helper methods
+	public bool HasActiveTenant() => !string.IsNullOrWhiteSpace(this.TenantId);
+	public bool IsFromProvider(IdentityProviderType provider) => this.Provider == provider;
+	public bool IsInDepartment(string department) =>
+		!string.IsNullOrWhiteSpace(this.Profile.Department) &&
+		string.Equals(this.Profile.Department, department, StringComparison.OrdinalIgnoreCase);
 
 	/// <summary>
-	/// Creates a RequestContext for the current runtime.
+	/// Creates a <see cref="RequestContext{TRequest}"/> for the current runtime.
 	/// </summary>
 	public static RequestContext<TRequest> Create(
 		IUserState userState,
@@ -62,7 +72,10 @@ public sealed record RequestContext<TRequest>(
 		string correlationId,
 		long startTimestamp) =>
 		new(
-			OperationContext.Create(userState, requestId, correlationId, startTimestamp),
+			userState,
 			request,
-			requestType);
+			requestType,
+			requestId,
+			correlationId,
+			startTimestamp);
 }

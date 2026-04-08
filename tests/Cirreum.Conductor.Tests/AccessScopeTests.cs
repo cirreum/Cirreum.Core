@@ -66,55 +66,33 @@ public class AccessScopeTests {
 		Assert.IsTrue(user.IsAccessScopeResolved, "Explicitly setting None should still mark as resolved");
 	}
 
-	// OperationContext passthrough
-	// -------------------------------------------------------------
-
-	[TestMethod]
-	public void OperationContext_AccessScope_reflects_UserState() {
-		var user = new AccessScopeExposingUserState();
-		user.StampScope(AccessScope.Global);
-
-		var ctx = CreateOperationContext(user);
-
-		Assert.AreEqual(AccessScope.Global, ctx.AccessScope);
-	}
-
-	[TestMethod]
-	public void OperationContext_AccessScope_is_None_when_UserState_is_None() {
-		var user = new TestUserState();
-		var ctx = CreateOperationContext(user);
-		Assert.AreEqual(AccessScope.None, ctx.AccessScope);
-	}
-
 	// AuthorizationContext<T> passthrough
 	// -------------------------------------------------------------
 
 	[TestMethod]
-	public void AuthorizationContext_AccessScope_reflects_Operation() {
+	public void AuthorizationContext_AccessScope_reflects_UserState() {
 		var user = new AccessScopeExposingUserState();
 		user.StampScope(AccessScope.Tenant);
-		var opCtx = CreateOperationContext(user);
 
 		var authCtx = new AuthorizationContext<TestResource>(
-			Operation: opCtx,
+			UserState: user,
 			EffectiveRoles: ImmutableHashSet<Role>.Empty,
-			Resource: new TestResource());
+			AuthorizableObject: new TestResource());
 
 		Assert.AreEqual(AccessScope.Tenant, authCtx.AccessScope);
 	}
 
-	// Helpers
-	// -------------------------------------------------------------
+	[TestMethod]
+	public void AuthorizationContext_AccessScope_is_None_when_UserState_is_None() {
+		var user = new TestUserState();
 
-	private static OperationContext CreateOperationContext(IUserState userState) =>
-		new(
-			Environment: "Test",
-			RuntimeType: DomainRuntimeType.UnitTest,
-			Timestamp: DateTimeOffset.UtcNow,
-			StartTimestamp: System.Diagnostics.Stopwatch.GetTimestamp(),
-			UserState: userState,
-			OperationId: Guid.NewGuid().ToString(),
-			CorrelationId: Guid.NewGuid().ToString());
+		var authCtx = new AuthorizationContext<TestResource>(
+			UserState: user,
+			EffectiveRoles: ImmutableHashSet<Role>.Empty,
+			AuthorizableObject: new TestResource());
+
+		Assert.AreEqual(AccessScope.None, authCtx.AccessScope);
+	}
 
 	private sealed class TestResource : IAuthorizableObject;
 

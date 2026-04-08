@@ -17,7 +17,7 @@ using System.Diagnostics;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Resources that do not implement <see cref="IGrantableMutateBase"/>, <see cref="IGrantableLookupBase"/>,
+/// Authorizable objects that do not implement <see cref="IGrantableMutateBase"/>, <see cref="IGrantableLookupBase"/>,
 /// <see cref="IGrantableSearchBase"/>, or <see cref="IGrantableSelfBase"/> short-circuit with a pass —
 /// the gate is purely a Grants concern.
 /// </para>
@@ -36,18 +36,18 @@ public sealed class OperationGrantEvaluator(
 		grantAccessor ?? throw new ArgumentNullException(nameof(grantAccessor));
 
 	/// <summary>
-	/// Evaluates the grant-aware scope gate against the resource in the given context.
+	/// Evaluates the grant-aware scope gate against the authorizable object in the given context.
 	/// </summary>
-	public async Task<ValidationResult> EvaluateAsync<TResource>(
-		AuthorizationContext<TResource> context,
+	public async Task<ValidationResult> EvaluateAsync<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
 		CancellationToken cancellationToken = default)
-		where TResource : notnull, IAuthorizableObject {
+		where TAuthorizableObject : notnull, IAuthorizableObject {
 
 		// Not applicable — short-circuit pass.
-		var mutate = context.Resource as IGrantableMutateBase;
-		var lookup = context.Resource as IGrantableLookupBase;
-		var search = context.Resource as IGrantableSearchBase;
-		var self = context.Resource as IGrantableSelfBase;
+		var mutate = context.AuthorizableObject as IGrantableMutateBase;
+		var lookup = context.AuthorizableObject as IGrantableLookupBase;
+		var search = context.AuthorizableObject as IGrantableSearchBase;
+		var self = context.AuthorizableObject as IGrantableSelfBase;
 		if (mutate is null && lookup is null && search is null && self is null) {
 			return Pass();
 		}
@@ -88,11 +88,11 @@ public sealed class OperationGrantEvaluator(
 
 	// Self-scoped enforcement —————————————————————————————————
 
-	private async Task<ValidationResult> EvaluateSelfAsync<TResource>(
-		AuthorizationContext<TResource> context,
+	private async Task<ValidationResult> EvaluateSelfAsync<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
 		IGrantableSelfBase self,
 		CancellationToken cancellationToken)
-		where TResource : notnull, IAuthorizableObject {
+		where TAuthorizableObject : notnull, IAuthorizableObject {
 
 		// Enrichment: auto-stamp Id from caller identity when null.
 		if (self.Id is null) {
@@ -128,10 +128,10 @@ public sealed class OperationGrantEvaluator(
 
 	// Owner-scoped enforcement ————————————————————————————————
 
-	private static ValidationResult EvaluateMutate<TResource>(
-		AuthorizationContext<TResource> context,
+	private static ValidationResult EvaluateMutate<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
 		IGrantableMutateBase mutate,
-		OperationGrant grant) where TResource : notnull, IAuthorizableObject {
+		OperationGrant grant) where TAuthorizableObject : notnull, IAuthorizableObject {
 
 		if (!string.IsNullOrWhiteSpace(mutate.OwnerId)) {
 			return grant.Contains(mutate.OwnerId!)
@@ -153,25 +153,25 @@ public sealed class OperationGrantEvaluator(
 		return Deny(DenyCodes.OwnerAmbiguous, "OwnerId is required — caller's grant contains multiple owners.");
 	}
 
-	private static ValidationResult EvaluateLookup<TResource>(
-		AuthorizationContext<TResource> context,
+	private static ValidationResult EvaluateLookup<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
 		IGrantableLookupBase lookup,
 		OperationGrant grant)
-		where TResource : notnull, IAuthorizableObject {
+		where TAuthorizableObject : notnull, IAuthorizableObject {
 
 		if (!string.IsNullOrWhiteSpace(lookup.OwnerId)) {
 			if (!grant.Contains(lookup.OwnerId!)) {
 				return Deny(DenyCodes.OwnerNotInReach, "Requested owner is not in the caller's granted access.");
 			}
 			// OwnerId supplied and in grant — stamp CallerAccessScope for cacheable lookups.
-			if (context.Resource is IGrantableCacheableLookupBase cacheableWithOwner) {
+			if (context.AuthorizableObject is IGrantableCacheableLookupBase cacheableWithOwner) {
 				cacheableWithOwner.CallerAccessScope = context.AccessScope;
 			}
 			return Pass();
 		}
 
 		// Cacheable lookup: Global callers MUST supply OwnerId to prevent unbounded cache bucket.
-		if (context.Resource is IGrantableCacheableLookupBase) {
+		if (context.AuthorizableObject is IGrantableCacheableLookupBase) {
 			if (context.AccessScope == AccessScope.Global) {
 				return Deny(DenyCodes.CacheableReadOwnerIdRequired,
 					"OwnerId is required for cross-tenant cacheable lookups.");
@@ -180,7 +180,7 @@ public sealed class OperationGrantEvaluator(
 
 		// OwnerId null — defer to handler (Pattern C). Grant already stashed on accessor.
 		// Stamp CallerAccessScope for cacheable lookups.
-		if (context.Resource is IGrantableCacheableLookupBase cacheable) {
+		if (context.AuthorizableObject is IGrantableCacheableLookupBase cacheable) {
 			cacheable.CallerAccessScope = context.AccessScope;
 		}
 		return Pass();
@@ -202,8 +202,8 @@ public sealed class OperationGrantEvaluator(
 
 	// Application user guard ————————————————————————————————
 
-	private static bool CheckApplicationUserEnabled<TResource>(AuthorizationContext<TResource> ctx)
-		where TResource : notnull, IAuthorizableObject {
+	private static bool CheckApplicationUserEnabled<TAuthorizableObject>(AuthorizationContext<TAuthorizableObject> ctx)
+		where TAuthorizableObject : notnull, IAuthorizableObject {
 
 		if (!ctx.UserState.IsApplicationUserLoaded) {
 			return true;
@@ -223,18 +223,18 @@ public sealed class OperationGrantEvaluator(
 	private static string DenyReason(ValidationResult r)
 		=> r.Errors.FirstOrDefault()?.ErrorCode ?? "UNKNOWN";
 
-	private static void EmitTelemetry<TResource>(
-		AuthorizationContext<TResource> ctx,
+	private static void EmitTelemetry<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> ctx,
 		string outcome,
 		string step = AuthorizationTelemetry.StepOwnerScope)
-		where TResource : notnull, IAuthorizableObject {
+		where TAuthorizableObject : notnull, IAuthorizableObject {
 
 		var isPass = outcome == AuthorizationTelemetry.ReasonPass;
 		var decision = isPass
 			? AuthorizationTelemetry.DecisionPass
 			: AuthorizationTelemetry.DecisionDeny;
 		var scope = ctx.AccessScope.ToString().ToLowerInvariant();
-		var resourceType = ctx.Resource.GetType().Name;
+		var resourceType = ctx.AuthorizableObject.GetType().Name;
 
 		var activity = Activity.Current;
 		if (activity is not null) {

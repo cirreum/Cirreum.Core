@@ -1,38 +1,38 @@
-﻿namespace Cirreum.Authorization.Diagnostics;
+namespace Cirreum.Authorization.Diagnostics;
 
 using Microsoft.Extensions.Logging;
 
 internal static partial class AuthorizationLogging {
 
 	[LoggerMessage(
-		EventId = AuthorizationLogEventId.AuthorizingResourceDeniedId,
+		EventId = AuthorizationLogEventId.AuthorizingDeniedId,
 		Level = LogLevel.Warning,
-		Message = "User '{UserName}' was DENIED access to Resource '{ResourceName}'.\r\n{DeniedReason}")]
-	public static partial void LogAuthorizingResourceDenied(
+		Message = "User '{UserName}' was DENIED access to '{ObjectName}'.\r\n{DeniedReason}")]
+	public static partial void LogAuthorizingDenied(
 		this ILogger logger,
 		string userName,
-		string resourceName,
+		string objectName,
 		string deniedReason);
 
 
 	[LoggerMessage(
-		EventId = AuthorizationLogEventId.AuthorizingResourceUnknownErrorId,
+		EventId = AuthorizationLogEventId.AuthorizingUnknownErrorId,
 		Level = LogLevel.Error,
-		Message = "Exception encountered while authorizing User '{UserName}' for Resource '{ResourceName}'.\r\n{FailureReasons}")]
-	public static partial void LogAuthorizingResourceUnknownError(
+		Message = "Exception encountered while authorizing User '{UserName}' for '{ObjectName}'.\r\n{FailureReasons}")]
+	public static partial void LogAuthorizingUnknownError(
 		this ILogger logger,
 		Exception ex,
 		string userName,
-		string resourceName,
+		string objectName,
 		string failureReasons);
 
 
 	[LoggerMessage(
-		EventId = AuthorizationLogEventId.AuthorizingResourceAllowedId,
+		EventId = AuthorizationLogEventId.AuthorizingAllowedId,
 		Level = LogLevel.Information,
-		Message = "User '{UserName}' was ALLOWED access to Resource '{ResourceName}'")]
-	public static partial void LogAuthorizingResourceAllowed(
+		Message = "User '{UserName}' was ALLOWED access to '{ObjectName}'")]
+	public static partial void LogAuthorizingAllowed(
 		this ILogger logger,
 		string userName,
-		string resourceName);
+		string objectName);
 }

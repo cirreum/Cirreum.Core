@@ -1,13 +1,13 @@
 namespace Cirreum.Authorization;
 
 /// <summary>
-/// Defines an authorizer that enforces authorization rules for a specific resource type.
+/// Defines an authorizer that enforces authorization rules for a specific <see cref="IAuthorizableObject"/> type.
 /// </summary>
-/// <typeparam name="TResource">The type of resource to authorize. Must implement <see cref="IAuthorizableObject"/>.</typeparam>
+/// <typeparam name="TAuthorizableObject">The type of <see cref="IAuthorizableObject"/> to authorize.</typeparam>
 /// <remarks>
 /// <para>
-/// Resource authorizers enforce permissions by evaluating user roles, state, and resource properties.
-/// While commonly used with commands/queries, authorizers can be used with any resource type that
+/// Authorizers enforce permissions by evaluating user roles, state, and object properties.
+/// While commonly used with commands/queries, authorizers can be used with any type that
 /// implements <see cref="IAuthorizableObject"/>.
 /// </para>
 /// <para>
@@ -15,7 +15,7 @@ namespace Cirreum.Authorization;
 /// in the application, not just within the Conductor pipeline.
 /// </para>
 /// <para>
-/// Domain developers should inherit from <see cref="AuthorizerBase{TResource}"/> rather than
+/// Domain developers should inherit from <see cref="AuthorizerBase{TAuthorizableObject}"/> rather than
 /// implementing this interface directly.
 /// </para>
 /// <example>
@@ -26,10 +26,10 @@ namespace Cirreum.Authorization;
 /// // Or with domain entities
 /// public class OrderAuthorizer : AuthorizerBase&lt;Order&gt;
 ///
-/// // Or any other resource type
+/// // Or any other authorizable type
 /// public class ReportAuthorizer : AuthorizerBase&lt;AnalyticsReport&gt;
 /// </code>
 /// </example>
 /// </remarks>
-public interface IAuthorizer<TResource>
-	where TResource : IAuthorizableObject;
+public interface IAuthorizer<TAuthorizableObject>
+	where TAuthorizableObject : IAuthorizableObject;

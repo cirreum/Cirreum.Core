@@ -16,8 +16,8 @@ public interface IOperationGrantFactory {
 	/// <summary>
 	/// Computes the <see cref="OperationGrant"/> for the current operation.
 	/// </summary>
-	ValueTask<OperationGrant> CreateAsync<TResource>(
-		AuthorizationContext<TResource> context,
+	ValueTask<OperationGrant> CreateAsync<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
 		CancellationToken cancellationToken)
-		where TResource : IAuthorizableObject;
+		where TAuthorizableObject : IAuthorizableObject;
 }

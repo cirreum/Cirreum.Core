@@ -16,7 +16,7 @@ using Cirreum.Diagnostics;
 /// <list type="number">
 ///   <item><description>Unauthenticated caller → <see cref="OperationGrant.Denied"/>.</description></item>
 ///   <item><description><see cref="IOperationGrantProvider.ShouldBypassAsync"/> returns <see langword="true"/> → <see cref="OperationGrant.Unrestricted"/> (always live, never cached).</description></item>
-///   <item><description>No <see cref="AuthorizationContext{TResource}.Permissions"/> declared → <see cref="OperationGrant.Denied"/> (misconfig guard).</description></item>
+///   <item><description>No <see cref="AuthorizationContext{TAuthorizableObject}.Permissions"/> declared → <see cref="OperationGrant.Denied"/> (misconfig guard).</description></item>
 ///   <item><description>L1 check: scoped in-memory dictionary keyed by cache key string.</description></item>
 ///   <item><description>L2 check: <see cref="ICacheService"/> via <c>GetOrCreateAsync</c>.</description></item>
 ///   <item><description>Cold path: invoke <see cref="IOperationGrantProvider.ResolveGrantsAsync"/> + <see cref="IOperationGrantProvider.ResolveHomeOwnerAsync"/> + merge.</description></item>
@@ -41,14 +41,14 @@ sealed class OperationGrantFactory(
 	// L1: scoped memoization — same cache key string as L2 for shared identity
 	private readonly Dictionary<string, OperationGrant> _scopeCache = [];
 
-	public async ValueTask<OperationGrant> CreateAsync<TResource>(
-		AuthorizationContext<TResource> context,
+	public async ValueTask<OperationGrant> CreateAsync<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
 		CancellationToken cancellationToken)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
 		ArgumentNullException.ThrowIfNull(context);
 
-		var resourceType = typeof(TResource).Name;
+		var resourceType = typeof(TAuthorizableObject).Name;
 
 		if (!context.IsAuthenticated) {
 			AuthorizationTelemetry.RecordGrantResolution(
@@ -71,7 +71,7 @@ sealed class OperationGrantFactory(
 			return OperationGrant.Denied;
 		}
 
-		var callerId = context.Operation.UserState.Id;
+		var callerId = context.UserState.Id;
 		var cacheKey = OperationGrantCacheKeys.BuildKey(
 			this._cacheSettings.Version,
 			callerId,
@@ -100,13 +100,13 @@ sealed class OperationGrantFactory(
 
 	// L2 cache integration ————————————————————————————————————
 
-	private async ValueTask<OperationGrant> CreateWithL2CacheAsync<TResource>(
-		AuthorizationContext<TResource> context,
+	private async ValueTask<OperationGrant> CreateWithL2CacheAsync<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
 		string cacheKey,
 		string callerId,
 		string domainFeature,
 		CancellationToken cancellationToken)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
 		var tags = OperationGrantCacheKeys.BuildTags(callerId, domainFeature);
 		var settings = this.BuildEffectiveCacheSettings(domainFeature);
@@ -121,10 +121,10 @@ sealed class OperationGrantFactory(
 
 	// Cold-path resolution ————————————————————————————————————
 
-	private async ValueTask<OperationGrant> CreateFromGrantResolverAsync<TResource>(
-		AuthorizationContext<TResource> context,
+	private async ValueTask<OperationGrant> CreateFromGrantResolverAsync<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
 		CancellationToken cancellationToken)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
 		var granted = await this._grantResolver
 			.ResolveGrantsAsync(context, cancellationToken)

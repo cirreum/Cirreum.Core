@@ -1,19 +1,18 @@
-﻿namespace Cirreum.Authorization;
+namespace Cirreum.Authorization;
 
-using Cirreum.Authorization.Operations;
 using Cirreum.Security;
 using System.Collections.Immutable;
 
 /// <summary>
-/// Represents the context for a given authorization check.
+/// Represents the context for evaluating authorization against an <see cref="IAuthorizableObject"/>.
 /// </summary>
-/// <param name="Operation">The core operational context containing user, environment, and timing information.</param>
+/// <param name="UserState">The current user's state, including identity and authentication information.</param>
 /// <param name="EffectiveRoles">
-/// The effective roles (resolved roles) associated with the current user, 
-/// including any roles inherited from others (downward inheritance only, e.g., 
+/// The effective roles (resolved roles) associated with the current user,
+/// including any roles inherited from others (downward inheritance only, e.g.,
 /// a manager inherits from coordinator, which inherits from user).
 /// </param>
-/// <param name="Resource">The <see cref="IAuthorizableObject"/> object being evaluated.</param>
+/// <param name="AuthorizableObject">The <see cref="IAuthorizableObject"/> being evaluated for authorization.</param>
 /// <remarks>
 /// <para>
 /// The user may only be assigned a single role by the Identity Provider (IdP), but based on application-defined
@@ -23,50 +22,51 @@ using System.Collections.Immutable;
 /// from exceeding the JWT's size limit, avoiding overflow.
 /// </para>
 /// </remarks>
-public sealed record AuthorizationContext<TResource>(
-	OperationContext Operation,
+public sealed record AuthorizationContext<TAuthorizableObject>(
+	IUserState UserState,
 	IImmutableSet<Role> EffectiveRoles,
-	TResource Resource)
-	where TResource : IAuthorizableObject {
+	TAuthorizableObject AuthorizableObject)
+	where TAuthorizableObject : IAuthorizableObject {
 
 	/// <summary>
-	/// The domain feature derived from <typeparamref name="TResource"/>'s namespace convention.
+	/// The domain feature derived from <typeparamref name="TAuthorizableObject"/>'s namespace convention.
 	/// Cached per-type via <see cref="DomainFeatureResolver"/> — zero per-request cost.
 	/// </summary>
-	public string? DomainFeature => DomainFeatureResolver.Resolve<TResource>();
+	public string? DomainFeature => DomainFeatureResolver.Resolve<TAuthorizableObject>();
 
-	// Convenience properties delegated to Operation
-	public string UserId => this.Operation.UserId;
-	public string UserName => this.Operation.UserName;
-	public string? TenantId => this.Operation.TenantId;
-	public IdentityProviderType Provider => this.Operation.Provider;
-	public AccessScope AccessScope => this.Operation.AccessScope;
-	public bool IsAuthenticated => this.Operation.IsAuthenticated;
-	public UserProfile Profile => this.Operation.Profile;
-	public bool HasEnrichedProfile => this.Operation.HasEnrichedProfile;
-	public IUserState UserState => this.Operation.UserState;
+	// User convenience properties
+	public string UserId => this.UserState.Id;
+	public string UserName => this.UserState.Name;
+	public string? TenantId => this.UserState.Profile.Organization.OrganizationId;
+	public IdentityProviderType Provider => this.UserState.Provider;
+	public AccessScope AccessScope => this.UserState.AccessScope;
+	public bool IsAuthenticated => this.UserState.IsAuthenticated;
+	public UserProfile Profile => this.UserState.Profile;
+	public bool HasEnrichedProfile => this.UserState.Profile.IsEnriched;
 
 	/// <summary>
 	/// The application-layer user loaded from the app's user store, or <see langword="null"/>
 	/// when no app-db record backs this caller (e.g., workforce identities that exist only in
 	/// an operator IdP). Shortcut for <c>UserState.ApplicationUser</c>.
 	/// </summary>
-	public IApplicationUser? ApplicationUser => this.Operation.UserState.ApplicationUser;
+	public IApplicationUser? ApplicationUser => this.UserState.ApplicationUser;
 
 	/// <summary>
-	/// The distinct set of permissions declared on <typeparamref name="TResource"/> via
+	/// The distinct set of permissions declared on <typeparamref name="TAuthorizableObject"/> via
 	/// <see cref="RequiresPermissionAttribute"/>. Hoisted once per type from
 	/// <see cref="RequiredPermissionCache"/>; available to every authorization stage without
 	/// per-request reflection. AND semantics — every listed permission is required.
 	/// </summary>
-	public PermissionSet Permissions => RequiredPermissionCache.GetFor<TResource>();
+	public PermissionSet Permissions => RequiredPermissionCache.GetFor<TAuthorizableObject>();
 
-	// ExecutionContext properties (for policy validators)
-	public DomainRuntimeType RuntimeType => this.Operation.RuntimeType;
-	public DateTimeOffset Timestamp => this.Operation.Timestamp;
+	// Static environment — set once at startup via DomainContext
+	public DomainRuntimeType RuntimeType => DomainContext.RuntimeType;
+	public DateTimeOffset Timestamp { get; } = DateTimeOffset.UtcNow;
 
 	// Helper methods
-	public bool HasActiveTenant() => this.Operation.HasActiveTenant();
-	public bool IsFromProvider(IdentityProviderType provider) => this.Operation.IsFromProvider(provider);
-	public bool IsInDepartment(string department) => this.Operation.IsInDepartment(department);
+	public bool HasActiveTenant() => !string.IsNullOrWhiteSpace(this.TenantId);
+	public bool IsFromProvider(IdentityProviderType provider) => this.Provider == provider;
+	public bool IsInDepartment(string department) =>
+		!string.IsNullOrWhiteSpace(this.Profile.Department) &&
+		string.Equals(this.Profile.Department, department, StringComparison.OrdinalIgnoreCase);
 }

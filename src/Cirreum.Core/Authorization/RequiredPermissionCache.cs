@@ -1,4 +1,4 @@
-namespace Cirreum.Authorization.Operations;
+namespace Cirreum.Authorization;
 
 using Cirreum.Authorization.Operations.Grants;
 using System.Collections.Concurrent;
@@ -6,24 +6,24 @@ using System.Reflection;
 
 /// <summary>
 /// Per-type cache of <see cref="RequiresPermissionAttribute"/> declarations. Reads all
-/// <c>[RequiresPermission]</c> attributes on a resource type (including stacked and inherited
+/// <c>[RequiresPermission]</c> attributes on an authorizable object type (including stacked and inherited
 /// declarations) exactly once, memoizes the result, and returns the same immutable list on
 /// every subsequent lookup.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The cache is consulted by the authorization pipeline setup to hoist required permissions
-/// onto <see cref="AuthorizationContext{TResource}.Permissions"/>. Every stage — the
+/// onto <see cref="AuthorizationContext{TAuthorizableObject}.Permissions"/>. Every stage — the
 /// Stage 1 gate, Stage 2 resource authorizers, Stage 3 policy validators — then reads
 /// permissions from the context without doing its own reflection.
 /// </para>
 /// <para>
-/// For granted resources (those implementing <see cref="IGrantableMutateBase"/>,
+/// For granted authorizable objects (those implementing <see cref="IGrantableMutateBase"/>,
 /// <see cref="IGrantableLookupBase"/>, <see cref="IGrantableSearchBase"/>), this cache also:
 /// </para>
 /// <list type="bullet">
 ///   <item><description>Resolves name-only <c>[RequiresPermission("delete")]</c> attributes
-///   by deriving the domain feature from the resource type's namespace convention via
+///   by deriving the domain feature from the authorizable object type's namespace convention via
 ///   <see cref="DomainFeatureResolver"/>.</description></item>
 ///   <item><description>Validates that all explicit permission features match the domain
 ///   feature — cross-domain permissions are a misconfiguration and cause a runtime
@@ -41,10 +41,10 @@ public static class RequiredPermissionCache {
 	/// <summary>
 	/// Returns the distinct set of permissions declared on <paramref name="resourceType"/> via
 	/// <see cref="RequiresPermissionAttribute"/>, computing and caching the result on first lookup.
-	/// For granted resources, resolves name-only permissions from the type's namespace convention
+	/// For granted authorizable objects, resolves name-only permissions from the type's namespace convention
 	/// and validates feature consistency.
 	/// </summary>
-	/// <param name="resourceType">The resource type to inspect.</param>
+	/// <param name="resourceType">The authorizable object type to inspect.</param>
 	/// <returns>
 	/// The declared required permissions. Returns an empty list when no attributes are present.
 	/// </returns>
@@ -101,12 +101,12 @@ public static class RequiredPermissionCache {
 	}
 
 	/// <summary>
-	/// Returns the distinct set of permissions declared on <typeparamref name="TResource"/>.
+	/// Returns the distinct set of permissions declared on <typeparamref name="TAuthorizableObject"/>.
 	/// </summary>
-	public static PermissionSet GetFor<TResource>() => GetFor(typeof(TResource));
+	public static PermissionSet GetFor<TAuthorizableObject>() => GetFor(typeof(TAuthorizableObject));
 
 	/// <summary>
-	/// Resolves the domain feature from the resource type's namespace convention.
+	/// Resolves the domain feature from the authorizable object type's namespace convention.
 	/// Returns <see langword="null"/> when the type does not follow the convention.
 	/// </summary>
 	internal static string? ResolveDomainNamespace(Type resourceType) =>

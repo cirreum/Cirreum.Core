@@ -36,7 +36,7 @@ sequenceDiagram
 
     AI->>US: GetUser() (cache read)
     US-->>AI: UserState
-    AI->>AE: Evaluate(resource, operation)
+    AI->>AE: Evaluate(authorizableObject, userState)
 
     AE->>AE: Authn check<br/>(UnauthenticatedAccessException on fail)
     AE->>RR: Resolve effective roles
@@ -45,7 +45,7 @@ sequenceDiagram
     Note over AE,GE: Three-stage pipeline<br/>(see SEQUENCE.md)
     AE->>AE: Stage 1 — Scope (short-circuit)
 
-    alt Resource is Granted (Mutate / Lookup / Search / Self)
+    alt Object is Granted (Mutate / Lookup / Search / Self)
         AE->>GE: EvaluateAsync(authContext)
         Note over GE: Resolve OperationGrant<br/>(L1→L2→cold path)
         GE->>GE: Grant enforcement<br/>(Mutate / Lookup / Search / Self rules)
@@ -53,7 +53,7 @@ sequenceDiagram
     end
 
     AE->>AE: Stage 1 cont. — Owner + Scope evaluators
-    AE->>AE: Stage 2 — Resource (aggregate, then short-circuit)
+    AE->>AE: Stage 2 — Object Authorizers (aggregate, then short-circuit)
     AE->>AE: Stage 3 — Policy (aggregate)
 
     alt All stages pass
@@ -81,22 +81,22 @@ sequenceDiagram
   that app-user — never IdP claims directly.
 - **Intercept placement.** Authorization runs after Validation but before
   the handler. The handler can assume a valid, authorized request.
-- **Grants (Stage 1 Step 0).** When a resource implements a grant interface
+- **Grants (Stage 1 Step 0).** When an authorizable object implements a grant interface
   (`IGrantMutateRequest`, `IGrantLookupRequest`, `IGrantSearchRequest`,
   `IGrantMutateSelfRequest`, `IGrantLookupSelfRequest`), the `OperationGrantEvaluator`
   resolves the caller's `OperationGrant` (owner-scoped) or performs identity
   matching (self-scoped) before any other scope evaluator runs. If the
-  resource is not granted, this step is a no-op pass. See the
-  [Grants README](Grants/README.md) for details.
+  object is not granted, this step is a no-op pass. See the
+  [Grants README](Operations/Grants/README.md) for details.
 - **Permissions are general-purpose.** `[RequiresPermission]` attributes are
-  resolved for all authorizable resources — not just granted ones. The
+  resolved for all authorizable objects — not just granted ones. The
   resolved `PermissionSet` is available on `AuthorizationContext.Permissions`
-  for use by resource authorizers (Stage 2) and policy validators (Stage 3).
+  for use by object authorizers (Stage 2) and policy validators (Stage 3).
 - **Result, not exceptions.** Authentication/authorization failures are
   returned as `Result.Fail(...)` through the pipeline. Exceptions inside
   an evaluator are caught and converted at the pipeline boundary.
 - **Effective roles are computed once** per evaluation and passed to every
-  stage via `AuthorizationContext<TResource>`.
+  stage via `AuthorizationContext<TAuthorizableObject>`.
 - **Short-circuit per stage.** Each stage denies the whole evaluation on
   failure; later stages don't run. Within Stage 2 and Stage 3, failures
   from *all* evaluators in that stage are aggregated before denial.

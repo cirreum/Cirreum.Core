@@ -105,7 +105,6 @@ public class DomainFeatureTests {
 namespace Cirreum.Conductor.Tests.Domain.Issues {
 
 	using Cirreum.Authorization;
-	using Cirreum.Authorization.Operations;
 	using Cirreum.Authorization.Operations.Grants;
 	using Cirreum.Conductor;
 

@@ -13,11 +13,11 @@ using Cirreum.Conductor;
 /// request marker interfaces instead:
 /// <see cref="IAuthorizableRequest"/> or <see cref="IAuthorizableRequest{TResponse}"/>.
 /// For grant-aware (grant-based) operations, use the grant interfaces:
-/// <see cref="Operations.Grants.IGrantMutateRequest"/>,
-/// <see cref="Operations.Grants.IGrantLookupRequest{TResponse}"/>,
-/// <see cref="Operations.Grants.IGrantSearchRequest{TResponse}"/>,
-/// <see cref="Operations.Grants.IGrantMutateSelfRequest"/>, or
-/// <see cref="Operations.Grants.IGrantLookupSelfRequest{TResponse}"/>.
+/// <see cref="Grants.IGrantMutateRequest"/>,
+/// <see cref="Grants.IGrantLookupRequest{TResponse}"/>,
+/// <see cref="Grants.IGrantSearchRequest{TResponse}"/>,
+/// <see cref="Grants.IGrantMutateSelfRequest"/>, or
+/// <see cref="Grants.IGrantLookupSelfRequest{TResponse}"/>.
 /// </para>
 /// <para>
 /// By inheriting <see cref="IAuthorizableObject"/>, every request instance may be

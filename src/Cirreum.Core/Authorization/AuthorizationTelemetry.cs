@@ -25,7 +25,7 @@ public static class AuthorizationTelemetry {
 	/// <summary>Stage 1 — scope evaluation (owner-scope gate + generic scope evaluators).</summary>
 	public const string StageScope = "scope";
 
-	/// <summary>Stage 2 — resource authorizers (<see cref="IAuthorizer{TResource}"/>).</summary>
+	/// <summary>Stage 2 — object authorizers (<see cref="IAuthorizer{TAuthorizableObject}"/>).</summary>
 	public const string StageResource = "resource";
 
 	/// <summary>Stage 3 — policy validators (<see cref="IPolicyValidator"/>).</summary>
@@ -42,10 +42,10 @@ public static class AuthorizationTelemetry {
 	/// <summary>Stage 1, Step 0s — self-identity gate (<see cref="Operations.Grants.OperationGrantEvaluator"/>).</summary>
 	public const string StepSelfIdentity = "self-identity";
 
-	/// <summary>Stage 1, Step 1 — generic <see cref="IScopeEvaluator"/> chain.</summary>
+	/// <summary>Stage 1, Step 1 — generic <see cref="Operations.IScopeEvaluator"/> chain.</summary>
 	public const string StepScopeEvaluator = "scope-evaluator";
 
-	/// <summary>Stage 2 — resource authorizer (<see cref="AuthorizerBase{TResource}"/>).</summary>
+	/// <summary>Stage 2 — object authorizer (<see cref="AuthorizerBase{TAuthorizableObject}"/>).</summary>
 	public const string StepResourceAuthorizer = "resource-authorizer";
 
 	/// <summary>Stage 3 — policy validator (<see cref="IPolicyValidator"/>).</summary>

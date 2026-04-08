@@ -1,7 +1,8 @@
-﻿namespace Cirreum.Conductor.Tests;
+namespace Cirreum.Conductor.Tests;
 
 using Cirreum.Authorization;
 using Cirreum.Exceptions;
+using Cirreum.Security;
 
 public sealed record OrderResource(
 	string OrderId,
@@ -21,56 +22,56 @@ public sealed record AdminOnlyResource(
 /// Creates a new instance of <see cref="TestAuthorizationEvaluator"/>.
 /// </remarks>
 /// <param name="evaluateAdHoc">
-/// Delegate used by the ad-hoc <see cref="Evaluate{TResource}(TResource, CancellationToken)"/>. 
+/// Delegate used by the ad-hoc <see cref="Evaluate{TAuthorizableObject}(TAuthorizableObject, CancellationToken)"/>.
 /// If null, authorization always succeeds.
 /// </param>
 /// <param name="evaluateWithContext">
-/// Delegate used by the context-aware <see cref="Evaluate{TResource}(TResource, OperationContext, CancellationToken)"/>. 
+/// Delegate used by the context-aware <see cref="Evaluate{TAuthorizableObject}(TAuthorizableObject, IUserState, CancellationToken)"/>.
 /// If null, authorization always succeeds.
 /// </param>
 public sealed class TestAuthorizationEvaluator(
 	Func<object, CancellationToken, Result>? evaluateAdHoc = null,
-	Func<object, OperationContext, CancellationToken, Result>? evaluateWithContext = null)
+	Func<object, IUserState, CancellationToken, Result>? evaluateWithContext = null)
 	: IAuthorizationEvaluator {
 
 	private readonly Func<object, CancellationToken, Result> _evaluateAdHoc =
 		evaluateAdHoc ?? ((_, _) => Result.Success);
 
-	private readonly Func<object, OperationContext, CancellationToken, Result> _evaluateWithContext =
+	private readonly Func<object, IUserState, CancellationToken, Result> _evaluateWithContext =
 		evaluateWithContext ?? ((_, _, _) => Result.Success);
 
 	/// <summary>
 	/// Ad-hoc evaluation (builds context internally in real implementation).
 	/// </summary>
-	public ValueTask<Result> Evaluate<TResource>(
-		TResource resource,
+	public ValueTask<Result> Evaluate<TAuthorizableObject>(
+		TAuthorizableObject authorizableObject,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
-		if (resource is null) {
-			throw new ArgumentNullException(nameof(resource));
+		if (authorizableObject is null) {
+			throw new ArgumentNullException(nameof(authorizableObject));
 		}
 
-		var result = _evaluateAdHoc(resource, cancellationToken);
+		var result = _evaluateAdHoc(authorizableObject, cancellationToken);
 		return new ValueTask<Result>(result);
 	}
 
 	/// <summary>
-	/// Context-aware evaluation (uses provided OperationContext).
+	/// Context-aware evaluation (uses provided <see cref="IUserState"/>).
 	/// </summary>
-	public ValueTask<Result> Evaluate<TResource>(
-		TResource resource,
-		OperationContext operation,
+	public ValueTask<Result> Evaluate<TAuthorizableObject>(
+		TAuthorizableObject authorizableObject,
+		IUserState userState,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
-		if (resource is null) {
-			throw new ArgumentNullException(nameof(resource));
+		if (authorizableObject is null) {
+			throw new ArgumentNullException(nameof(authorizableObject));
 		}
 
-		ArgumentNullException.ThrowIfNull(operation);
+		ArgumentNullException.ThrowIfNull(userState);
 
-		var result = _evaluateWithContext(resource, operation, cancellationToken);
+		var result = _evaluateWithContext(authorizableObject, userState, cancellationToken);
 		return new ValueTask<Result>(result);
 	}
 }
@@ -80,19 +81,19 @@ public sealed class TestAuthorizationEvaluator(
 /// </summary>
 public sealed class AlwaysAllowAuthorizationEvaluator : IAuthorizationEvaluator {
 
-	public ValueTask<Result> Evaluate<TResource>(
-		TResource resource,
+	public ValueTask<Result> Evaluate<TAuthorizableObject>(
+		TAuthorizableObject authorizableObject,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
 		return ValueTask.FromResult(Result.Success);
 	}
 
-	public ValueTask<Result> Evaluate<TResource>(
-		TResource resource,
-		OperationContext operation,
+	public ValueTask<Result> Evaluate<TAuthorizableObject>(
+		TAuthorizableObject authorizableObject,
+		IUserState userState,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
 		return ValueTask.FromResult(Result.Success);
 	}
@@ -107,19 +108,19 @@ public sealed class AlwaysDenyAuthorizationEvaluator(Exception? exception = null
 		exception ??
 		new ForbiddenAccessException("Access denied by test evaluator.");
 
-	public ValueTask<Result> Evaluate<TResource>(
-		TResource resource,
+	public ValueTask<Result> Evaluate<TAuthorizableObject>(
+		TAuthorizableObject authorizableObject,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
 		return ValueTask.FromResult(Result.Fail(_exception));
 	}
 
-	public ValueTask<Result> Evaluate<TResource>(
-		TResource resource,
-		OperationContext operation,
+	public ValueTask<Result> Evaluate<TAuthorizableObject>(
+		TAuthorizableObject authorizableObject,
+		IUserState userState,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableObject {
+		where TAuthorizableObject : IAuthorizableObject {
 
 		return ValueTask.FromResult(Result.Fail(_exception));
 	}

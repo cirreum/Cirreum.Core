@@ -1,4 +1,4 @@
-namespace Cirreum.Authorization.Operations;
+namespace Cirreum.Authorization;
 
 /// <summary>
 /// Declares a permission that an operation requires on the target owner. Consumed by Stage 1

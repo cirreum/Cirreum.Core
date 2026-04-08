@@ -6,22 +6,22 @@ using FluentValidation;
 /// <summary>
 /// Base Authorizer of <see cref="IAuthorizableObject"/> objects.
 /// </summary>
-/// <typeparam name="TResource">The Type of the resource.</typeparam>
+/// <typeparam name="TAuthorizableObject">The type of the <see cref="IAuthorizableObject"/> being authorized.</typeparam>
 /// <remarks>
 /// <para>
 /// This abstract class provides a base implementation of the
-/// <see cref="IAuthorizer{TResource}"/> interface and
-/// serves as a foundational authorizer for resources that implement the
+/// <see cref="IAuthorizer{TAuthorizableObject}"/> interface and
+/// serves as a foundational authorizer for types that implement the
 /// <see cref="IAuthorizableObject"/> interface.
 /// </para>
 /// </remarks>
-public abstract class AuthorizerBase<TResource>
-	: AbstractValidator<AuthorizationContext<TResource>>
-	, IAuthorizer<TResource>
-	where TResource : IAuthorizableObject {
+public abstract class AuthorizerBase<TAuthorizableObject>
+	: AbstractValidator<AuthorizationContext<TAuthorizableObject>>
+	, IAuthorizer<TAuthorizableObject>
+	where TAuthorizableObject : IAuthorizableObject {
 
 	/// <summary>
-	/// Initializes a new instance of <see cref="AuthorizerBase{TResource}"/>
+	/// Initializes a new instance of <see cref="AuthorizerBase{TAuthorizableObject}"/>
 	/// </summary>
 	protected AuthorizerBase() {
 
@@ -33,11 +33,11 @@ public abstract class AuthorizerBase<TResource>
 			.NotNull()
 			.WithMessage("User roles cannot be null");
 
-		this.RuleFor(context => context.Resource)
+		this.RuleFor(context => context.AuthorizableObject)
 			.NotNull()
-			.WithMessage("Resource cannot be null")
-			.Must(resource => resource.GetType() == typeof(TResource))
-			.WithMessage($"Resource must be exactly of type {typeof(TResource).Name}, not a subclass");
+			.WithMessage("Authorizable object cannot be null")
+			.Must(obj => obj.GetType() == typeof(TAuthorizableObject))
+			.WithMessage($"Authorizable object must be exactly of type {typeof(TAuthorizableObject).Name}, not a subclass");
 	}
 
 	/// <summary>
@@ -86,23 +86,41 @@ public abstract class AuthorizerBase<TResource>
 	}
 
 	/// <summary>
-	/// Conditionally registers rules when the operation declares the specified
-	/// <paramref name="permission"/> via <see cref="RequiresPermissionAttribute"/>. Use this to
-	/// write permission-aware rules without scattering <c>ctx.Permissions.Contains</c>
-	/// checks across each rule's <c>When</c>-clause.
+	/// Registers nested rules under a gate that applies them only when the operation
+	/// declares the specified <paramref name="permission"/> via
+	/// <see cref="RequiresPermissionAttribute"/>.
 	/// </summary>
-	/// <param name="permission">The required permission that gates the nested rules.</param>
-	/// <param name="configure">The action that registers rules applicable when the gate is met.</param>
+	/// <param name="permission">The permission whose presence enables the nested rules.</param>
+	/// <param name="configure">The action that defines the nested rules.</param>
 	/// <example>
 	/// <code>
-	/// this.WhenRequires(IssuePermissions.Delete, () =>
+	/// this.WhenPermissions(IssuePermissions.Delete, () =>
 	///     this.HasAnyRole(Roles.IssueManager, Roles.IssueEscalator));
 	/// </code>
 	/// </example>
-	protected void WhenRequires(Permission permission, Action configure) {
+	protected void WhenPermissions(Permission permission, Action configure) {
 		ArgumentNullException.ThrowIfNull(permission);
 		ArgumentNullException.ThrowIfNull(configure);
 		this.When(ctx => ctx.Permissions.Contains(permission), configure);
+	}
+
+	/// <summary>
+	/// Registers nested rules under a gate that applies them only when the operation
+	/// does not declare the specified <paramref name="permission"/> via
+	/// <see cref="RequiresPermissionAttribute"/>.
+	/// </summary>
+	/// <param name="permission">The permission whose absence enables the nested rules.</param>
+	/// <param name="configure">The action that defines the nested rules.</param>
+	/// <example>
+	/// <code>
+	/// this.UnlessPermissions(IssuePermissions.Delete, () =>
+	///     this.HasRole(Roles.ReadOnlyUser));
+	/// </code>
+	/// </example>
+	protected void UnlessPermissions(Permission permission, Action configure) {
+		ArgumentNullException.ThrowIfNull(permission);
+		ArgumentNullException.ThrowIfNull(configure);
+		this.When(ctx => !ctx.Permissions.Contains(permission), configure);
 	}
 
 }

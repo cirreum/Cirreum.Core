@@ -34,10 +34,10 @@ public interface IOperationGrantProvider {
 	/// (Stage 2). This method is a pure data lookup against the grants table.
 	/// </para>
 	/// </remarks>
-	ValueTask<OperationGrantResult> ResolveGrantsAsync<TResource>(
-		AuthorizationContext<TResource> context,
+	ValueTask<OperationGrantResult> ResolveGrantsAsync<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
 		CancellationToken cancellationToken)
-		where TResource : IAuthorizableObject;
+		where TAuthorizableObject : IAuthorizableObject;
 
 	/// <summary>
 	/// Optional wildcard bypass: when <see langword="true"/>, the orchestrator short-circuits
@@ -48,10 +48,10 @@ public interface IOperationGrantProvider {
 	/// Default: <see langword="false"/>. Override only for wildcard-admin roles. Do not build
 	/// per-permission role logic here — that belongs in resource authorizers.
 	/// </remarks>
-	ValueTask<bool> ShouldBypassAsync<TResource>(
-		AuthorizationContext<TResource> context,
+	ValueTask<bool> ShouldBypassAsync<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
 		CancellationToken cancellationToken)
-		where TResource : IAuthorizableObject
+		where TAuthorizableObject : IAuthorizableObject
 		=> new(false);
 
 	/// <summary>
@@ -60,9 +60,9 @@ public interface IOperationGrantProvider {
 	/// grant-derived owner set. Return <see langword="null"/> to skip the home-owner merge
 	/// (e.g., for suspended users, revoked memberships, or strict grants-only policy).
 	/// </summary>
-	ValueTask<string?> ResolveHomeOwnerAsync<TResource>(
-		AuthorizationContext<TResource> context,
+	ValueTask<string?> ResolveHomeOwnerAsync<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
 		CancellationToken cancellationToken)
-		where TResource : IAuthorizableObject
+		where TAuthorizableObject : IAuthorizableObject
 		=> new((context.UserState.ApplicationUser as IOwnedApplicationUser)?.OwnerId);
 }
