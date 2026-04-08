@@ -35,6 +35,11 @@ public sealed class PermissionSet : IReadOnlyList<Permission> {
 	/// <inheritdoc />
 	public int Count => this._items.Length;
 
+	/// <summary>
+	/// Returns <see langword="true"/> when the set contains no permissions.
+	/// </summary>
+	public bool IsEmpty => this._items.Length == 0;
+
 	/// <inheritdoc />
 	public Permission this[int index] => this._items[index];
 
@@ -68,6 +73,32 @@ public sealed class PermissionSet : IReadOnlyList<Permission> {
 	/// </exception>
 	public bool Contains(string featureAndOperation) =>
 		this.Contains(Permission.Parse(featureAndOperation));
+
+	/// <summary>
+	/// Returns <see langword="true"/> if the set contains any of the specified permissions.
+	/// </summary>
+	/// <param name="permissions">The permissions to check for.</param>
+	public bool ContainsAny(params Permission[] permissions) {
+		for (var i = 0; i < permissions.Length; i++) {
+			if (this.Contains(permissions[i])) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/// <summary>
+	/// Returns <see langword="true"/> if the set contains all of the specified permissions.
+	/// </summary>
+	/// <param name="permissions">The permissions to check for.</param>
+	public bool ContainsAll(params Permission[] permissions) {
+		for (var i = 0; i < permissions.Length; i++) {
+			if (!this.Contains(permissions[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
 
 	/// <summary>
 	/// Returns <see langword="true"/> if any permission in the set belongs to the

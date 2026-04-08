@@ -103,9 +103,7 @@ public sealed record Permission : IComparable<Permission> {
 		string.Equals(this.Operation, other.Operation, StringComparison.OrdinalIgnoreCase);
 
 	public override int GetHashCode() =>
-		HashCode.Combine(
-			this.Feature.ToLowerInvariant(),
-			this.Operation.ToLowerInvariant());
+		HashCode.Combine(this.Feature, this.Operation);
 }
 
 /// <summary>
