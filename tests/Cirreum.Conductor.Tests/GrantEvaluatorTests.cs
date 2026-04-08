@@ -18,7 +18,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Non_granted_resource_passes_through() {
-		var evaluator = BuildEvaluator(AccessReach.Denied);
+		var evaluator = BuildEvaluator(AccessGrant.Denied);
 		var ctx = BuildContext(
 			resource: new NonOwnedResource(),
 			accessScope: AccessScope.None,
@@ -34,7 +34,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Loaded_disabled_user_denies_with_UserDisabled() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			resource: new GrantedCommand(),
 			accessScope: AccessScope.Tenant,
@@ -47,7 +47,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Loaded_non_owned_app_user_denies_with_UserDisabled() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			resource: new GrantedCommand(),
 			accessScope: AccessScope.Tenant,
@@ -58,27 +58,12 @@ public class GrantEvaluatorTests {
 		AssertDeniedWith(result, DenyCodes.UserDisabled);
 	}
 
-	[TestMethod]
-	public async Task Unloaded_app_user_passes_enabled_check_but_no_resolver_denies() {
-		// Unloaded user → enabled check passes (progressive enrichment),
-		// but no resolver registered → ScopeNotPermitted.
-		var evaluator = BuildEvaluator(reach: null, registerResolver: false);
-		var ctx = BuildContext(
-			resource: new GrantedCommand(),
-			accessScope: AccessScope.Tenant,
-			appUser: null);
-
-		var result = await evaluator.EvaluateAsync(ctx);
-
-		AssertDeniedWith(result, DenyCodes.ScopeNotPermitted);
-	}
-
-	// ReachDenied
+	// GrantDenied
 	// -------------------------------------------------------------
 
 	[TestMethod]
-	public async Task Denied_reach_denies_with_ReachDenied() {
-		var evaluator = BuildEvaluator(AccessReach.Denied);
+	public async Task Denied_grant_denies_with_GrantDenied() {
+		var evaluator = BuildEvaluator(AccessGrant.Denied);
 		var ctx = BuildContext(
 			resource: new GrantedCommand { OwnerId = CallerTenantId },
 			accessScope: AccessScope.Tenant,
@@ -86,15 +71,15 @@ public class GrantEvaluatorTests {
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
-		AssertDeniedWith(result, DenyCodes.ReachDenied);
+		AssertDeniedWith(result, DenyCodes.GrantDenied);
 	}
 
 	// Command — OwnerId enforcement
 	// -------------------------------------------------------------
 
 	[TestMethod]
-	public async Task Command_with_OwnerId_in_reach_passes() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+	public async Task Command_with_OwnerId_in_grant_passes() {
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			resource: new GrantedCommand { OwnerId = CallerTenantId },
 			accessScope: AccessScope.Tenant,
@@ -106,8 +91,8 @@ public class GrantEvaluatorTests {
 	}
 
 	[TestMethod]
-	public async Task Command_with_OwnerId_not_in_reach_denies_with_OwnerNotInReach() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+	public async Task Command_with_OwnerId_not_in_grant_denies_with_OwnerNotInReach() {
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			resource: new GrantedCommand { OwnerId = OtherTenantId },
 			accessScope: AccessScope.Tenant,
@@ -120,7 +105,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Global_command_without_OwnerId_denies_with_OwnerIdRequired() {
-		var evaluator = BuildEvaluator(AccessReach.Unrestricted);
+		var evaluator = BuildEvaluator(AccessGrant.Unrestricted);
 		var ctx = BuildContext(
 			resource: new GrantedCommand { OwnerId = null },
 			accessScope: AccessScope.Global,
@@ -132,8 +117,8 @@ public class GrantEvaluatorTests {
 	}
 
 	[TestMethod]
-	public async Task Command_enriches_OwnerId_from_single_element_reach() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+	public async Task Command_enriches_OwnerId_from_single_element_grant() {
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var resource = new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
 			resource: resource,
@@ -147,8 +132,8 @@ public class GrantEvaluatorTests {
 	}
 
 	[TestMethod]
-	public async Task Command_without_OwnerId_and_multi_element_reach_denies_with_OwnerAmbiguous() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId, OtherTenantId]));
+	public async Task Command_without_OwnerId_and_multi_element_grant_denies_with_OwnerAmbiguous() {
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId, OtherTenantId]));
 		var resource = new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
 			resource: resource,
@@ -161,8 +146,8 @@ public class GrantEvaluatorTests {
 	}
 
 	[TestMethod]
-	public async Task Command_with_unrestricted_reach_and_no_OwnerId_denies_with_OwnerIdRequired() {
-		var evaluator = BuildEvaluator(AccessReach.Unrestricted);
+	public async Task Command_with_unrestricted_grant_and_no_OwnerId_denies_with_OwnerIdRequired() {
+		var evaluator = BuildEvaluator(AccessGrant.Unrestricted);
 		var resource = new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
 			resource: resource,
@@ -178,8 +163,8 @@ public class GrantEvaluatorTests {
 	// -------------------------------------------------------------
 
 	[TestMethod]
-	public async Task Read_with_OwnerId_in_reach_passes() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+	public async Task Read_with_OwnerId_in_grant_passes() {
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			resource: new GrantedRead { OwnerId = CallerTenantId },
 			accessScope: AccessScope.Tenant,
@@ -191,8 +176,8 @@ public class GrantEvaluatorTests {
 	}
 
 	[TestMethod]
-	public async Task Read_with_OwnerId_not_in_reach_denies() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+	public async Task Read_with_OwnerId_not_in_grant_denies() {
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			resource: new GrantedRead { OwnerId = OtherTenantId },
 			accessScope: AccessScope.Tenant,
@@ -205,7 +190,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Read_without_OwnerId_passes_deferred_Pattern_C() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			resource: new GrantedRead { OwnerId = null },
 			accessScope: AccessScope.Tenant,
@@ -218,7 +203,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Global_read_without_OwnerId_passes_deferred_Pattern_C() {
-		var evaluator = BuildEvaluator(AccessReach.Unrestricted);
+		var evaluator = BuildEvaluator(AccessGrant.Unrestricted);
 		var ctx = BuildContext(
 			resource: new GrantedRead { OwnerId = null },
 			accessScope: AccessScope.Global,
@@ -234,7 +219,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Global_cacheable_read_without_OwnerId_denies_with_CacheableReadOwnerIdRequired() {
-		var evaluator = BuildEvaluator(AccessReach.Unrestricted);
+		var evaluator = BuildEvaluator(AccessGrant.Unrestricted);
 		var ctx = BuildContext(
 			resource: new GrantedCacheableRead { OwnerId = null },
 			accessScope: AccessScope.Global,
@@ -247,7 +232,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Global_cacheable_read_with_OwnerId_passes_and_stamps_Global_scope() {
-		var evaluator = BuildEvaluator(AccessReach.Unrestricted);
+		var evaluator = BuildEvaluator(AccessGrant.Unrestricted);
 		var resource = new GrantedCacheableRead { OwnerId = OtherTenantId };
 		var ctx = BuildContext(
 			resource: resource,
@@ -262,7 +247,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Tenant_cacheable_read_passes_and_stamps_Tenant_scope() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var resource = new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
 			resource: resource,
@@ -277,7 +262,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Tenant_cacheable_read_defers_null_OwnerId_and_stamps_scope() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var resource = new GrantedCacheableRead { OwnerId = null };
 		var ctx = BuildContext(
 			resource: resource,
@@ -292,7 +277,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task CallerAccessScope_is_not_stamped_on_denied_evaluation() {
-		var evaluator = BuildEvaluator(AccessReach.Unrestricted);
+		var evaluator = BuildEvaluator(AccessGrant.Unrestricted);
 		var resource = new GrantedCacheableRead { OwnerId = null };
 		var ctx = BuildContext(
 			resource: resource,
@@ -307,7 +292,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Same_OwnerId_under_Global_vs_Tenant_produces_distinct_CacheKeys() {
-		var evaluator = BuildEvaluator(AccessReach.Unrestricted);
+		var evaluator = BuildEvaluator(AccessGrant.Unrestricted);
 
 		var globalResource = new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var globalCtx = BuildContext(
@@ -316,7 +301,7 @@ public class GrantEvaluatorTests {
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 		var globalResult = await evaluator.EvaluateAsync(globalCtx);
 
-		var tenantEvaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+		var tenantEvaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var tenantResource = new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var tenantCtx = BuildContext(
 			resource: tenantResource,
@@ -334,7 +319,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Composed_CacheKey_contains_owner_scope_and_scoped_key() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var resource = new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
 			resource: resource,
@@ -352,7 +337,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task CacheTags_includes_automatic_tenant_tag_and_preserves_extras() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var resource = new GrantedCacheableRead {
 			OwnerId = CallerTenantId,
 			ExtraTags = ["dashboard", "section:sales"]
@@ -374,7 +359,7 @@ public class GrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task CacheTags_returns_only_tenant_tag_when_no_extras_supplied() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var resource = new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
 			resource: resource,
@@ -394,8 +379,8 @@ public class GrantEvaluatorTests {
 	// -------------------------------------------------------------
 
 	[TestMethod]
-	public async Task List_with_null_OwnerIds_stamps_from_reach() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId, OtherTenantId]));
+	public async Task List_with_null_OwnerIds_stamps_from_grant() {
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId, OtherTenantId]));
 		var resource = new GrantedList { OwnerIds = null };
 		var ctx = BuildContext(
 			resource: resource,
@@ -410,8 +395,8 @@ public class GrantEvaluatorTests {
 	}
 
 	[TestMethod]
-	public async Task List_with_null_OwnerIds_and_unrestricted_reach_stamps_null() {
-		var evaluator = BuildEvaluator(AccessReach.Unrestricted);
+	public async Task List_with_null_OwnerIds_and_unrestricted_grant_stamps_null() {
+		var evaluator = BuildEvaluator(AccessGrant.Unrestricted);
 		var resource = new GrantedList { OwnerIds = null };
 		var ctx = BuildContext(
 			resource: resource,
@@ -425,8 +410,8 @@ public class GrantEvaluatorTests {
 	}
 
 	[TestMethod]
-	public async Task List_with_OwnerIds_subset_of_reach_passes() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId, OtherTenantId]));
+	public async Task List_with_OwnerIds_subset_of_grant_passes() {
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId, OtherTenantId]));
 		var resource = new GrantedList { OwnerIds = [CallerTenantId] };
 		var ctx = BuildContext(
 			resource: resource,
@@ -439,8 +424,8 @@ public class GrantEvaluatorTests {
 	}
 
 	[TestMethod]
-	public async Task List_with_OwnerIds_not_subset_of_reach_denies() {
-		var evaluator = BuildEvaluator(AccessReach.ForOwners([CallerTenantId]));
+	public async Task List_with_OwnerIds_not_subset_of_grant_denies() {
+		var evaluator = BuildEvaluator(AccessGrant.ForOwners([CallerTenantId]));
 		var resource = new GrantedList { OwnerIds = [CallerTenantId, OtherTenantId] };
 		var ctx = BuildContext(
 			resource: resource,
@@ -452,40 +437,14 @@ public class GrantEvaluatorTests {
 		AssertDeniedWith(result, DenyCodes.OwnerNotInReach);
 	}
 
-	// No resolver registered — misconfiguration
-	// -------------------------------------------------------------
-
-	[TestMethod]
-	public async Task Granted_resource_without_resolver_denies_with_ScopeNotPermitted() {
-		var evaluator = BuildEvaluator(reach: null, registerResolver: false);
-		var ctx = BuildContext(
-			resource: new GrantedCommand { OwnerId = CallerTenantId },
-			accessScope: AccessScope.Tenant,
-			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
-
-		var result = await evaluator.EvaluateAsync(ctx);
-
-		AssertDeniedWith(result, DenyCodes.ScopeNotPermitted);
-	}
-
 	// Helpers
 	// -------------------------------------------------------------
 
-	private static GrantEvaluator BuildEvaluator(
-		AccessReach? reach,
-		bool registerResolver = true) {
-
-		IAccessReachResolver[] resolvers = registerResolver && reach is not null
-			? [new StubAccessReachResolver(reach)]
-			: [];
-
-		var selector = new AccessReachResolverSelector(resolvers);
-		var accessor = new DefaultAccessReachAccessor();
-		return new GrantEvaluator(selector, accessor);
+	private static GrantEvaluator BuildEvaluator(AccessGrant grant) {
+		var factory = new StubAccessGrantFactory(grant);
+		var accessor = new DefaultAccessGrantAccessor();
+		return new GrantEvaluator(factory, accessor);
 	}
-
-	private static GrantEvaluator BuildEvaluator(AccessReach reach) =>
-		BuildEvaluator(reach, registerResolver: true);
 
 	private static AuthorizationContext<TResource> BuildContext<TResource>(
 		TResource resource,
@@ -554,14 +513,13 @@ public class GrantEvaluatorTests {
 		}
 	}
 
-	private sealed class StubAccessReachResolver(AccessReach reach) : IAccessReachResolver {
-		public bool Handles(Type resourceType) => true;
+	private sealed class StubAccessGrantFactory(AccessGrant grant) : IAccessGrantFactory {
 
-		public ValueTask<AccessReach> ResolveAsync<TResource>(
+		public ValueTask<AccessGrant> CreateAsync<TResource>(
 			AuthorizationContext<TResource> context,
 			CancellationToken cancellationToken)
 			where TResource : IAuthorizableResource {
-			return ValueTask.FromResult(reach);
+			return ValueTask.FromResult(grant);
 		}
 	}
 

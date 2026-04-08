@@ -1,14 +1,14 @@
 namespace Cirreum.Authorization.Grants;
 
 /// <summary>
-/// Base detection interface for self-scoped resources. Carries the resource <c>Id</c>
+/// Base detection interface for self-scoped authorization targets. Carries the resource <c>Id</c>
 /// from which the grant evaluator extracts the <see cref="ExternalId"/> to compare
 /// against the calling user's identity.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Unlike owner-scoped kinds (Mutate/Lookup/Search) that resolve tenant-level
-/// <see cref="AccessReach"/>, Self-scoped requests perform a direct identity match:
+/// <see cref="AccessGrant"/>, Self-scoped requests perform a direct identity match:
 /// <c>ExternalId == context.UserId</c>. No reach resolution is needed for the
 /// happy path (owner accessing their own resource).
 /// </para>
@@ -24,10 +24,9 @@ namespace Cirreum.Authorization.Grants;
 /// format of untrusted input before the evaluator attempts the identity match.
 /// </para>
 /// <para>
-/// <b>Mutate enrichment.</b> For <see cref="IGrantableMutateSelfBase"/> requests where
-/// <see cref="Id"/> is null, the evaluator auto-enriches it from the calling user's identity
-/// (<c>context.UserId</c>), allowing "update my profile" scenarios without requiring the
-/// caller to supply their own ID.
+/// <b>Auto-enrichment.</b> When <see cref="Id"/> is null, the evaluator auto-enriches it
+/// from the calling user's identity (<c>context.UserId</c>), allowing "get my profile" or
+/// "update my profile" scenarios without requiring the caller to supply their own ID.
 /// </para>
 /// </remarks>
 public interface IGrantableSelfBase {
@@ -55,9 +54,3 @@ public interface IGrantableSelfBase {
 	bool IsValidId => this.Id is not null;
 }
 
-/// <summary>
-/// Marker interface for self-scoped mutations. Extends <see cref="IGrantableSelfBase"/>
-/// to signal the evaluator that auto-enrichment is allowed: when <c>Id</c> is null,
-/// the evaluator stamps it from <c>context.UserId</c>.
-/// </summary>
-public interface IGrantableMutateSelfBase : IGrantableSelfBase;

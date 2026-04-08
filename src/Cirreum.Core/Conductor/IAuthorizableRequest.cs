@@ -6,7 +6,7 @@ namespace Cirreum.Conductor;
 /// <remarks>
 /// Implements <see cref="IAuthorizableRequestBase"/> for authorization pipeline participation
 /// and <see cref="IRequest"/> for conductor routing.
-/// For grant-aware (ReBAC) operations, use the grant interfaces:
+/// For grant-aware (grant-based) operations, use the grant interfaces:
 /// <see cref="Authorization.Grants.IGrantMutateRequest"/>,
 /// <see cref="Authorization.Grants.IGrantLookupRequest{TResponse}"/>,
 /// <see cref="Authorization.Grants.IGrantSearchRequest{TResponse}"/>,
@@ -22,7 +22,7 @@ public interface IAuthorizableRequest : IAuthorizableRequestBase, IRequest;
 /// <remarks>
 /// Implements <see cref="IAuthorizableRequestBase"/> for authorization pipeline participation
 /// and <see cref="IRequest{TResponse}"/> for conductor routing.
-/// For grant-aware (ReBAC) operations, use the grant interfaces:
+/// For grant-aware (grant-based) operations, use the grant interfaces:
 /// <see cref="Authorization.Grants.IGrantMutateRequest{TResponse}"/>,
 /// <see cref="Authorization.Grants.IGrantLookupRequest{TResponse}"/>,
 /// <see cref="Authorization.Grants.IGrantSearchRequest{TResponse}"/>,

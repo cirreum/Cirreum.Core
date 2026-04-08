@@ -10,7 +10,7 @@ public interface IGrantableLookupBase {
 	/// <summary>
 	/// The identifier of the owner (tenant/company). When non-null, enforced
 	/// <c>OwnerId ∈ reach</c> before the handler. When null, reach is stashed on
-	/// <see cref="IAccessReachAccessor"/> and the handler checks the fetched entity's
+	/// <see cref="IAccessGrantAccessor"/> and the handler checks the fetched entity's
 	/// owner post-fetch.
 	/// </summary>
 	string? OwnerId { get; set; }

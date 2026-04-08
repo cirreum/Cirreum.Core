@@ -82,27 +82,27 @@ public static class AuthorizationTelemetry {
 	/// <summary>Tag: resource CLR type name.</summary>
 	public const string ResourceTypeTag = "cirreum.authz.resource_type";
 
-	// Reach cache level values ————————————————————————————————
+	// Grant cache level values ————————————————————————————————
 
-	/// <summary>Reach resolved via admin bypass (always live, never cached).</summary>
-	public const string ReachLevelBypass = "bypass";
+	/// <summary>Grant resolved via admin bypass (always live, never cached).</summary>
+	public const string GrantLevelBypass = "bypass";
 
-	/// <summary>Reach resolved from L1 scoped in-memory cache (per-request dedup).</summary>
-	public const string ReachLevelL1Hit = "l1-hit";
+	/// <summary>Grant resolved from L1 scoped in-memory cache (per-request dedup).</summary>
+	public const string GrantLevelL1Hit = "l1-hit";
 
-	/// <summary>Reach resolved via L2 cross-request cache (may be hot or cold).</summary>
-	public const string ReachLevelL2 = "l2";
+	/// <summary>Grant resolved via L2 cross-request cache (may be hot or cold).</summary>
+	public const string GrantLevelL2 = "l2";
 
-	/// <summary>Reach denied early (unauthenticated or no permissions).</summary>
-	public const string ReachLevelDeniedEarly = "denied-early";
+	/// <summary>Grant denied early (unauthenticated or no permissions).</summary>
+	public const string GrantLevelDeniedEarly = "denied-early";
 
-	// Reach tag names ————————————————————————————————————————
+	// Grant tag names ————————————————————————————————————————
 
-	/// <summary>Tag: reach cache level (bypass / l1-hit / l2 / denied-early).</summary>
-	public const string ReachCacheLevelTag = "cirreum.authz.reach.cache_level";
+	/// <summary>Tag: grant cache level (bypass / l1-hit / l2 / denied-early).</summary>
+	public const string GrantCacheLevelTag = "cirreum.authz.grant.cache_level";
 
-	/// <summary>Tag: domain feature for reach resolution.</summary>
-	public const string ReachDomainTag = "cirreum.authz.reach.domain";
+	/// <summary>Tag: domain feature for grant resolution.</summary>
+	public const string GrantDomainTag = "cirreum.authz.grant.domain";
 
 	// Metrics ——————————————————————————————————————————————————
 
@@ -112,11 +112,11 @@ public static class AuthorizationTelemetry {
 	/// <summary>Metric: authorization pipeline duration in milliseconds.</summary>
 	public const string DurationMetric = "cirreum.authz.duration";
 
-	/// <summary>Metric: reach resolution duration in milliseconds (L2/cold path only).</summary>
-	public const string ReachDurationMetric = "cirreum.authz.reach.duration";
+	/// <summary>Metric: grant resolution duration in milliseconds (L2/cold path only).</summary>
+	public const string GrantDurationMetric = "cirreum.authz.grant.duration";
 
-	/// <summary>Metric: reach resolution cache hit/miss counter.</summary>
-	public const string ReachCacheMetric = "cirreum.authz.reach.cache";
+	/// <summary>Metric: grant resolution cache hit/miss counter.</summary>
+	public const string GrantCacheMetric = "cirreum.authz.grant.cache";
 
 	// ActivitySource / Meter ————————————————————————————————
 
@@ -135,14 +135,14 @@ public static class AuthorizationTelemetry {
 		unit: "ms",
 		description: "Authorization pipeline processing duration in milliseconds");
 
-	private static readonly Histogram<double> _reachDurationHistogram = _meter.CreateHistogram<double>(
-		ReachDurationMetric,
+	private static readonly Histogram<double> _grantDurationHistogram = _meter.CreateHistogram<double>(
+		GrantDurationMetric,
 		unit: "ms",
-		description: "Reach resolution duration in milliseconds (L2/cold path)");
+		description: "Grant resolution duration in milliseconds (L2/cold path)");
 
-	private static readonly Counter<long> _reachCacheCounter = _meter.CreateCounter<long>(
-		ReachCacheMetric,
-		description: "Reach resolution cache hit/miss counter");
+	private static readonly Counter<long> _grantCacheCounter = _meter.CreateCounter<long>(
+		GrantCacheMetric,
+		description: "Grant resolution cache hit/miss counter");
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal static bool HasListeners() => ActivitySource.HasListeners();
@@ -197,33 +197,33 @@ public static class AuthorizationTelemetry {
 		_durationHistogram.Record(durationMs, tags);
 	}
 
-	// Reach Resolution ——————————————————————————————————
+	// Grant Resolution ——————————————————————————————————
 
 	/// <summary>
-	/// Records a reach resolution event (cache hit/miss/bypass) with optional duration
+	/// Records a grant resolution event (cache hit/miss/bypass) with optional duration
 	/// for L2/cold-path resolutions.
 	/// </summary>
-	internal static void RecordReachResolution(
+	internal static void RecordGrantResolution(
 		string? domain,
 		string? resourceType,
 		string cacheLevel,
 		double? durationMs = null) {
 
 		var tags = new TagList {
-			{ ReachCacheLevelTag, cacheLevel }
+			{ GrantCacheLevelTag, cacheLevel }
 		};
 
 		if (domain is not null) {
-			tags.Add(ReachDomainTag, domain);
+			tags.Add(GrantDomainTag, domain);
 		}
 		if (resourceType is not null) {
 			tags.Add(ResourceTypeTag, resourceType);
 		}
 
-		_reachCacheCounter.Add(1, tags);
+		_grantCacheCounter.Add(1, tags);
 
 		if (durationMs.HasValue) {
-			_reachDurationHistogram.Record(durationMs.Value, tags);
+			_grantDurationHistogram.Record(durationMs.Value, tags);
 		}
 	}
 

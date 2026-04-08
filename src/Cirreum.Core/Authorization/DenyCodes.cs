@@ -43,11 +43,11 @@ public static class DenyCodes {
 	public const string OwnerNotInReach = "OWNER_NOT_IN_REACH";
 
 	/// <summary>
-	/// The caller's reach is empty for this operation (no grants, no home owner).
+	/// The caller's granted access is empty for this operation (no grants, no home owner).
 	/// Emitted when a command or list cannot be stamped/enriched because the caller has
-	/// nothing to reach.
+	/// no granted access.
 	/// </summary>
-	public const string ReachDenied = "REACH_DENIED";
+	public const string GrantDenied = "GRANT_DENIED";
 
 	/// <summary>
 	/// The caller's reach is ambiguous for enrichment: more than one owner is reachable

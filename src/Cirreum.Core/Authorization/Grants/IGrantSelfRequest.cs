@@ -7,7 +7,7 @@ using Cirreum.Conductor;
 /// operations on the caller's own resources.
 /// </summary>
 public interface IGrantMutateSelfRequest
-	: IAuthorizableRequest, IGrantableMutateSelfBase;
+	: IAuthorizableRequest, IGrantableSelfBase;
 
 /// <summary>
 /// Self-scoped mutation with a response. Developers implement this for
@@ -15,7 +15,7 @@ public interface IGrantMutateSelfRequest
 /// </summary>
 /// <typeparam name="TResponse">The type of response returned by the mutation.</typeparam>
 public interface IGrantMutateSelfRequest<out TResponse>
-	: IAuthorizableRequest<TResponse>, IGrantableMutateSelfBase;
+	: IAuthorizableRequest<TResponse>, IGrantableSelfBase;
 
 /// <summary>
 /// Self-scoped lookup with a response. Developers implement this for

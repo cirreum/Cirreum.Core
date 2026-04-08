@@ -12,7 +12,7 @@ using Cirreum.Authorization;
 /// Normally you would not implement this interface directly. Implement one of the
 /// request marker interfaces instead:
 /// <see cref="IAuthorizableRequest"/> or <see cref="IAuthorizableRequest{TResponse}"/>.
-/// For grant-aware (ReBAC) operations, use the grant interfaces:
+/// For grant-aware (grant-based) operations, use the grant interfaces:
 /// <see cref="Authorization.Grants.IGrantMutateRequest"/>,
 /// <see cref="Authorization.Grants.IGrantLookupRequest{TResponse}"/>,
 /// <see cref="Authorization.Grants.IGrantSearchRequest{TResponse}"/>,

@@ -9,13 +9,13 @@ namespace Cirreum.Authorization.Grants;
 /// <para>
 /// This is the only Grants interface the app writes code against. It has one required
 /// method (<see cref="ResolveGrantsAsync"/>) and two optional hooks (<see cref="ShouldBypassAsync"/>,
-/// <see cref="ResolveHomeOwnerAsync"/>). The app does not touch <see cref="AccessReach"/> —
-/// Core's <c>GrantBasedAccessReachResolver</c> orchestrator does all
+/// <see cref="ResolveHomeOwnerAsync"/>). The app does not touch <see cref="AccessGrant"/> —
+/// Core's <c>AccessGrantFactory</c> orchestrator does all
 /// translation policy (denied/unrestricted semantics, home-owner merge, empty-set collapse).
 /// </para>
 /// <para>
 /// Register with <c>services.AddAccessGrants&lt;TResolver&gt;()</c>. Core wires
-/// up the orchestrator and binds it to <see cref="IAccessReachResolver"/> automatically.
+/// up the orchestrator and binds it to <see cref="IAccessGrantFactory"/> automatically.
 /// </para>
 /// </remarks>
 public interface IGrantResolver {
@@ -27,21 +27,21 @@ public interface IGrantResolver {
 	/// <remarks>
 	/// <para>
 	/// An empty owner list means the caller has no qualifying grants. The orchestrator
-	/// translates an empty combined set (grants + home owner) to <see cref="AccessReach.Denied"/>.
+	/// translates an empty combined set (grants + home owner) to <see cref="AccessGrant.Denied"/>.
 	/// </para>
 	/// <para>
 	/// Do not encode role-to-permission rules here — those belong in resource authorizers
 	/// (Stage 2). This method is a pure data lookup against the grants table.
 	/// </para>
 	/// </remarks>
-	ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
+	ValueTask<GrantResult> ResolveGrantsAsync<TResource>(
 		AuthorizationContext<TResource> context,
 		CancellationToken cancellationToken)
 		where TResource : IAuthorizableResource;
 
 	/// <summary>
 	/// Optional wildcard bypass: when <see langword="true"/>, the orchestrator short-circuits
-	/// to <see cref="AccessReach.Unrestricted"/> without calling <see cref="ResolveGrantsAsync"/>.
+	/// to <see cref="AccessGrant.Unrestricted"/> without calling <see cref="ResolveGrantsAsync"/>.
 	/// Intended for a single bounded-context-wide admin role (e.g., <c>IssueManager</c>).
 	/// </summary>
 	/// <remarks>

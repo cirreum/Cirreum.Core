@@ -19,7 +19,7 @@ public sealed class GrantCacheInvalidator(ICacheService cacheService)
 		CancellationToken cancellationToken = default) {
 
 		ArgumentException.ThrowIfNullOrWhiteSpace(callerId);
-		var tag = ReachCacheKeys.CallerTag(callerId);
+		var tag = GrantCacheKeys.CallerTag(callerId);
 		return this._cacheService.RemoveByTagAsync(tag, cancellationToken);
 	}
 
@@ -29,7 +29,7 @@ public sealed class GrantCacheInvalidator(ICacheService cacheService)
 		CancellationToken cancellationToken = default) {
 
 		ArgumentException.ThrowIfNullOrWhiteSpace(domainFeature);
-		var tag = ReachCacheKeys.DomainTag(domainFeature);
+		var tag = GrantCacheKeys.DomainTag(domainFeature);
 		return this._cacheService.RemoveByTagAsync(tag, cancellationToken);
 	}
 }

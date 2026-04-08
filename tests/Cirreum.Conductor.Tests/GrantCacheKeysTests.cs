@@ -4,7 +4,7 @@ using Cirreum.Authorization;
 using Cirreum.Authorization.Grants.Caching;
 
 [TestClass]
-public class ReachCacheKeysTests {
+public class GrantCacheKeysTests {
 
 	// PermissionSet.ToSignature
 	// -------------------------------------------------------------
@@ -53,9 +53,9 @@ public class ReachCacheKeysTests {
 	public void BuildKey_produces_expected_format() {
 		var set = new PermissionSet([new Permission("issues", "delete")]);
 
-		var key = ReachCacheKeys.BuildKey(1, "user-123", "issues", set);
+		var key = GrantCacheKeys.BuildKey(1, "user-123", "issues", set);
 
-		Assert.AreEqual("reach:v1:user-123:issues:delete", key);
+		Assert.AreEqual("grant:v1:user-123:issues:delete", key);
 	}
 
 	[TestMethod]
@@ -65,17 +65,17 @@ public class ReachCacheKeysTests {
 			new Permission("issues", "delete"),
 		]);
 
-		var key = ReachCacheKeys.BuildKey(2, "user-456", "issues", set);
+		var key = GrantCacheKeys.BuildKey(2, "user-456", "issues", set);
 
-		Assert.AreEqual("reach:v2:user-456:issues:delete+write", key);
+		Assert.AreEqual("grant:v2:user-456:issues:delete+write", key);
 	}
 
 	[TestMethod]
 	public void Version_bump_changes_key() {
 		var set = new PermissionSet([new Permission("issues", "read")]);
 
-		var v1 = ReachCacheKeys.BuildKey(1, "u1", "issues", set);
-		var v2 = ReachCacheKeys.BuildKey(2, "u1", "issues", set);
+		var v1 = GrantCacheKeys.BuildKey(1, "u1", "issues", set);
+		var v2 = GrantCacheKeys.BuildKey(2, "u1", "issues", set);
 
 		Assert.AreNotEqual(v1, v2);
 	}
@@ -85,20 +85,20 @@ public class ReachCacheKeysTests {
 
 	[TestMethod]
 	public void BuildTags_returns_caller_and_domain_tags() {
-		var tags = ReachCacheKeys.BuildTags("user-123", "issues");
+		var tags = GrantCacheKeys.BuildTags("user-123", "issues");
 
 		Assert.HasCount(2, tags);
-		Assert.AreEqual("reach:caller:user-123", tags[0]);
-		Assert.AreEqual("reach:domain:issues", tags[1]);
+		Assert.AreEqual("grant:caller:user-123", tags[0]);
+		Assert.AreEqual("grant:domain:issues", tags[1]);
 	}
 
 	[TestMethod]
 	public void CallerTag_format() {
-		Assert.AreEqual("reach:caller:abc", ReachCacheKeys.CallerTag("abc"));
+		Assert.AreEqual("grant:caller:abc", GrantCacheKeys.CallerTag("abc"));
 	}
 
 	[TestMethod]
 	public void DomainTag_format() {
-		Assert.AreEqual("reach:domain:issues", ReachCacheKeys.DomainTag("issues"));
+		Assert.AreEqual("grant:domain:issues", GrantCacheKeys.DomainTag("issues"));
 	}
 }

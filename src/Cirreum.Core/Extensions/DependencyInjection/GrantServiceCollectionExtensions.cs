@@ -9,14 +9,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 /// <summary>
-/// Extension methods for registering Cirreum access-grants (ReBAC) services.
+/// Extension methods for registering Cirreum grant-based access control services.
 /// </summary>
 public static class GrantServiceCollectionExtensions {
 
 	/// <summary>
-	/// Registers the access-grants (ReBAC) pipeline with a single universal grant resolver.
+	/// Registers the grant-based access control pipeline with a single universal grant resolver.
 	/// Registers the app-provided <see cref="IGrantResolver"/>, the Core-supplied
-	/// <see cref="GrantBasedAccessReachResolver"/> orchestrator, and the sealed
+	/// <see cref="AccessGrantFactory"/> orchestrator, and the sealed
 	/// <see cref="GrantEvaluator"/> that enforces Mutate/Lookup/Search/Self grant semantics
 	/// as Stage 1 Step 0 of the authorization pipeline.
 	/// </summary>
@@ -98,13 +98,12 @@ public static class GrantServiceCollectionExtensions {
 			lifetime: lifetime));
 
 		services.Add(ServiceDescriptor.Describe(
-			serviceType: typeof(IAccessReachResolver),
-			implementationType: typeof(GrantBasedAccessReachResolver),
+			serviceType: typeof(IAccessGrantFactory),
+			implementationType: typeof(AccessGrantFactory),
 			lifetime: lifetime));
 
 		// Shared infrastructure
-		services.TryAddScoped<IAccessReachAccessor, DefaultAccessReachAccessor>();
-		services.TryAddScoped<AccessReachResolverSelector>();
+		services.TryAddScoped<IAccessGrantAccessor, DefaultAccessGrantAccessor>();
 		services.TryAddScoped<GrantEvaluator>();
 		services.AddGrantCacheInfrastructure();
 

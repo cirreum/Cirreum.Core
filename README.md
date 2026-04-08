@@ -55,21 +55,21 @@ var authContext = new AuthorizationContext<TResource>(
 
 ### 🔐 Authorization Abstractions
 
-Flexible, policy-based authorization with support for RBAC, ABAC, and ReBAC patterns:
+Flexible, policy-based authorization with support for RBAC, ABAC, and grant-based access control patterns:
 
 - **RBAC** — roles with inheritance via `IAuthorizationRoleRegistry` and `EffectiveRoles`
 - **ABAC** — attribute checks over user, resource, and ambient context inside `ResourceAuthorizerBase<T>` FluentValidation rules
-- **ReBAC** — owner→resource and tenant→resource relationships enforced by `OwnerScopeEvaluatorBase` (Stage 1 Step 0) and custom `IScopeEvaluator` implementations (Stage 1 Step 1)
-- **Grants (ReBAC)** — opt-in grant-based access control answering *"which owners can this caller reach?"* via `IGrantResolver<TDomain>`, with L1/L2 reach caching and CRL (Command/Read/List) enforcement semantics
+- **Owner-scope** — owner→resource and tenant→resource relationships enforced by `OwnerScopeEvaluatorBase` (Stage 1 Step 0) and custom `IScopeEvaluator` implementations (Stage 1 Step 1)
+- **Grants** — opt-in grant-based access control answering *"which owners can this caller access?"* via `IGrantResolver`, with L1/L2 grant caching and Mutate/Lookup/Search/Self enforcement semantics
 
 - `IAuthorizationEvaluator` - Pluggable, three-stage authorization evaluator (Scope → Resource → Policy)
 - `IAuthorizableResource` - Resources that can be authorized
 - `ResourceAuthorizerBase<TResource>` - FluentValidation-backed resource authorizer (one per resource type)
 - `IScopeEvaluator` / `OwnerScopeEvaluatorBase` - Stage 1 scope gates (tenant, owner, access-scope)
-- `GrantEvaluator` / `IGrantResolver<TDomain>` - Stage 1 grant-aware scope gate with CRL enforcement
+- `GrantEvaluator` / `IGrantResolver` - Stage 1 grant-aware scope gate with Mutate/Lookup/Search/Self enforcement
 - `IPolicyValidator` - Stage 3 cross-cutting policy validators (hours, quotas, kill-switches)
 - `AccessScope` (None / Global / Tenant) - Coarse authorization dimension resolved by `IAccessScopeResolver`
-- `AccessReach` - Computed set of reachable owners per operation (Denied / Unrestricted / Bounded)
+- `AccessGrant` - Computed set of accessible owners per operation (Denied / Unrestricted / Bounded)
 - Role resolution with inheritance support via `IAuthorizationRoleRegistry`
 - Flexible AuthN/AuthZ with support for OIDC/MSAL/BYOID
 
@@ -157,10 +157,10 @@ Centralized telemetry with zero overhead when OpenTelemetry is not configured:
 
 **Telemetry Classes** (each owns an `ActivitySource` and/or `Meter`):
 - `RequestTelemetry` — Conductor dispatcher metrics (request counts, durations, failures/cancellations)
-- `AuthorizationTelemetry` — three-stage pipeline metrics (per-stage decision counters, pipeline duration histogram, reach resolution cache tracking)
+- `AuthorizationTelemetry` — three-stage pipeline metrics (per-stage decision counters, pipeline duration histogram, grant resolution cache tracking)
 - `CacheTelemetry` — cache hit/miss counters and operation duration histograms
 
-**Cache Instrumentation** — `InstrumentedCacheService` decorator wraps any `ICacheService` implementation transparently via DI. All consumers (`QueryCaching`, `GrantBasedAccessReachResolver`, future consumers) get hit/miss tracking and duration metrics for free. The decorator detects hits vs misses via a `factoryExecuted` flag — no `ICacheService` API changes needed. `NoCacheService` is never wrapped (zero overhead when caching is disabled).
+**Cache Instrumentation** — `InstrumentedCacheService` decorator wraps any `ICacheService` implementation transparently via DI. All consumers (`QueryCaching`, `AccessGrantFactory`, future consumers) get hit/miss tracking and duration metrics for free. The decorator detects hits vs misses via a `factoryExecuted` flag — no `ICacheService` API changes needed. `NoCacheService` is never wrapped (zero overhead when caching is disabled).
 
 **OTel Integration**:
 ```csharp
@@ -177,8 +177,8 @@ builder.Services.AddOpenTelemetry()
 | `conductor.requests.duration` | Histogram (ms) | request.type, request.status |
 | `cirreum.authz.decisions` | Counter | stage, step, decision, reason |
 | `cirreum.authz.duration` | Histogram (ms) | resource_type, decision |
-| `cirreum.authz.reach.cache` | Counter | cache_level (bypass/l1-hit/l2/denied-early) |
-| `cirreum.authz.reach.duration` | Histogram (ms) | domain, resource_type |
+| `cirreum.authz.grant.cache` | Counter | cache_level (bypass/l1-hit/l2/denied-early) |
+| `cirreum.authz.grant.duration` | Histogram (ms) | domain, resource_type |
 | `cirreum.cache.operations` | Counter | status (hit/miss) |
 | `cirreum.cache.duration` | Histogram (ms) | status (hit/miss) |
 
@@ -215,7 +215,7 @@ Foundational building blocks including:
 Definitions that support Cirreum's architectural patterns:
 
 - CQRS-style request and response contracts
-- RBAC / ABAC / ReBAC authorization with role inheritance and owner/tenant relationships
+- RBAC / ABAC / grant-based authorization with role inheritance and owner/tenant relationships
 - Interceptors, pipelines, and execution flows
 - Metadata propagation and scoped request details
 
@@ -229,10 +229,10 @@ Definitions that support Cirreum's architectural patterns:
 | `IAuthorizableOwnerScopedCommand` / `<T>` | ✓ | ✗ | ✓ | Protected mutations of owned resources |
 | `IAuthorizableOwnerScopedQuery<T>` | ✓ | ✗ | ✓ | Protected reads of owned resources |
 | `IAuthorizableOwnerScopedCacheableQuery<T>` | ✓ | ✓ | ✓ | Protected, cached reads of owned resources |
-| `IGrantedCommand<TDomain>` / `<TDomain, T>` | ✓ | ✗ | ✓ | Grant-aware writes (ReBAC) |
-| `IGrantedRead<TDomain, T>` | ✓ | ✗ | ✓ | Grant-aware point-reads (ReBAC) |
-| `IGrantedCacheableRead<TDomain, T>` | ✓ | ✓ | ✓ | Grant-aware cached reads (ReBAC) |
-| `IGrantedList<TDomain, T>` | ✓ | ✗ | ✓ | Grant-aware cross-owner queries (ReBAC) |
+| `IGrantMutateRequest` / `<TResponse>` | ✓ | ✗ | ✓ | Grant-aware writes |
+| `IGrantLookupRequest<TResponse>` | ✓ | ✗ | ✓ | Grant-aware point-reads |
+| `IGrantCacheableLookupRequest<TResponse>` | ✓ | ✓ | ✓ | Grant-aware cached reads |
+| `IGrantSearchRequest<TResponse>` | ✓ | ✗ | ✓ | Grant-aware cross-owner queries |
 
 ### 4. Utilities & Helpers
 
@@ -350,40 +350,36 @@ Cross-cutting runtime rules (hours, quotas, kill-switches) live in
 access-scope gates live in `IScopeEvaluator` / `OwnerScopeEvaluatorBase`
 implementations evaluated in Stage 1.
 
-### Grants (ReBAC)
+### Grants
 
-For multi-tenant applications requiring relationship-based access control,
-Grants answers *"which owners can this caller reach?"* without the handler
+For multi-tenant applications requiring grant-based access control,
+Grants answers *"which owners can this caller access?"* without the handler
 knowing about grant tables:
 
 ```csharp
-// 1. Declare a domain with a permission namespace
-[DomainFeature("issues")]
-public interface IIssueOperation;
-
-// 2. Define grant-aware requests
+// 1. Define grant-aware requests (domain derived from namespace convention)
 [RequiresPermission("delete")]
-public sealed record DeleteIssue(string Id) : IGrantedCommand<IIssueOperation> {
+public sealed record DeleteIssue(string Id) : IGrantMutateRequest {
     public string? OwnerId { get; set; }
 }
 
-// 3. Implement a grant resolver (the only app code)
-public class IssueGrantResolver : IGrantResolver<IIssueOperation> {
-    public async ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
+// 2. Implement a grant resolver (the only app code)
+public class AppGrantResolver : IGrantResolver {
+    public async ValueTask<GrantResult> ResolveGrantsAsync<TResource>(
         AuthorizationContext<TResource> context, CancellationToken ct)
         where TResource : IAuthorizableResource {
         // Query your grants table
-        var ownerIds = await db.GetGrantedOwners(context.UserId, context.RequiredPermissions);
-        return new GrantedReach(ownerIds);
+        var ownerIds = await db.GetGrantedOwners(context.UserId, context.Permissions);
+        return new GrantResult(ownerIds);
     }
 }
 
-// 4. Register
-services.AddAccessGrants<IIssueOperation, IssueGrantResolver>();
+// 3. Register
+services.AddAccessGrants<AppGrantResolver>();
 ```
 
 See [Grants README](src/Cirreum.Core/Authorization/Grants/README.md) for the
-full architecture, CRL enforcement rules, caching strategy, and configuration.
+full architecture, Mutate/Lookup/Search/Self enforcement rules, caching strategy, and configuration.
 
 ## Usage
 
@@ -479,7 +475,7 @@ This library:
 - [Context Architecture](src/Cirreum.Core/OPERATION-CONTEXT.md) - Detailed context composition guide
 - [Authorization Flow](src/Cirreum.Core/Authorization/FLOW.md) - High-level request → authorization flow
 - [Authorization Sequence](src/Cirreum.Core/Authorization/SEQUENCE.md) - Detailed three-stage pipeline
-- [Grants (ReBAC)](src/Cirreum.Core/Authorization/Grants/README.md) - Grant-based access control with CRL enforcement
+- [Grants](src/Cirreum.Core/Authorization/Grants/README.md) - Grant-based access control with Mutate/Lookup/Search/Self enforcement
 - [Conductor](src/Cirreum.Core/Conductor/README.md) - In-process dispatcher + intercept pipeline
 
 ## Contribution Guidelines

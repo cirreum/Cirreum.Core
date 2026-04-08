@@ -1,12 +1,12 @@
-# Grants (ReBAC)
+# Grants
 
-## Relationship-Based Access Control for Cirreum Applications
+## Grant-Based Access Control for Cirreum Applications
 
-Grants is Cirreum's opt-in ReBAC (Relationship-Based Access Control) system that
+Grants is Cirreum's opt-in grant-based access control system that
 **augments the existing authorization pipeline** — it does not replace RBAC or ABAC.
 The base authorization system (roles, resource authorizers, policy validators) continues
 to work exactly as before. Grants adds a new dimension: *"for this operation, which
-owners can this caller reach?"* — answered before the handler runs, without the handler
+owners can this caller access?"* — answered before the handler runs, without the handler
 knowing anything about grant tables or relationships.
 
 Grants integrates into the existing three-stage authorization pipeline as **Stage 1 Step 0**,
@@ -24,7 +24,7 @@ a no-op pass with zero overhead.
 4. [Request Interfaces](#request-interfaces)
 5. [Grant Enforcement](#grant-enforcement)
 6. [Permission Model](#permission-model)
-7. [Reach Resolution Flow](#reach-resolution-flow)
+7. [Grant Resolution Flow](#grant-resolution-flow)
 8. [Caching](#caching)
 9. [Discovery & Analysis](#discovery--analysis)
 10. [DI Registration](#di-registration)
@@ -40,7 +40,7 @@ a no-op pass with zero overhead.
 | **Grant** | A stored relationship: *"caller X holds permission P on owner Y"* |
 | **Domain** | A bounded context (e.g., Issues, Documents) derived from the C# namespace convention |
 | **Permission** | A feature-scoped capability (e.g., `issues:delete`, `issues:read`) |
-| **AccessReach** | The computed set of owners a caller can touch for a given operation |
+| **AccessGrant** | The computed set of owners a caller can touch for a given operation |
 | **Grant Kinds** | Mutate / Lookup / Search / Self — the four grant-aware operation patterns |
 
 ### What Grants Is Not
@@ -93,18 +93,18 @@ a no-op pass with zero overhead.
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              Core Layer (sealed, no extension points)               │
 │                                                                                     │
-│   GrantBasedAccessReachResolver  ← orchestrator                                     │
+│   AccessGrantFactory  ← orchestrator                                     │
 │     • Bypass check (live, never cached)                                             │
 │     • L1 scoped cache → L2 cross-request cache → cold-path resolution               │
-│     • Merges grants + home owner → AccessReach                                      │
+│     • Merges grants + home owner → AccessGrant                                      │
 │                                                                                     │
 │   GrantEvaluator  ← grant enforcement                                               │
-│     • Mutate: OwnerId ∈ reach (pre-handler)                                        │
-│     • Lookup: stash reach for post-fetch check, or OwnerId ∈ reach when supplied    │
-│     • Search: OwnerIds ⊆ reach, stamp when null                                    │
+│     • Mutate: OwnerId ∈ grant (pre-handler)                                        │
+│     • Lookup: stash grant for post-fetch check, or OwnerId ∈ grant when supplied    │
+│     • Search: OwnerIds ⊆ grant, stamp when null                                    │
 │     • Self: ExternalId == UserId / admin bypass                                     │
 │                                                                                     │
-│   AccessReach  ← the gate's output                                                  │
+│   AccessGrant  ← the gate's output                                                  │
 │     • Denied (empty set) / Unrestricted (no bound) / Bounded (explicit owners)      │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -189,46 +189,46 @@ The `GrantEvaluator` enforces timing rules per operation kind:
 ### Mutate (owner-scoped)
 
 ```text
-OwnerId supplied  →  OwnerId ∈ reach? Pass : Deny
+OwnerId supplied  →  OwnerId ∈ grant? Pass : Deny
 OwnerId null:
   • Global caller         →  Deny (OwnerId required for cross-tenant writes)
-  • Unrestricted reach    →  Deny (OwnerId required — ambiguous target)
-  • Single-owner reach    →  Auto-enrich OwnerId from reach, Pass
-  • Multi-owner reach     →  Deny (ambiguous — caller must specify)
+  • Unrestricted grant    →  Deny (OwnerId required — ambiguous target)
+  • Single-owner grant    →  Auto-enrich OwnerId from grant, Pass
+  • Multi-owner grant     →  Deny (ambiguous — caller must specify)
 ```
 
 ### Lookup (owner-scoped)
 
 ```text
-OwnerId supplied  →  OwnerId ∈ reach? Pass : Deny
-OwnerId null      →  Pass (Pattern C — reach stashed on IAccessReachAccessor,
-                      handler checks post-fetch entity's owner against reach)
+OwnerId supplied  →  OwnerId ∈ grant? Pass : Deny
+OwnerId null      →  Pass (Pattern C — grant stashed on IAccessGrantAccessor,
+                      handler checks post-fetch entity's owner against grant)
 ```
 
 **Pattern C (existence-hiding):** The handler fetches the entity, checks
-`reach.Contains(entity.OwnerId)`, and returns 404 (not 403) if the caller
-doesn't have reach — preventing information leakage about resource existence.
+`grant.Contains(entity.OwnerId)`, and returns 404 (not 403) if the caller
+doesn't have access — preventing information leakage about resource existence.
 
 ### Search (owner-scoped)
 
 ```text
-OwnerIds supplied  →  OwnerIds ⊆ reach? Pass : Deny
-OwnerIds null      →  Stamp OwnerIds from reach (unrestricted = null = no bound)
+OwnerIds supplied  →  OwnerIds ⊆ grant? Pass : Deny
+OwnerIds null      →  Stamp OwnerIds from grant (unrestricted = null = no bound)
 ```
 
 ### Self (user-owned)
 
 ```text
-Id null + MutateSelf  →  Auto-enrich Id from context.UserId, Pass
-Id null/invalid       →  Deny (ResourceIdRequired)
+Id null               →  Auto-enrich Id from context.UserId, Pass
+Id invalid            →  Deny (ResourceIdRequired)
 ExternalId == UserId  →  Pass (identity match — fast path, no resolver)
-ExternalId != UserId  →  Resolve reach via ShouldBypassAsync
-  • reach.IsUnrestricted  →  Pass (admin bypass)
+ExternalId != UserId  →  Resolve grant via ShouldBypassAsync
+  • grant.IsUnrestricted  →  Pass (admin bypass)
   • Otherwise             →  Deny (NotResourceOwner)
 ```
 
 Self-scoped requests perform a direct identity match (`ExternalId == context.UserId`)
-without reach resolution for the happy path. Admin bypass is supported via the existing
+without grant resolution for the happy path. Admin bypass is supported via the existing
 `IGrantResolver.ShouldBypassAsync` mechanism.
 
 ### Pre-flight: User Enabled Check
@@ -282,7 +282,7 @@ target owner(s). Permissions are evaluated with AND semantics, not OR.
 
 ---
 
-## Reach Resolution Flow
+## Grant Resolution Flow
 
 ```text
 Hot  (L1 hit):  ResolveAsync → ShouldBypassAsync (live) → L1 dict hit → return
@@ -295,31 +295,31 @@ Cold (miss):    ResolveAsync → bypass check → L1 miss → L2 miss → factor
 ```mermaid
 flowchart TD
     A[ResolveAsync] --> B{Authenticated?}
-    B -- No --> C[AccessReach.Denied]
+    B -- No --> C[AccessGrant.Denied]
     B -- Yes --> D{ShouldBypassAsync?}
-    D -- Yes --> E[AccessReach.Unrestricted]
+    D -- Yes --> E[AccessGrant.Unrestricted]
     D -- No --> F{Permissions declared?}
-    F -- No --> G[AccessReach.Denied]
+    F -- No --> G[AccessGrant.Denied]
     F -- Yes --> H{L1 cache hit?}
-    H -- Yes --> I[Return cached reach]
+    H -- Yes --> I[Return cached grant]
     H -- No --> J{L2 cache hit?}
     J -- Yes --> K[Populate L1, return]
     J -- No --> L[ResolveGrantsAsync]
     L --> M[ResolveHomeOwnerAsync]
     M --> N[Merge grants + home owner]
     N --> O{Combined set empty?}
-    O -- Yes --> P[AccessReach.Denied]
-    O -- No --> Q[AccessReach.ForOwners]
+    O -- Yes --> P[AccessGrant.Denied]
+    O -- No --> Q[AccessGrant.ForOwners]
     Q --> R[Populate L1 + L2, return]
 ```
 
-### AccessReach Shapes
+### AccessGrant Shapes
 
 | Shape | `OwnerIds` | Meaning |
 |-------|-----------|---------|
 | **Denied** | `[]` (empty) | Caller has no access for this operation |
 | **Unrestricted** | `null` | No bound — cross-tenant visibility (admin bypass) |
-| **Bounded** | `["owner-a", "owner-b"]` | Explicit set of reachable owners |
+| **Bounded** | `["owner-a", "owner-b"]` | Explicit set of accessible owners |
 
 ---
 
@@ -335,7 +335,7 @@ flowchart TD
 ### Cache Key Format
 
 ```
-reach:v{version}:{callerId}:{domain}:{permissionSignature}
+grant:v{version}:{callerId}:{domain}:{permissionSignature}
 ```
 
 - **`callerId`** — covers both C2M (human users with delegated permissions) and M2M
@@ -350,13 +350,13 @@ Sorting is required for **cache correctness**: permissions use AND semantics, so
 
 | Tag | Purpose |
 |-----|---------|
-| `reach:caller:{callerId}` | Invalidate all entries for a user |
-| `reach:domain:{domain}` | Invalidate all entries for a domain |
+| `grant:caller:{callerId}` | Invalidate all entries for a user |
+| `grant:domain:{domain}` | Invalidate all entries for a domain |
 
-### Reach Resolution Telemetry
+### Grant Resolution Telemetry
 
-`GrantBasedAccessReachResolver` records reach resolution events via
-`AuthorizationTelemetry.RecordReachResolution()` at every decision point:
+`AccessGrantFactory` records grant resolution events via
+`AuthorizationTelemetry.RecordGrantResolution()` at every decision point:
 
 | Decision Point | Cache Level Tag | Duration Recorded |
 |----------------|-----------------|-------------------|
@@ -377,7 +377,7 @@ hit/miss counters and operation duration at the L2 boundary.
 ### What's Never Cached
 
 - **Bypass checks** (`ShouldBypassAsync`) — always live. Admin role promotion is immediate.
-- **Denied reach** from unauthenticated callers — short-circuit before cache lookup.
+- **Denied grant** from unauthenticated callers — short-circuit before cache lookup.
 
 ### Invalidation
 
@@ -457,8 +457,8 @@ services.AddAccessGrants<AppGrantResolver>();
 
 This registers:
 - The app's `IGrantResolver`
-- Core's `GrantBasedAccessReachResolver` orchestrator
-- Shared infrastructure: `IAccessReachAccessor`, `AccessReachResolverSelector`,
+- Core's `AccessGrantFactory` orchestrator
+- Shared infrastructure: `IAccessGrantAccessor`, `AccessGrantResolverSelector`,
   `GrantEvaluator`, cache settings
 
 ### Assembly-Scanned Registration
@@ -525,7 +525,7 @@ public class AppGrantResolver : IGrantResolver {
         new(context.EffectiveRoles.Any(r => r.Name == "SuperAdmin"));
 
     // Domain-aware grant lookup
-    public async ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
+    public async ValueTask<GrantResult> ResolveGrantsAsync<TResource>(
         AuthorizationContext<TResource> context,
         CancellationToken cancellationToken)
         where TResource : IAuthorizableResource {
@@ -534,7 +534,7 @@ public class AppGrantResolver : IGrantResolver {
             context.UserId,
             context.DomainFeature,
             context.Permissions);
-        return new GrantedReach(ownerIds);
+        return new GrantResult(ownerIds);
     }
 
     // Home-owner with suspension check
@@ -553,33 +553,33 @@ public class AppGrantResolver : IGrantResolver {
 
 ### Extensions for Auxiliary Dimensions
 
-`AccessReach.Extensions` carries app-specific auxiliary dimensions through the pipeline:
+`AccessGrant.Extensions` carries app-specific auxiliary dimensions through the pipeline:
 
 ```csharp
-public async ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
+public async ValueTask<GrantResult> ResolveGrantsAsync<TResource>(
     AuthorizationContext<TResource> context,
     CancellationToken ct)
     where TResource : IAuthorizableResource {
 
     var (ownerIds, tiers) = await db.GetGrantsWithTiers(context.UserId, ...);
 
-    return new GrantedReach(
+    return new GrantResult(
         ownerIds,
         Extensions: new Dictionary<string, object> {
             ["allowed-tiers"] = tiers   // e.g., ["gold", "platinum"]
         });
 }
 
-// In the handler — read auxiliary dimensions from reach
+// In the handler — read auxiliary dimensions from grant
 public async Task<Result<Issue>> Handle(GetIssue request, CancellationToken ct) {
-    var reach = reachAccessor.Get();
-    var tiers = reach.Extensions?["allowed-tiers"] as IReadOnlyList<string>;
+    var grant = grantAccessor.Get();
+    var tiers = grant.Extensions?["allowed-tiers"] as IReadOnlyList<string>;
     // Apply as additional predicate scope...
 }
 ```
 
-Extensions are opaque to Core — they flow through the cache and reach accessor
-unchanged. Handlers read them via `IAccessReachAccessor` and apply them as
+Extensions are opaque to Core — they flow through the cache and grant accessor
+unchanged. Handlers read them via `IAccessGrantAccessor` and apply them as
 additional filters.
 
 ---
@@ -603,12 +603,12 @@ added no information the compiler didn't already have. Convention-based resoluti
 generic parameter from the entire chain — reducing each granted resource from 5 pieces of
 ceremony to 1 interface.
 
-### Why the App Never Touches AccessReach
+### Why the App Never Touches AccessGrant
 
-`AccessReach` has three distinguished shapes (Denied / Unrestricted / Bounded) with
+`AccessGrant` has three distinguished shapes (Denied / Unrestricted / Bounded) with
 subtle edge cases (empty-set collapse, home-owner merge, null semantics). The
-orchestrator (`GrantBasedAccessReachResolver`) handles all translation policy so apps
-can't accidentally produce an invalid reach. Apps return `GrantedReach` (a simple
+orchestrator (`AccessGrantFactory`) handles all translation policy so apps
+can't accidentally produce an invalid grant. Apps return `GrantResult` (a simple
 owner list) and Core does the rest.
 
 ### Why Four Grant Kinds Instead of a Generic "Grant Gate"
@@ -617,7 +617,7 @@ Mutate, Lookup, Search, and Self have fundamentally different timing requirement
 - Mutate must know the target owner *before* the handler (no speculative writes)
 - Lookup may need to hide existence (Pattern C — check *after* fetch)
 - Search operates on sets, not scalars (subset enforcement, auto-stamping)
-- Self performs direct identity matching without reach resolution
+- Self performs direct identity matching without grant resolution
 
 A single generic gate would either be too permissive or too restrictive. The four kinds
 capture the real-world patterns.

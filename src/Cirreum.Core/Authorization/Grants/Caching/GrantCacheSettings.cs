@@ -1,12 +1,12 @@
 namespace Cirreum.Authorization.Grants.Caching;
 
 /// <summary>
-/// Configuration for the built-in reach cache. Bound from
+/// Configuration for the built-in grant cache. Bound from
 /// <c>Cirreum:Authorization:Grants:Cache</c> in application settings.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The reach cache stores computed <see cref="AccessReach"/> results per caller and
+/// The grant cache stores computed <see cref="AccessGrant"/> results per caller and
 /// permission set. It operates at two levels: L1 (scoped in-memory dictionary per DI
 /// scope) and L2 (cross-request via <c>ICacheService</c>).
 /// </para>
@@ -31,7 +31,7 @@ public sealed class GrantCacheSettings {
 	public int Version { get; set; } = 1;
 
 	/// <summary>
-	/// Absolute expiration for L2 reach cache entries. If <see langword="null"/>,
+	/// Absolute expiration for L2 grant cache entries. If <see langword="null"/>,
 	/// inherits from <see cref="Cirreum.Caching.CacheSettings.DefaultExpiration"/>.
 	/// </summary>
 	public TimeSpan? Expiration { get; set; }

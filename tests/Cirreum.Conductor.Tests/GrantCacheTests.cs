@@ -8,7 +8,7 @@ using Cirreum.Caching;
 using Cirreum.Conductor.Tests.Domain.TestGrant;
 
 [TestClass]
-public class ReachCacheTests {
+public class GrantCacheTests {
 
 	private const string CallerId = "user-123";
 	private const string TenantA = "tenant-A";
@@ -19,29 +19,29 @@ public class ReachCacheTests {
 	[TestMethod]
 	public async Task L1_hit_resolves_grants_only_once_per_scope() {
 		var grantResolver = new CountingGrantResolver([TenantA]);
-		var resolver = BuildResolver(grantResolver);
+		var factory = BuildFactory(grantResolver);
 
 		var ctx1 = BuildContext(new TestDeleteCmd());
 		var ctx2 = BuildContext(new TestDeleteCmd());
 
-		var reach1 = await resolver.ResolveAsync(ctx1, CancellationToken.None);
-		var reach2 = await resolver.ResolveAsync(ctx2, CancellationToken.None);
+		var grant1 = await factory.CreateAsync(ctx1, CancellationToken.None);
+		var grant2 = await factory.CreateAsync(ctx2, CancellationToken.None);
 
 		Assert.AreEqual(1, grantResolver.ResolveCount, "ResolveGrantsAsync should be called once (L1 hit on second call)");
-		Assert.IsFalse(reach1.IsDenied);
-		Assert.IsFalse(reach2.IsDenied);
+		Assert.IsFalse(grant1.IsDenied);
+		Assert.IsFalse(grant2.IsDenied);
 	}
 
 	[TestMethod]
 	public async Task L1_miss_when_different_permissions() {
 		var grantResolver = new CountingGrantResolver([TenantA]);
-		var resolver = BuildResolver(grantResolver);
+		var factory = BuildFactory(grantResolver);
 
 		var ctxDelete = BuildContext(new TestDeleteCmd());
 		var ctxRead = BuildContext(new TestReadCmd());
 
-		await resolver.ResolveAsync(ctxDelete, CancellationToken.None);
-		await resolver.ResolveAsync(ctxRead, CancellationToken.None);
+		await factory.CreateAsync(ctxDelete, CancellationToken.None);
+		await factory.CreateAsync(ctxRead, CancellationToken.None);
 
 		Assert.AreEqual(2, grantResolver.ResolveCount, "Different permissions should cause L1 miss");
 	}
@@ -56,14 +56,14 @@ public class ReachCacheTests {
 		var settings = new GrantCacheSettings();
 
 		// Scope 1
-		var resolver1 = BuildResolver(grantResolver, cacheService, settings);
+		var factory1 = BuildFactory(grantResolver, cacheService, settings);
 		var ctx1 = BuildContext(new TestDeleteCmd());
-		await resolver1.ResolveAsync(ctx1, CancellationToken.None);
+		await factory1.CreateAsync(ctx1, CancellationToken.None);
 
-		// Scope 2 — new resolver instance, same L2 cache
-		var resolver2 = BuildResolver(grantResolver, cacheService, settings);
+		// Scope 2 — new factory instance, same L2 cache
+		var factory2 = BuildFactory(grantResolver, cacheService, settings);
 		var ctx2 = BuildContext(new TestDeleteCmd());
-		await resolver2.ResolveAsync(ctx2, CancellationToken.None);
+		await factory2.CreateAsync(ctx2, CancellationToken.None);
 
 		Assert.AreEqual(1, grantResolver.ResolveCount, "L2 should serve second scope from cache");
 	}
@@ -77,14 +77,14 @@ public class ReachCacheTests {
 		var cacheService = new InMemoryTestCacheService();
 		var settings = new GrantCacheSettings();
 
-		var resolver = BuildResolver(grantResolver, cacheService, settings);
+		var factory = BuildFactory(grantResolver, cacheService, settings);
 
 		// Both TestDeleteCmd and TestDeleteCmd2 require [RequiresPermission("delete")]
 		var ctx1 = BuildContext(new TestDeleteCmd());
 		var ctx2 = BuildContext(new TestDeleteCmd2());
 
-		await resolver.ResolveAsync(ctx1, CancellationToken.None);
-		await resolver.ResolveAsync(ctx2, CancellationToken.None);
+		await factory.CreateAsync(ctx1, CancellationToken.None);
+		await factory.CreateAsync(ctx2, CancellationToken.None);
 
 		Assert.AreEqual(1, grantResolver.ResolveCount,
 			"Two resource types with same permissions should share a cache entry");
@@ -99,12 +99,12 @@ public class ReachCacheTests {
 		var noCacheService = new NoCacheService();
 
 		// Scope 1
-		var resolver1 = BuildResolver(grantResolver, noCacheService);
-		await resolver1.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
+		var factory1 = BuildFactory(grantResolver, noCacheService);
+		await factory1.CreateAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
-		// Scope 2 — fresh resolver, NoCacheService passes through
-		var resolver2 = BuildResolver(grantResolver, noCacheService);
-		await resolver2.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
+		// Scope 2 — fresh factory, NoCacheService passes through
+		var factory2 = BuildFactory(grantResolver, noCacheService);
+		await factory2.CreateAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
 		Assert.AreEqual(2, grantResolver.ResolveCount);
 	}
@@ -124,12 +124,12 @@ public class ReachCacheTests {
 		};
 
 		// Scope 1 — populates L2
-		var resolver1 = BuildResolver(grantResolver, cacheService, settings);
-		await resolver1.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
+		var factory1 = BuildFactory(grantResolver, cacheService, settings);
+		await factory1.CreateAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
 		// Scope 2 — should hit L2 cache
-		var resolver2 = BuildResolver(grantResolver, cacheService, settings);
-		await resolver2.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
+		var factory2 = BuildFactory(grantResolver, cacheService, settings);
+		await factory2.CreateAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
 		Assert.AreEqual(1, grantResolver.ResolveCount, "Domain override expiration should not prevent L2 hit");
 	}
@@ -144,13 +144,13 @@ public class ReachCacheTests {
 
 		// Scope 1 with version 1
 		var settings1 = new GrantCacheSettings { Version = 1 };
-		var resolver1 = BuildResolver(grantResolver, cacheService, settings1);
-		await resolver1.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
+		var factory1 = BuildFactory(grantResolver, cacheService, settings1);
+		await factory1.CreateAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
 		// Scope 2 with version 2 — different key, L2 miss
 		var settings2 = new GrantCacheSettings { Version = 2 };
-		var resolver2 = BuildResolver(grantResolver, cacheService, settings2);
-		await resolver2.ResolveAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
+		var factory2 = BuildFactory(grantResolver, cacheService, settings2);
+		await factory2.CreateAsync(BuildContext(new TestDeleteCmd()), CancellationToken.None);
 
 		Assert.AreEqual(2, grantResolver.ResolveCount, "Version bump should cause L2 miss");
 	}
@@ -161,16 +161,16 @@ public class ReachCacheTests {
 	[TestMethod]
 	public async Task Bypass_always_runs_live() {
 		var grantResolver = new CountingGrantResolver([TenantA]) { AlwaysBypass = true };
-		var resolver = BuildResolver(grantResolver);
+		var factory = BuildFactory(grantResolver);
 
 		var ctx1 = BuildContext(new TestDeleteCmd());
 		var ctx2 = BuildContext(new TestDeleteCmd());
 
-		var reach1 = await resolver.ResolveAsync(ctx1, CancellationToken.None);
-		var reach2 = await resolver.ResolveAsync(ctx2, CancellationToken.None);
+		var grant1 = await factory.CreateAsync(ctx1, CancellationToken.None);
+		var grant2 = await factory.CreateAsync(ctx2, CancellationToken.None);
 
-		Assert.IsTrue(reach1.IsUnrestricted);
-		Assert.IsTrue(reach2.IsUnrestricted);
+		Assert.IsTrue(grant1.IsUnrestricted);
+		Assert.IsTrue(grant2.IsUnrestricted);
 		Assert.AreEqual(2, grantResolver.BypassCount, "ShouldBypassAsync should run every time");
 		Assert.AreEqual(0, grantResolver.ResolveCount, "ResolveGrantsAsync should never be called when bypassing");
 	}
@@ -181,13 +181,13 @@ public class ReachCacheTests {
 	[TestMethod]
 	public async Task Unauthenticated_caller_returns_denied() {
 		var grantResolver = new CountingGrantResolver([TenantA]);
-		var resolver = BuildResolver(grantResolver);
+		var factory = BuildFactory(grantResolver);
 
 		var ctx = BuildUnauthenticatedContext(new TestDeleteCmd());
 
-		var reach = await resolver.ResolveAsync(ctx, CancellationToken.None);
+		var grant = await factory.CreateAsync(ctx, CancellationToken.None);
 
-		Assert.IsTrue(reach.IsDenied);
+		Assert.IsTrue(grant.IsDenied);
 		Assert.AreEqual(0, grantResolver.ResolveCount);
 	}
 
@@ -197,13 +197,13 @@ public class ReachCacheTests {
 	[TestMethod]
 	public async Task Empty_grants_returns_denied() {
 		var grantResolver = new CountingGrantResolver([]);
-		var resolver = BuildResolver(grantResolver);
+		var factory = BuildFactory(grantResolver);
 
 		var ctx = BuildContext(new TestDeleteCmd());
 
-		var reach = await resolver.ResolveAsync(ctx, CancellationToken.None);
+		var grant = await factory.CreateAsync(ctx, CancellationToken.None);
 
-		Assert.IsTrue(reach.IsDenied);
+		Assert.IsTrue(grant.IsDenied);
 	}
 
 	// Home owner merge
@@ -214,28 +214,28 @@ public class ReachCacheTests {
 		var grantResolver = new CountingGrantResolver(["other-tenant"]) {
 			HomeOwnerId = TenantA
 		};
-		var resolver = BuildResolver(grantResolver);
+		var factory = BuildFactory(grantResolver);
 
 		var ctx = BuildContext(new TestDeleteCmd());
-		var reach = await resolver.ResolveAsync(ctx, CancellationToken.None);
+		var grant = await factory.CreateAsync(ctx, CancellationToken.None);
 
-		Assert.IsFalse(reach.IsDenied);
-		Assert.IsFalse(reach.IsUnrestricted);
-		Assert.IsNotNull(reach.OwnerIds);
-		CollectionAssert.Contains(reach.OwnerIds.ToList(), TenantA);
-		CollectionAssert.Contains(reach.OwnerIds.ToList(), "other-tenant");
+		Assert.IsFalse(grant.IsDenied);
+		Assert.IsFalse(grant.IsUnrestricted);
+		Assert.IsNotNull(grant.OwnerIds);
+		CollectionAssert.Contains(grant.OwnerIds.ToList(), TenantA);
+		CollectionAssert.Contains(grant.OwnerIds.ToList(), "other-tenant");
 	}
 
 	// Helpers
 	// -------------------------------------------------------------
 
-	private static GrantBasedAccessReachResolver BuildResolver(
+	private static AccessGrantFactory BuildFactory(
 		CountingGrantResolver grantResolver,
 		ICacheService? cacheService = null,
 		GrantCacheSettings? cacheSettings = null,
 		CacheSettings? rootCacheSettings = null) {
 
-		return new GrantBasedAccessReachResolver(
+		return new AccessGrantFactory(
 			grantResolver,
 			cacheService ?? new InMemoryTestCacheService(),
 			rootCacheSettings ?? new CacheSettings(),
@@ -373,13 +373,13 @@ namespace Cirreum.Conductor.Tests.Domain.TestGrant {
 		public bool AlwaysBypass;
 		public string? HomeOwnerId;
 
-		public ValueTask<GrantedReach> ResolveGrantsAsync<TResource>(
+		public ValueTask<GrantResult> ResolveGrantsAsync<TResource>(
 			AuthorizationContext<TResource> context,
 			CancellationToken cancellationToken)
 			where TResource : IAuthorizableResource {
 
 			Interlocked.Increment(ref this.ResolveCount);
-			return ValueTask.FromResult(new GrantedReach(ownerIds));
+			return ValueTask.FromResult(new GrantResult(ownerIds));
 		}
 
 		public ValueTask<bool> ShouldBypassAsync<TResource>(

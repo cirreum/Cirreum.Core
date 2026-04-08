@@ -6,12 +6,12 @@ using System.Diagnostics;
 
 /// <summary>
 /// Stage 1 / Step 0 — the grant-aware scope gate. Evaluates the caller's
-/// <see cref="AccessReach"/> via the registered <see cref="IAccessReachResolver"/> and
+/// <see cref="AccessGrant"/> via the registered <see cref="IAccessGrantFactory"/> and
 /// enforces grant timing:
 /// <list type="bullet">
-///   <item><description><b>Mutate:</b> <c>OwnerId ∈ reach</c> before handler.</description></item>
-///   <item><description><b>Lookup:</b> stash reach for post-fetch check (Pattern C), or enforce <c>OwnerId ∈ reach</c> when supplied.</description></item>
-///   <item><description><b>Search:</b> <c>OwnerIds ⊆ reach</c>, stamp when null.</description></item>
+///   <item><description><b>Mutate:</b> <c>OwnerId ∈ grant</c> before handler.</description></item>
+///   <item><description><b>Lookup:</b> stash grant for post-fetch check (Pattern C), or enforce <c>OwnerId ∈ grant</c> when supplied.</description></item>
+///   <item><description><b>Search:</b> <c>OwnerIds ⊆ grant</c>, stamp when null.</description></item>
 ///   <item><description><b>Self:</b> <c>ExternalId == context.UserId</c> identity match; admin bypass via <see cref="IGrantResolver.ShouldBypassAsync"/>.</description></item>
 /// </list>
 /// </summary>
@@ -27,13 +27,13 @@ using System.Diagnostics;
 /// </para>
 /// </remarks>
 public sealed class GrantEvaluator(
-	AccessReachResolverSelector resolverSelector,
-	IAccessReachAccessor reachAccessor) {
+	IAccessGrantFactory grantFactory,
+	IAccessGrantAccessor grantAccessor) {
 
-	private readonly AccessReachResolverSelector _resolverSelector =
-		resolverSelector ?? throw new ArgumentNullException(nameof(resolverSelector));
-	private readonly IAccessReachAccessor _reachAccessor =
-		reachAccessor ?? throw new ArgumentNullException(nameof(reachAccessor));
+	private readonly IAccessGrantFactory _grantFactory =
+		grantFactory ?? throw new ArgumentNullException(nameof(grantFactory));
+	private readonly IAccessGrantAccessor _grantAccessor =
+		grantAccessor ?? throw new ArgumentNullException(nameof(grantAccessor));
 
 	/// <summary>
 	/// Evaluates the grant-aware scope gate against the resource in the given context.
@@ -58,38 +58,29 @@ public sealed class GrantEvaluator(
 			return Deny(DenyCodes.UserDisabled, "User is disabled.");
 		}
 
-		// Self-scoped: identity match — fast path without reach resolution.
+		// Self-scoped: identity match — fast path without grant resolution.
 		if (self is not null) {
 			return await this.EvaluateSelfAsync(context, self, cancellationToken)
 				.ConfigureAwait(false);
 		}
 
-		// Owner-scoped: reach resolution required.
-		var resolver = this._resolverSelector.SelectFor(typeof(TResource));
-		if (resolver is null) {
-			// Grant interface present but no resolver registered — misconfiguration.
-			EmitTelemetry(context, DenyCodes.ScopeNotPermitted);
-			return Deny(DenyCodes.ScopeNotPermitted,
-				$"No IAccessReachResolver registered for resource type '{typeof(TResource).Name}'. " +
-				$"Register a grant resolver via services.AddAccessGrants<TResolver>().");
-		}
-
-		var reach = await resolver
-			.ResolveAsync(context, cancellationToken)
+		// Owner-scoped: grant resolution required.
+		var grant = await this._grantFactory
+			.CreateAsync(context, cancellationToken)
 			.ConfigureAwait(false);
 
-		this._reachAccessor.Set(reach);
+		this._grantAccessor.Set(grant);
 
-		if (reach.IsDenied) {
-			EmitTelemetry(context, DenyCodes.ReachDenied);
-			return Deny(DenyCodes.ReachDenied, "Caller has no reach for this operation.");
+		if (grant.IsDenied) {
+			EmitTelemetry(context, DenyCodes.GrantDenied);
+			return Deny(DenyCodes.GrantDenied, "Caller has no granted access for this operation.");
 		}
 
 		var result = search is not null
-			? EvaluateSearch(search, reach)
+			? EvaluateSearch(search, grant)
 			: mutate is not null
-			? EvaluateMutate(context, mutate, reach)
-			: EvaluateLookup(context, lookup!, reach);
+			? EvaluateMutate(context, mutate, grant)
+			: EvaluateLookup(context, lookup!, grant);
 
 		EmitTelemetry(context, result.IsValid ? AuthorizationTelemetry.ReasonPass : DenyReason(result));
 		return result;
@@ -103,8 +94,8 @@ public sealed class GrantEvaluator(
 		CancellationToken cancellationToken)
 		where TResource : notnull, IAuthorizableResource {
 
-		// Mutate enrichment: auto-stamp Id from caller identity when null.
-		if (self is IGrantableMutateSelfBase && self.Id is null) {
+		// Enrichment: auto-stamp Id from caller identity when null.
+		if (self.Id is null) {
 			self.Id = context.UserId;
 			EmitTelemetry(context, AuthorizationTelemetry.ReasonPass, AuthorizationTelemetry.StepSelfIdentity);
 			return Pass();
@@ -115,23 +106,20 @@ public sealed class GrantEvaluator(
 			return Deny(DenyCodes.ResourceIdRequired, "Id is required and must be valid on self-scoped resources.");
 		}
 
-		// Fast path: identity match — no resolver needed.
+		// Fast path: identity match — no factory needed.
 		if (string.Equals(self.ExternalId, context.UserId, StringComparison.OrdinalIgnoreCase)) {
 			EmitTelemetry(context, AuthorizationTelemetry.ReasonPass, AuthorizationTelemetry.StepSelfIdentity);
 			return Pass();
 		}
 
-		// Non-match: check for admin/privilege bypass via reach resolution.
-		var resolver = this._resolverSelector.SelectFor(typeof(TResource));
-		if (resolver is not null) {
-			var reach = await resolver
-				.ResolveAsync(context, cancellationToken)
-				.ConfigureAwait(false);
+		// Non-match: check for admin/privilege bypass via grant resolution.
+		var grant = await this._grantFactory
+			.CreateAsync(context, cancellationToken)
+			.ConfigureAwait(false);
 
-			if (reach.IsUnrestricted) {
-				EmitTelemetry(context, AuthorizationTelemetry.ReasonPass, AuthorizationTelemetry.StepSelfIdentity);
-				return Pass();
-			}
+		if (grant.IsUnrestricted) {
+			EmitTelemetry(context, AuthorizationTelemetry.ReasonPass, AuthorizationTelemetry.StepSelfIdentity);
+			return Pass();
 		}
 
 		EmitTelemetry(context, DenyCodes.NotResourceOwner, AuthorizationTelemetry.StepSelfIdentity);
@@ -143,39 +131,39 @@ public sealed class GrantEvaluator(
 	private static ValidationResult EvaluateMutate<TResource>(
 		AuthorizationContext<TResource> context,
 		IGrantableMutateBase mutate,
-		AccessReach reach) where TResource : notnull, IAuthorizableResource {
+		AccessGrant grant) where TResource : notnull, IAuthorizableResource {
 
 		if (!string.IsNullOrWhiteSpace(mutate.OwnerId)) {
-			return reach.Contains(mutate.OwnerId!)
+			return grant.Contains(mutate.OwnerId!)
 				? Pass()
-				: Deny(DenyCodes.OwnerNotInReach, "Requested owner is not in the caller's reach.");
+				: Deny(DenyCodes.OwnerNotInReach, "Requested owner is not in the caller's granted access.");
 		}
 
-		// OwnerId is null — enrich from reach.
+		// OwnerId is null — enrich from grant.
 		if (context.AccessScope == AccessScope.Global) {
 			return Deny(DenyCodes.OwnerIdRequired, "OwnerId is required for cross-tenant writes.");
 		}
-		if (reach.IsUnrestricted) {
-			return Deny(DenyCodes.OwnerIdRequired, "OwnerId is required — caller's reach is unrestricted.");
+		if (grant.IsUnrestricted) {
+			return Deny(DenyCodes.OwnerIdRequired, "OwnerId is required — caller's grant is unrestricted.");
 		}
-		if (reach.OwnerIds is { Count: 1 }) {
-			mutate.OwnerId = reach.OwnerIds[0];
+		if (grant.OwnerIds is { Count: 1 }) {
+			mutate.OwnerId = grant.OwnerIds[0];
 			return Pass();
 		}
-		return Deny(DenyCodes.OwnerAmbiguous, "OwnerId is required — caller's reach contains multiple owners.");
+		return Deny(DenyCodes.OwnerAmbiguous, "OwnerId is required — caller's grant contains multiple owners.");
 	}
 
 	private static ValidationResult EvaluateLookup<TResource>(
 		AuthorizationContext<TResource> context,
 		IGrantableLookupBase lookup,
-		AccessReach reach)
+		AccessGrant grant)
 		where TResource : notnull, IAuthorizableResource {
 
 		if (!string.IsNullOrWhiteSpace(lookup.OwnerId)) {
-			if (!reach.Contains(lookup.OwnerId!)) {
-				return Deny(DenyCodes.OwnerNotInReach, "Requested owner is not in the caller's reach.");
+			if (!grant.Contains(lookup.OwnerId!)) {
+				return Deny(DenyCodes.OwnerNotInReach, "Requested owner is not in the caller's granted access.");
 			}
-			// OwnerId supplied and in reach — stamp CallerAccessScope for cacheable lookups.
+			// OwnerId supplied and in grant — stamp CallerAccessScope for cacheable lookups.
 			if (context.Resource is IGrantableCacheableLookupBase cacheableWithOwner) {
 				cacheableWithOwner.CallerAccessScope = context.AccessScope;
 			}
@@ -190,7 +178,7 @@ public sealed class GrantEvaluator(
 			}
 		}
 
-		// OwnerId null — defer to handler (Pattern C). Reach already stashed on accessor.
+		// OwnerId null — defer to handler (Pattern C). Grant already stashed on accessor.
 		// Stamp CallerAccessScope for cacheable lookups.
 		if (context.Resource is IGrantableCacheableLookupBase cacheable) {
 			cacheable.CallerAccessScope = context.AccessScope;
@@ -200,14 +188,14 @@ public sealed class GrantEvaluator(
 
 	private static ValidationResult EvaluateSearch(
 		IGrantableSearchBase search,
-		AccessReach reach) {
+		AccessGrant grant) {
 		if (search.OwnerIds is null) {
-			// Stamp reach. Unrestricted = null (no bound).
-			search.OwnerIds = reach.IsUnrestricted ? null : reach.OwnerIds;
+			// Stamp grant. Unrestricted = null (no bound).
+			search.OwnerIds = grant.IsUnrestricted ? null : grant.OwnerIds;
 			return Pass();
 		}
-		if (!reach.ContainsAll(search.OwnerIds)) {
-			return Deny(DenyCodes.OwnerNotInReach, "One or more requested owners are not in the caller's reach.");
+		if (!grant.ContainsAll(search.OwnerIds)) {
+			return Deny(DenyCodes.OwnerNotInReach, "One or more requested owners are not in the caller's granted access.");
 		}
 		return Pass();
 	}
