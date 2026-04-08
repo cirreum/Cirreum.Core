@@ -20,7 +20,8 @@ using Cirreum.Security;
 /// <c>OwnerId</c> and <see cref="ScopedCacheKey"/> must always get the same result.
 /// </para>
 /// <para>
-/// <b>Global-scope callers</b> of this interface <b>must</b> supply a non-null <c>OwnerId</c>.
+/// <b>Global-scope callers</b> (those with <see cref="AuthenticationScope.Global"/>)
+/// <b>must</b> supply a non-null <c>OwnerId</c>.
 /// Omitting it denies with <see cref="DenyCodes.CacheableReadOwnerIdRequired"/>. This
 /// prevents an unbounded "null-owner" cache bucket shared across all operator callers.
 /// </para>
