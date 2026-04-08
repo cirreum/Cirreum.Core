@@ -74,12 +74,12 @@ public sealed class DispatcherTests {
 		}
 	}
 
-	private sealed class AuthRequestAuthorizer : ResourceAuthorizerBase<AuthRequest> {
+	private sealed class AuthRequestAuthorizer : AuthorizerBase<AuthRequest> {
 		public AuthRequestAuthorizer() {
 			this.HasRole(ApplicationRoles.AppUserRole);
 		}
 	}
-	private sealed class AuthAdminRequestAuthorizer : ResourceAuthorizerBase<AuthRequest> {
+	private sealed class AuthAdminRequestAuthorizer : AuthorizerBase<AuthRequest> {
 		public AuthAdminRequestAuthorizer() {
 			this.HasRole(ApplicationRoles.AppAdminRole);
 		}
@@ -212,7 +212,7 @@ public sealed class DispatcherTests {
 
 		var authHandler = new AuthRequestHandler();
 		var services = Shared.ArrangeServices(sp => {
-			sp.AddTransient<IResourceAuthorizer<AuthRequest>, AuthRequestAuthorizer>();
+			sp.AddTransient<IAuthorizer<AuthRequest>, AuthRequestAuthorizer>();
 			sp.AddTransient<IRequestHandler<AuthRequest>>(sp => authHandler);
 			sp.AddConductor(options => {
 				options.AddOpenIntercept(typeof(Authorization<,>));
@@ -238,7 +238,7 @@ public sealed class DispatcherTests {
 
 		var authHandler = new AuthRequestHandler();
 		var services = Shared.ArrangeServices(sp => {
-			sp.AddTransient<IResourceAuthorizer<AuthRequest>, AuthAdminRequestAuthorizer>();
+			sp.AddTransient<IAuthorizer<AuthRequest>, AuthAdminRequestAuthorizer>();
 			sp.AddTransient<IRequestHandler<AuthRequest>>(sp => authHandler);
 			sp.AddConductor(options => {
 				options.AddOpenIntercept(typeof(Authorization<,>));

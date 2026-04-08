@@ -11,7 +11,7 @@ using System.Collections;
 /// <para>
 /// <see cref="PermissionSet"/> is the runtime representation of all
 /// <see cref="RequiresPermissionAttribute"/> declarations on a resource. It is created
-/// once per resource type by <see cref="PermissionSetCache"/> and shared across
+/// once per resource type by <see cref="RequiredPermissionCache"/> and shared across
 /// all requests — the set is fully immutable after construction.
 /// </para>
 /// <para>

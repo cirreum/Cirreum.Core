@@ -35,7 +35,7 @@ public class AuthorizableResourceAnalyzer(
 					: "Verify these resources are covered by registered global policies, or add authorizers if dedicated protection is needed.";
 
 				return new(
-					$"Found {count} IAuthorizableResource type(s) without an authorizer or attribute-based policy (may be covered by global policies)",
+					$"Found {count} IAuthorizableObject type(s) without an authorizer or attribute-based policy (may be covered by global policies)",
 					recommendation);
 			}
 
@@ -44,13 +44,13 @@ public class AuthorizableResourceAnalyzer(
 				: "Add an authorizer or apply a policy attribute to protect these resources, or convert to anonymous if public access is intended.";
 
 			return new(
-				$"Found {count} IAuthorizableResource type(s) without an authorizer or attribute-based policy protection",
+				$"Found {count} IAuthorizableObject type(s) without an authorizer or attribute-based policy protection",
 				defaultRecommendation);
 		}
 
 
 		public static IssueDefinition ResourcesWithOnlyPolicyProtection(int count) => new(
-			$"Found {count} IAuthorizableResource type(s) protected only by attribute-based policies (no dedicated authorizer)",
+			$"Found {count} IAuthorizableObject type(s) protected only by attribute-based policies (no dedicated authorizer)",
 			"This is valid but consider dedicated authorizers for complex authorization logic or fine-grained control.");
 
 		public static IssueDefinition ResourcesWithOnlyRoleChecks(int count) => new(
@@ -127,7 +127,7 @@ public class AuthorizableResourceAnalyzer(
 				Recommendation: issue.Recommendation));
 		}
 
-		// For non-request IAuthorizableResource without authorizer, check policy coverage
+		// For non-request IAuthorizableObject without authorizer, check policy coverage
 		if (nonRequestResources.Count > 0) {
 
 			var withPolicyProtection = nonRequestResources
@@ -138,7 +138,7 @@ public class AuthorizableResourceAnalyzer(
 				.Where(r => !HasAttributeBasedPolicyProtection(r.ResourceType, policyValidators))
 				.ToList();
 
-			// WARNING/INFO: IAuthorizableResource without authorizer AND without policy = potential gap
+			// WARNING/INFO: IAuthorizableObject without authorizer AND without policy = potential gap
 			if (withoutPolicyProtection.Count > 0) {
 				var globalPolicyCount = policyValidators.Count(IsGlobalPolicy);
 				var issue = Issues.ResourcesWithNoProtection(withoutPolicyProtection.Count, globalPolicyCount > 0);
@@ -152,7 +152,7 @@ public class AuthorizableResourceAnalyzer(
 			}
 
 
-			// INFO: IAuthorizableResource relying only on policies (valid but worth noting)
+			// INFO: IAuthorizableObject relying only on policies (valid but worth noting)
 			if (withPolicyProtection.Count > 0) {
 				var issue = Issues.ResourcesWithOnlyPolicyProtection(withPolicyProtection.Count);
 				issues.Add(new AnalysisIssue(

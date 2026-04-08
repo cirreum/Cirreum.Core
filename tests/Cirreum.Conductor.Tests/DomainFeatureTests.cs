@@ -1,7 +1,8 @@
 namespace Cirreum.Conductor.Tests {
 
 using Cirreum.Authorization;
-using Cirreum.Authorization.Grants;
+using Cirreum.Authorization.Operations;
+using Cirreum.Authorization.Operations.Grants;
 using Cirreum.Conductor.Tests.Domain.Issues;
 
 [TestClass]
@@ -32,12 +33,12 @@ public class DomainFeatureTests {
 		Assert.AreEqual("issues", result);
 	}
 
-	// PermissionSetCache — single-arg feature resolution
+	// RequiredPermissionCache — single-arg feature resolution
 	// -------------------------------------------------------------
 
 	[TestMethod]
 	public void Single_arg_permission_resolves_feature_from_namespace() {
-		var permissions = PermissionSetCache.GetFor<DeleteIssueCmd>();
+		var permissions = RequiredPermissionCache.GetFor<DeleteIssueCmd>();
 
 		Assert.HasCount(1, permissions);
 		Assert.AreEqual("issues", permissions[0].Feature);
@@ -46,7 +47,7 @@ public class DomainFeatureTests {
 
 	[TestMethod]
 	public void Two_arg_permission_validates_matching_feature() {
-		var permissions = PermissionSetCache.GetFor<ArchiveIssueCmd>();
+		var permissions = RequiredPermissionCache.GetFor<ArchiveIssueCmd>();
 
 		Assert.HasCount(1, permissions);
 		Assert.AreEqual("issues", permissions[0].Feature);
@@ -56,18 +57,18 @@ public class DomainFeatureTests {
 	[TestMethod]
 	public void Mismatched_feature_on_granted_resource_throws() {
 		Assert.ThrowsExactly<InvalidOperationException>(
-			() => PermissionSetCache.GetFor<CrossDomainCmd>());
+			() => RequiredPermissionCache.GetFor<CrossDomainCmd>());
 	}
 
 	[TestMethod]
 	public void Single_arg_on_type_without_domain_namespace_throws() {
 		Assert.ThrowsExactly<InvalidOperationException>(
-			() => PermissionSetCache.GetFor<NonGrantedWithNameOnly>());
+			() => RequiredPermissionCache.GetFor<NonGrantedWithNameOnly>());
 	}
 
 	[TestMethod]
 	public void Multiple_permissions_are_all_resolved() {
-		var permissions = PermissionSetCache.GetFor<MultiPermCmd>();
+		var permissions = RequiredPermissionCache.GetFor<MultiPermCmd>();
 
 		Assert.HasCount(2, permissions);
 		Assert.IsTrue(permissions.Any(p => p.Operation == "write"));
@@ -77,7 +78,7 @@ public class DomainFeatureTests {
 
 	[TestMethod]
 	public void Duplicate_permissions_are_deduplicated() {
-		var permissions = PermissionSetCache.GetFor<DuplicatePermCmd>();
+		var permissions = RequiredPermissionCache.GetFor<DuplicatePermCmd>();
 
 		Assert.HasCount(1, permissions);
 		Assert.AreEqual("delete", permissions[0].Operation);
@@ -85,7 +86,7 @@ public class DomainFeatureTests {
 
 	[TestMethod]
 	public void No_permission_attributes_returns_empty() {
-		var permissions = PermissionSetCache.GetFor<NoPermCmd>();
+		var permissions = RequiredPermissionCache.GetFor<NoPermCmd>();
 
 		Assert.HasCount(0, permissions);
 	}
@@ -104,7 +105,8 @@ public class DomainFeatureTests {
 namespace Cirreum.Conductor.Tests.Domain.Issues {
 
 	using Cirreum.Authorization;
-	using Cirreum.Authorization.Grants;
+	using Cirreum.Authorization.Operations;
+	using Cirreum.Authorization.Operations.Grants;
 	using Cirreum.Conductor;
 
 	[RequiresPermission("delete")]

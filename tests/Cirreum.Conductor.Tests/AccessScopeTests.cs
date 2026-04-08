@@ -116,7 +116,7 @@ public class AccessScopeTests {
 			OperationId: Guid.NewGuid().ToString(),
 			CorrelationId: Guid.NewGuid().ToString());
 
-	private sealed class TestResource : IAuthorizableResource;
+	private sealed class TestResource : IAuthorizableObject;
 
 	/// <summary>
 	/// Subclass that publicly exposes the protected SetAccessScope setter

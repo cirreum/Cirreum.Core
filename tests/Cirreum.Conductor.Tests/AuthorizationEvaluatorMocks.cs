@@ -6,11 +6,11 @@ using Cirreum.Exceptions;
 public sealed record OrderResource(
 	string OrderId,
 	string OwnerUserId
-) : IAuthorizableResource;
+) : IAuthorizableObject;
 
 public sealed record AdminOnlyResource(
 	string ResourceName
-) : IAuthorizableResource;
+) : IAuthorizableObject;
 
 
 /// <summary>
@@ -45,7 +45,7 @@ public sealed class TestAuthorizationEvaluator(
 	public ValueTask<Result> Evaluate<TResource>(
 		TResource resource,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableResource {
+		where TResource : IAuthorizableObject {
 
 		if (resource is null) {
 			throw new ArgumentNullException(nameof(resource));
@@ -62,7 +62,7 @@ public sealed class TestAuthorizationEvaluator(
 		TResource resource,
 		OperationContext operation,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableResource {
+		where TResource : IAuthorizableObject {
 
 		if (resource is null) {
 			throw new ArgumentNullException(nameof(resource));
@@ -83,7 +83,7 @@ public sealed class AlwaysAllowAuthorizationEvaluator : IAuthorizationEvaluator 
 	public ValueTask<Result> Evaluate<TResource>(
 		TResource resource,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableResource {
+		where TResource : IAuthorizableObject {
 
 		return ValueTask.FromResult(Result.Success);
 	}
@@ -92,7 +92,7 @@ public sealed class AlwaysAllowAuthorizationEvaluator : IAuthorizationEvaluator 
 		TResource resource,
 		OperationContext operation,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableResource {
+		where TResource : IAuthorizableObject {
 
 		return ValueTask.FromResult(Result.Success);
 	}
@@ -110,7 +110,7 @@ public sealed class AlwaysDenyAuthorizationEvaluator(Exception? exception = null
 	public ValueTask<Result> Evaluate<TResource>(
 		TResource resource,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableResource {
+		where TResource : IAuthorizableObject {
 
 		return ValueTask.FromResult(Result.Fail(_exception));
 	}
@@ -119,7 +119,7 @@ public sealed class AlwaysDenyAuthorizationEvaluator(Exception? exception = null
 		TResource resource,
 		OperationContext operation,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableResource {
+		where TResource : IAuthorizableObject {
 
 		return ValueTask.FromResult(Result.Fail(_exception));
 	}

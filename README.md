@@ -58,18 +58,18 @@ var authContext = new AuthorizationContext<TResource>(
 Flexible, policy-based authorization with support for RBAC, ABAC, and grant-based access control patterns:
 
 - **RBAC** — roles with inheritance via `IAuthorizationRoleRegistry` and `EffectiveRoles`
-- **ABAC** — attribute checks over user, resource, and ambient context inside `ResourceAuthorizerBase<T>` FluentValidation rules
+- **ABAC** — attribute checks over user, resource, and ambient context inside `AuthorizerBase<T>` FluentValidation rules
 - **Owner-scope** — owner→resource and tenant→resource relationships enforced by `OwnerScopeEvaluatorBase` (Stage 1 Step 0) and custom `IScopeEvaluator` implementations (Stage 1 Step 1)
-- **Grants** — opt-in grant-based access control answering *"which owners can this caller access?"* via `IGrantResolver`, with L1/L2 grant caching and Mutate/Lookup/Search/Self enforcement semantics
+- **Grants** — opt-in grant-based access control answering *"which owners can this caller access?"* via `IOperationGrantProvider`, with L1/L2 grant caching and Mutate/Lookup/Search/Self enforcement semantics
 
 - `IAuthorizationEvaluator` - Pluggable, three-stage authorization evaluator (Scope → Resource → Policy)
-- `IAuthorizableResource` - Resources that can be authorized
-- `ResourceAuthorizerBase<TResource>` - FluentValidation-backed resource authorizer (one per resource type)
+- `IAuthorizableObject` - Resources that can be authorized
+- `AuthorizerBase<TResource>` - FluentValidation-backed resource authorizer (one per resource type)
 - `IScopeEvaluator` / `OwnerScopeEvaluatorBase` - Stage 1 scope gates (tenant, owner, access-scope)
-- `GrantEvaluator` / `IGrantResolver` - Stage 1 grant-aware scope gate with Mutate/Lookup/Search/Self enforcement
+- `OperationGrantEvaluator` / `IOperationGrantProvider` - Stage 1 grant-aware scope gate with Mutate/Lookup/Search/Self enforcement
 - `IPolicyValidator` - Stage 3 cross-cutting policy validators (hours, quotas, kill-switches)
 - `AccessScope` (None / Global / Tenant) - Coarse authorization dimension resolved by `IAccessScopeResolver`
-- `AccessGrant` - Computed set of accessible owners per operation (Denied / Unrestricted / Bounded)
+- `OperationGrant` - Computed set of accessible owners per operation (Denied / Unrestricted / Bounded)
 - Role resolution with inheritance support via `IAuthorizationRoleRegistry`
 - Flexible AuthN/AuthZ with support for OIDC/MSAL/BYOID
 
@@ -149,7 +149,7 @@ A high-performance mediator implementation with comprehensive pipeline support f
 - **QueryCaching** - Automatic result caching with configurable providers
 
 **Discriminator**
-- `IAuthorizableRequestBase` - Single pipeline discriminator for authorization; inherits `IAuthorizableResource` so every request is its own authorizable resource (no wrapping required)
+- `IAuthorizableRequestBase` - Single pipeline discriminator for authorization; inherits `IAuthorizableObject` so every request is its own authorizable resource (no wrapping required)
 
 ### 📊 Observability
 
@@ -160,7 +160,7 @@ Centralized telemetry with zero overhead when OpenTelemetry is not configured:
 - `AuthorizationTelemetry` — three-stage pipeline metrics (per-stage decision counters, pipeline duration histogram, grant resolution cache tracking)
 - `CacheTelemetry` — cache hit/miss counters and operation duration histograms
 
-**Cache Instrumentation** — `InstrumentedCacheService` decorator wraps any `ICacheService` implementation transparently via DI. All consumers (`QueryCaching`, `AccessGrantFactory`, future consumers) get hit/miss tracking and duration metrics for free. The decorator detects hits vs misses via a `factoryExecuted` flag — no `ICacheService` API changes needed. `NoCacheService` is never wrapped (zero overhead when caching is disabled).
+**Cache Instrumentation** — `InstrumentedCacheService` decorator wraps any `ICacheService` implementation transparently via DI. All consumers (`QueryCaching`, `OperationGrantFactory`, future consumers) get hit/miss tracking and duration metrics for free. The decorator detects hits vs misses via a `factoryExecuted` flag — no `ICacheService` API changes needed. `NoCacheService` is never wrapped (zero overhead when caching is disabled).
 
 **OTel Integration**:
 ```csharp
@@ -324,14 +324,14 @@ var result = await evaluator.Evaluate(resource);
 var result = await evaluator.Evaluate(resource, operationContext);
 ```
 
-Resource authorizers derive from `ResourceAuthorizerBase<TResource>`, which
+Resource authorizers derive from `AuthorizerBase<TResource>`, which
 is an `AbstractValidator<AuthorizationContext<TResource>>`. Each resource
 type has **exactly one** registered authorizer (mirroring FluentValidation's
 one-validator-per-type contract):
 
 ```csharp
 public sealed class DocumentAuthorizer
-    : ResourceAuthorizerBase<DocumentResource>
+    : AuthorizerBase<DocumentResource>
 {
     public DocumentAuthorizer()
     {
@@ -364,18 +364,18 @@ public sealed record DeleteIssue(string Id) : IGrantMutateRequest {
 }
 
 // 2. Implement a grant resolver (the only app code)
-public class AppGrantResolver : IGrantResolver {
-    public async ValueTask<GrantResult> ResolveGrantsAsync<TResource>(
+public class AppOperationGrantProvider : IOperationGrantProvider {
+    public async ValueTask<OperationGrantResult> ResolveGrantsAsync<TResource>(
         AuthorizationContext<TResource> context, CancellationToken ct)
-        where TResource : IAuthorizableResource {
+        where TResource : IAuthorizableObject {
         // Query your grants table
         var ownerIds = await db.GetGrantedOwners(context.UserId, context.Permissions);
-        return new GrantResult(ownerIds);
+        return new OperationGrantResult(ownerIds);
     }
 }
 
 // 3. Register
-services.AddAccessGrants<AppGrantResolver>();
+services.AddOperationGrants<AppOperationGrantProvider>();
 ```
 
 See [Grants README](src/Cirreum.Core/Authorization/Grants/README.md) for the
@@ -431,9 +431,9 @@ public sealed record GetDocumentQuery : IAuthorizableQuery<DocumentDto>
     public required string OwnerId { get; init; }
 }
 
-// Exactly one ResourceAuthorizerBase<T> per resource type (FluentValidation-style)
+// Exactly one AuthorizerBase<T> per resource type (FluentValidation-style)
 public sealed class GetDocumentQueryAuthorizer
-    : ResourceAuthorizerBase<GetDocumentQuery>
+    : AuthorizerBase<GetDocumentQuery>
 {
     public GetDocumentQueryAuthorizer()
     {

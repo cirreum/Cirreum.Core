@@ -50,7 +50,7 @@ public interface IPolicyValidator {
 	/// Determines whether this validator should be applied to the specified resource within the given execution context.
 	/// </summary>
 	/// <typeparam name="TResource">
-	/// The type of the resource being evaluated. Must be non-nullable and implement <see cref="IAuthorizableResource"/>.
+	/// The type of the resource being evaluated. Must be non-nullable and implement <see cref="IAuthorizableObject"/>.
 	/// </typeparam>
 	/// <param name="resource">
 	/// The resource instance to evaluate for validator applicability. Cannot be <see langword="null"/>.
@@ -74,13 +74,13 @@ public interface IPolicyValidator {
 		TResource resource,
 		DomainRuntimeType runtimeType,
 		DateTimeOffset timestamp)
-		where TResource : notnull, IAuthorizableResource;
+		where TResource : notnull, IAuthorizableObject;
 
 	/// <summary>
 	/// Asynchronously validates the authorization of a resource within the specified authorization context.
 	/// </summary>
 	/// <typeparam name="TResource">
-	/// The type of the resource being authorized. Must be non-nullable and implement <see cref="IAuthorizableResource"/>.
+	/// The type of the resource being authorized. Must be non-nullable and implement <see cref="IAuthorizableObject"/>.
 	/// </typeparam>
 	/// <param name="context">
 	/// The authorization context containing the resource and all necessary information for performing the validation.
@@ -115,5 +115,5 @@ public interface IPolicyValidator {
 	Task<ValidationResult> ValidateAsync<TResource>(
 		AuthorizationContext<TResource> context,
 		CancellationToken cancellationToken = default)
-		where TResource : notnull, IAuthorizableResource;
+		where TResource : notnull, IAuthorizableObject;
 }

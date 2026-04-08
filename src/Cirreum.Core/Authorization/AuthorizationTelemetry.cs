@@ -25,28 +25,34 @@ public static class AuthorizationTelemetry {
 	/// <summary>Stage 1 — scope evaluation (owner-scope gate + generic scope evaluators).</summary>
 	public const string StageScope = "scope";
 
-	/// <summary>Stage 2 — resource authorizers (<see cref="IResourceAuthorizer{TResource}"/>).</summary>
+	/// <summary>Stage 2 — resource authorizers (<see cref="IAuthorizer{TResource}"/>).</summary>
 	public const string StageResource = "resource";
 
 	/// <summary>Stage 3 — policy validators (<see cref="IPolicyValidator"/>).</summary>
 	public const string StagePolicy = "policy";
 
+	/// <summary>Stage — resource access evaluation (<see cref="Resources.IResourceAccessEvaluator"/>).</summary>
+	public const string StageResourceAccess = "resource-access";
+
 	// Step names ———————————————————————————————————————————————
 
-	/// <summary>Stage 1, Step 0 — owner-scope gate (<see cref="Grants.GrantEvaluator"/>).</summary>
+	/// <summary>Stage 1, Step 0 — owner-scope gate (<see cref="Operations.Grants.OperationGrantEvaluator"/>).</summary>
 	public const string StepOwnerScope = "owner-scope";
 
-	/// <summary>Stage 1, Step 0s — self-identity gate (<see cref="Grants.GrantEvaluator"/>).</summary>
+	/// <summary>Stage 1, Step 0s — self-identity gate (<see cref="Operations.Grants.OperationGrantEvaluator"/>).</summary>
 	public const string StepSelfIdentity = "self-identity";
 
 	/// <summary>Stage 1, Step 1 — generic <see cref="IScopeEvaluator"/> chain.</summary>
 	public const string StepScopeEvaluator = "scope-evaluator";
 
-	/// <summary>Stage 2 — resource authorizer (<see cref="ResourceAuthorizerBase{TResource}"/>).</summary>
+	/// <summary>Stage 2 — resource authorizer (<see cref="AuthorizerBase{TResource}"/>).</summary>
 	public const string StepResourceAuthorizer = "resource-authorizer";
 
 	/// <summary>Stage 3 — policy validator (<see cref="IPolicyValidator"/>).</summary>
 	public const string StepPolicyValidator = "policy-validator";
+
+	/// <summary>Resource access check (<see cref="Resources.ResourceAccessEvaluator"/>).</summary>
+	public const string StepResourceAccessCheck = "resource-access-check";
 
 	// Decision values —————————————————————————————————————————
 

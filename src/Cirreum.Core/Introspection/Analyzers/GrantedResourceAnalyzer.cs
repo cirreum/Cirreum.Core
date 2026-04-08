@@ -1,6 +1,6 @@
 namespace Cirreum.Introspection.Analyzers;
 
-using Cirreum.Authorization.Grants;
+using Cirreum.Authorization.Operations.Grants;
 using Cirreum.Introspection.Modeling;
 using Cirreum.Introspection.Modeling.Types;
 
@@ -86,7 +86,7 @@ public class GrantedResourceAnalyzer : IDomainAnalyzer {
 					"resource-level authorization rules are applied.",
 				RelatedTypeNames: [.. grantedWithoutAuthorizer.Select(TypeName)],
 				Recommendation: "If these resources require resource-level authorization beyond grant " +
-					"evaluation, add a ResourceAuthorizerBase<T> implementation. If grants-only " +
+					"evaluation, add a AuthorizerBase<T> implementation. If grants-only " +
 					"authorization is intentional, this can be safely ignored."));
 		}
 

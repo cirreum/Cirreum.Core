@@ -1,7 +1,7 @@
 namespace Cirreum;
 
-using Cirreum.Authorization.Grants;
-using Cirreum.Authorization.Grants.Caching;
+using Cirreum.Authorization.Operations.Grants;
+using Cirreum.Authorization.Operations.Grants.Caching;
 using Cirreum.Caching;
 using Cirreum.Extensions.Internal;
 using System.Reflection;
@@ -15,9 +15,9 @@ public static class GrantServiceCollectionExtensions {
 
 	/// <summary>
 	/// Registers the grant-based access control pipeline with a single universal grant resolver.
-	/// Registers the app-provided <see cref="IGrantResolver"/>, the Core-supplied
-	/// <see cref="AccessGrantFactory"/> orchestrator, and the sealed
-	/// <see cref="GrantEvaluator"/> that enforces Mutate/Lookup/Search/Self grant semantics
+	/// Registers the app-provided <see cref="IOperationGrantProvider"/>, the Core-supplied
+	/// <see cref="OperationGrantFactory"/> orchestrator, and the sealed
+	/// <see cref="OperationGrantEvaluator"/> that enforces Mutate/Lookup/Search/Self grant semantics
 	/// as Stage 1 Step 0 of the authorization pipeline.
 	/// </summary>
 	/// <typeparam name="TGrantResolver">The app's grant-resolver implementation.</typeparam>
@@ -28,21 +28,21 @@ public static class GrantServiceCollectionExtensions {
 	/// repository/DB context.
 	/// </param>
 	/// <returns>The <see cref="IServiceCollection"/> for chaining.</returns>
-	public static IServiceCollection AddAccessGrants<TGrantResolver>(
+	public static IServiceCollection AddOperationGrants<TGrantResolver>(
 		this IServiceCollection services,
 		ServiceLifetime lifetime = ServiceLifetime.Scoped)
-		where TGrantResolver : class, IGrantResolver =>
-		services.AddAccessGrantsCore(typeof(TGrantResolver), lifetime);
+		where TGrantResolver : class, IOperationGrantProvider =>
+		services.AddOperationGrantsCore(typeof(TGrantResolver), lifetime);
 
 	/// <summary>
-	/// Discovers the <see cref="IGrantResolver"/> implementation in the provided assemblies,
-	/// binds <see cref="GrantCacheSettings"/> from configuration, and registers the full
+	/// Discovers the <see cref="IOperationGrantProvider"/> implementation in the provided assemblies,
+	/// binds <see cref="OperationGrantCacheSettings"/> from configuration, and registers the full
 	/// grants pipeline. This is the convention-based entry point intended for higher-level
 	/// runtime extensions (e.g., <c>AddGrantAuthorization</c> in <c>Cirreum.Runtime</c>).
 	/// </summary>
 	/// <param name="services">The <see cref="IServiceCollection"/> to register with.</param>
 	/// <param name="configuration">
-	/// The application <see cref="IConfiguration"/> used to bind <see cref="GrantCacheSettings"/>
+	/// The application <see cref="IConfiguration"/> used to bind <see cref="OperationGrantCacheSettings"/>
 	/// from the <c>Cirreum:Authorization:Grants:Cache</c> section.
 	/// </param>
 	/// <param name="assemblies">The assemblies to scan for grant resolver implementations.</param>
@@ -55,7 +55,7 @@ public static class GrantServiceCollectionExtensions {
 		this IServiceCollection services,
 		IConfiguration? configuration = null,
 		Assembly[]? assemblies = null,
-		Action<GrantCacheSettings>? configureCaching = null) {
+		Action<OperationGrantCacheSettings>? configureCaching = null) {
 
 		ArgumentNullException.ThrowIfNull(services);
 
@@ -64,7 +64,7 @@ public static class GrantServiceCollectionExtensions {
 		// Register cache settings from configuration + delegate (idempotent)
 		services.AddGrantCacheInfrastructure(configuration, configureCaching);
 
-		var grantResolverType = typeof(IGrantResolver);
+		var grantResolverType = typeof(IOperationGrantProvider);
 
 		var resolverType = assemblies
 			.Where(a => a is not null)
@@ -73,13 +73,13 @@ public static class GrantServiceCollectionExtensions {
 			.FirstOrDefault(t => t.IsConcreteClass() && grantResolverType.IsAssignableFrom(t));
 
 		if (resolverType is not null) {
-			services.AddAccessGrantsCore(resolverType, ServiceLifetime.Scoped);
+			services.AddOperationGrantsCore(resolverType, ServiceLifetime.Scoped);
 		}
 
 		return services;
 	}
 
-	private static IServiceCollection AddAccessGrantsCore(
+	private static IServiceCollection AddOperationGrantsCore(
 		this IServiceCollection services,
 		Type resolverType,
 		ServiceLifetime lifetime) {
@@ -87,24 +87,24 @@ public static class GrantServiceCollectionExtensions {
 		ArgumentNullException.ThrowIfNull(services);
 
 		// Skip if already registered
-		if (services.Any(sd => sd.ServiceType == typeof(IGrantResolver))) {
+		if (services.Any(sd => sd.ServiceType == typeof(IOperationGrantProvider))) {
 			return services;
 		}
 
 		// Resolver and orchestrator
 		services.Add(ServiceDescriptor.Describe(
-			serviceType: typeof(IGrantResolver),
+			serviceType: typeof(IOperationGrantProvider),
 			implementationType: resolverType,
 			lifetime: lifetime));
 
 		services.Add(ServiceDescriptor.Describe(
-			serviceType: typeof(IAccessGrantFactory),
-			implementationType: typeof(AccessGrantFactory),
+			serviceType: typeof(IOperationGrantFactory),
+			implementationType: typeof(OperationGrantFactory),
 			lifetime: lifetime));
 
 		// Shared infrastructure
-		services.TryAddScoped<IAccessGrantAccessor, DefaultAccessGrantAccessor>();
-		services.TryAddScoped<GrantEvaluator>();
+		services.TryAddScoped<IOperationGrantAccessor, DefaultOperationGrantAccessor>();
+		services.TryAddScoped<OperationGrantEvaluator>();
 		services.AddGrantCacheInfrastructure();
 
 		return services;
@@ -112,29 +112,29 @@ public static class GrantServiceCollectionExtensions {
 
 	/// <summary>
 	/// Registers the shared cache infrastructure for the grant system. Idempotent — safe to
-	/// call from every <see cref="AddAccessGrants{TGrantResolver}"/> invocation.
+	/// call from every <see cref="AddOperationGrants{TGrantResolver}"/> invocation.
 	/// </summary>
 	private static void AddGrantCacheInfrastructure(
 		this IServiceCollection services,
 		IConfiguration? configuration = null,
-		Action<GrantCacheSettings>? configureCaching = null) {
+		Action<OperationGrantCacheSettings>? configureCaching = null) {
 
 		// Only register once
-		if (services.Any(sd => sd.ServiceType == typeof(GrantCacheSettings))) {
+		if (services.Any(sd => sd.ServiceType == typeof(OperationGrantCacheSettings))) {
 			return;
 		}
 
-		var settings = new GrantCacheSettings();
+		var settings = new OperationGrantCacheSettings();
 
 		if (configuration is not null) {
-			var section = configuration.GetSection(GrantCacheSettings.SectionPath);
+			var section = configuration.GetSection(OperationGrantCacheSettings.SectionPath);
 			section.Bind(settings);
 		}
 
 		configureCaching?.Invoke(settings);
 		services.AddSingleton(settings);
 
-		services.TryAddSingleton<IGrantCacheInvalidator, GrantCacheInvalidator>();
+		services.TryAddSingleton<IOperationGrantCacheInvalidator, OperationGrantCacheInvalidator>();
 
 		// Safety net: ensure a cache service is available even if Conductor caching
 		// hasn't been configured yet. NoCacheService degrades gracefully —

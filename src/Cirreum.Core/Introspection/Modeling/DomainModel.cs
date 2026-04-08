@@ -2,7 +2,8 @@ namespace Cirreum.Introspection.Modeling;
 
 using Cirreum;
 using Cirreum.Authorization;
-using Cirreum.Authorization.Grants;
+using Cirreum.Authorization.Operations;
+using Cirreum.Authorization.Operations.Grants;
 using Cirreum.Introspection.Modeling.Export;
 using Cirreum.Introspection.Modeling.Types;
 using Cirreum.Conductor;
@@ -16,7 +17,7 @@ using System.Reflection;
 /// <summary>
 /// Provides access to all domain resources and their authorization information.
 /// This is the single source of truth for resource discovery and authorization rules.
-/// Scans all IDomainResource types (both protected and anonymous).
+/// Scans all IDomainObject types (both protected and anonymous).
 /// </summary>
 public class DomainModel() {
 
@@ -91,7 +92,7 @@ public class DomainModel() {
 			.Where(t => t.IsClass && !t.IsAbstract)
 			.ToList();
 
-		// Step 2: Find all IDomainResource types
+		// Step 2: Find all IDomainObject types
 		var domainResourceTypes = allTypes.Where(IsDomainResource).ToList();
 
 		// Step 3: Find all authorizers and build a lookup by resource type
@@ -109,7 +110,7 @@ public class DomainModel() {
 			var hasAuthorizer = authorizersByResource.TryGetValue(resourceType, out var authorizerType);
 			var rules = hasAuthorizer ? ExtractValidationRules(resourceType, authorizerType!) : [];
 
-			// IsAnonymous: not an IAuthorizableResource (doesn't participate in authorization)
+			// IsAnonymous: not an IAuthorizableObject (doesn't participate in authorization)
 			var isAnonymous = !IsAuthorizableResource(resourceType);
 
 			// IsCacheableQuery: is an ICacheableQuery (the query results are cached and returned to prevent re-query)
@@ -120,8 +121,8 @@ public class DomainModel() {
 
 			// Permission metadata: domain feature and required permissions are available
 			// for all resources in a *.Domain.* namespace, not just grant-aware ones.
-			var grantDomain = PermissionSetCache.ResolveDomainNamespace(resourceType);
-			var permissions = PermissionSetCache.GetFor(resourceType);
+			var grantDomain = RequiredPermissionCache.ResolveDomainNamespace(resourceType);
+			var permissions = RequiredPermissionCache.GetFor(resourceType);
 			var isGranted = typeof(IGrantableMutateBase).IsAssignableFrom(resourceType)
 				|| typeof(IGrantableLookupBase).IsAssignableFrom(resourceType)
 				|| typeof(IGrantableSearchBase).IsAssignableFrom(resourceType)
@@ -158,7 +159,7 @@ public class DomainModel() {
 	}
 
 	/// <summary>
-	/// Gets only authorizable resources (those that implement IAuthorizableResource).
+	/// Gets only authorizable resources (those that implement IAuthorizableObject).
 	/// </summary>
 	public IReadOnlyList<ResourceTypeInfo> GetAuthorizableResources(bool useCache = true) {
 		return this.GetAllResources(useCache).Where(r => !r.IsAnonymous).ToList().AsReadOnly();
@@ -304,23 +305,23 @@ public class DomainModel() {
 	#region Type Detection Helpers
 
 	/// <summary>
-	/// Determines whether the specified type implements the IDomainResource interface.
+	/// Determines whether the specified type implements the IDomainObject interface.
 	/// </summary>
-	/// <param name="type">The type to examine for implementation of the IDomainResource interface. Cannot be null.</param>
-	/// <returns>true if the specified type implements IDomainResource; otherwise, false.</returns>
+	/// <param name="type">The type to examine for implementation of the IDomainObject interface. Cannot be null.</param>
+	/// <returns>true if the specified type implements IDomainObject; otherwise, false.</returns>
 	private static bool IsDomainResource(Type type) {
 		var interfaces = type.GetInterfaces();
-		return interfaces.Any(i => i.Name == nameof(IDomainResource));
+		return interfaces.Any(i => i.Name == nameof(IDomainObject));
 	}
 
 	/// <summary>
-	/// Determines whether the specified type implements the IAuthorizableResource interface.
+	/// Determines whether the specified type implements the IAuthorizableObject interface.
 	/// </summary>
-	/// <param name="type">The type to examine for implementation of the IAuthorizableResource interface.</param>
-	/// <returns>true if the specified type implements IAuthorizableResource; otherwise, false.</returns>
+	/// <param name="type">The type to examine for implementation of the IAuthorizableObject interface.</param>
+	/// <returns>true if the specified type implements IAuthorizableObject; otherwise, false.</returns>
 	private static bool IsAuthorizableResource(Type type) {
 		var interfaces = type.GetInterfaces();
-		return interfaces.Any(i => i.Name == nameof(IAuthorizableResource));
+		return interfaces.Any(i => i.Name == nameof(IAuthorizableObject));
 	}
 
 	/// <summary>
@@ -352,27 +353,27 @@ public class DomainModel() {
 	private static bool IsResourceAuthorizer(Type type) {
 		// Check for base class validators
 		if (type.BaseType?.IsGenericType == true &&
-			type.BaseType.GetGenericTypeDefinition() == typeof(ResourceAuthorizerBase<>)) {
+			type.BaseType.GetGenericTypeDefinition() == typeof(AuthorizerBase<>)) {
 			return true;
 		}
 
 		// Check for interface-based validators
 		return type.GetInterfaces()
 			.Any(i => i.IsGenericType &&
-					  i.GetGenericTypeDefinition() == typeof(IResourceAuthorizer<>));
+					  i.GetGenericTypeDefinition() == typeof(IAuthorizer<>));
 	}
 
 	private static Type? GetResourceTypeFromAuthorizer(Type authorizerType) {
 		// Try base class first
 		if (authorizerType.BaseType?.IsGenericType == true &&
-			authorizerType.BaseType.GetGenericTypeDefinition() == typeof(ResourceAuthorizerBase<>)) {
+			authorizerType.BaseType.GetGenericTypeDefinition() == typeof(AuthorizerBase<>)) {
 			return authorizerType.BaseType.GetGenericArguments()[0];
 		}
 
 		// Try interface
 		var validatorInterface = authorizerType.GetInterfaces()
 			.FirstOrDefault(i => i.IsGenericType &&
-								 i.GetGenericTypeDefinition() == typeof(IResourceAuthorizer<>));
+								 i.GetGenericTypeDefinition() == typeof(IAuthorizer<>));
 
 		return validatorInterface?.GetGenericArguments()[0];
 	}

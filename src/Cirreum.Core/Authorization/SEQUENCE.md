@@ -9,11 +9,11 @@ sequenceDiagram
     participant AI as Authorization<br/>Intercept
     participant AE as DefaultAuthorization<br/>Evaluator
     participant RR as IAuthorizationRole<br/>Registry
-    participant GE as GrantEvaluator
-    participant AR as AccessGrant<br/>Factory
+    participant GE as OperationGrantEvaluator
+    participant AR as OperationGrant<br/>Factory
     participant OE as OwnerScope<br/>Evaluator
     participant SE as IScopeEvaluator[]
-    participant RA as IResourceAuthorizer[T]
+    participant RA as IAuthorizer[T]
     participant PV as IPolicyValidator[]
 
     AI->>AE: Evaluate(resource, operation)
@@ -47,10 +47,10 @@ sequenceDiagram
             AE-->>AI: Result.Fail(Forbidden)
         end
         GE->>AR: SelectFor(resourceType)
-        AR-->>GE: IAccessGrantResolver
+        AR-->>GE: IOperationGrantResolver
         GE->>AR: ResolveAsync(context)
         Note over AR: ShouldBypassAsync (live)<br/>→ L1 cache<br/>→ L2 cache<br/>→ ResolveGrantsAsync + HomeOwner
-        AR-->>GE: AccessGrant
+        AR-->>GE: OperationGrant
         GE->>GE: Grant enforcement:<br/>Mutate: OwnerId ∈ grant<br/>Lookup: stash grant / OwnerId ∈ grant<br/>Search: OwnerIds ⊆ grant / stamp<br/>Self: ExternalId == UserId / bypass
         alt !IsValid
             AE-->>AI: Result.Fail(Forbidden)
@@ -115,26 +115,26 @@ sequenceDiagram
 
 | Stage | Purpose | Strategy | Short-circuit |
 |---|---|---|---|
-| **1 Step 0a** — Grant gate | Resolve `AccessGrant` and enforce grant timing for `IGrantMutateRequest`, `IGrantLookupRequest`, `IGrantSearchRequest`, `IGrantMutateSelfRequest`, `IGrantLookupSelfRequest` | First failure | Within Stage 1 |
+| **1 Step 0a** — Grant gate | Resolve `OperationGrant` and enforce grant timing for `IGrantMutateRequest`, `IGrantLookupRequest`, `IGrantSearchRequest`, `IGrantMutateSelfRequest`, `IGrantLookupSelfRequest` | First failure | Within Stage 1 |
 | **1 Step 0b** — Owner gate | Enforce `OwnerId` presence + match for `IAuthorizableOwnerScopedResource` | First failure | Within Stage 1 |
 | **1 Step 1** — Scope evaluators | Tenant / access-scope / ambient constraints | First failure, registration order | Within Stage 1 |
-| **2** — Resource authorizer | Role and rule checks specific to this resource type | Single `ResourceAuthorizerBase<T>` per `T`; multiple FluentValidation rules aggregate within it | Stage 2 → Stage 3 |
+| **2** — Resource authorizer | Role and rule checks specific to this resource type | Single `AuthorizerBase<T>` per `T`; multiple FluentValidation rules aggregate within it | Stage 2 → Stage 3 |
 | **3** — Policy validators | Cross-cutting runtime policies (hours, quotas, kill-switches) | Sequential by `Order`, aggregate within stage | End of pipeline |
 
 ## Grant Evaluation Detail
 
-When a resource implements a Granted interface, the `GrantEvaluator` runs as the
+When a resource implements a Granted interface, the `OperationGrantEvaluator` runs as the
 first sub-step of Stage 1. Its internal flow:
 
 1. **User enabled check** — `IOwnedApplicationUser.IsEnabled` (immediate deny if disabled)
-2. **Grant factory** — `IAccessGrantFactory.CreateAsync(context)` is invoked
+2. **Grant factory** — `IOperationGrantFactory.CreateAsync(context)` is invoked
 3. **Grant resolution** — the factory runs:
    - Bypass check (`ShouldBypassAsync`) — always live, never cached
    - L1 scoped cache lookup (per-request dedup)
    - L2 cross-request cache lookup (`ICacheService`)
    - Cold path: `ResolveGrantsAsync` + `ResolveHomeOwnerAsync` + merge
 4. **Grant enforcement** — operation-kind-specific rules (see [Grants README](Grants/README.md))
-5. **Grant stashing** — `AccessGrant` set on `IAccessGrantAccessor` for handler access
+5. **Grant stashing** — `OperationGrant` set on `IOperationGrantAccessor` for handler access
 
 If no Granted interface is present, the grant gate is a no-op pass with zero overhead.
 
@@ -164,7 +164,7 @@ at every exit path:
 | Unauthenticated | `RecordDuration(deny, "unauthenticated")` |
 | No authorizers | `RecordDuration(deny, "no-authorizers")` |
 | No roles | `RecordDuration(deny, "no-roles")` |
-| Stage 1 grant gate deny | `RecordDuration(deny, stage=scope)` — GrantEvaluator also calls `RecordDecision` |
+| Stage 1 grant gate deny | `RecordDuration(deny, stage=scope)` — OperationGrantEvaluator also calls `RecordDecision` |
 | Stage 1 scope evaluator deny | `RecordDecision(scope, scope-evaluator, deny)` + `RecordDuration` |
 | Stage 2 resource authorizer deny | `RecordDecision(resource, resource-authorizer, deny)` + `RecordDuration` |
 | Stage 3 policy validator deny | `RecordDecision(policy, policy-validator, deny)` + `RecordDuration` |

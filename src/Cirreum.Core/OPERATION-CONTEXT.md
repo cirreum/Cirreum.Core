@@ -38,7 +38,7 @@
 │                                                           │   │                                                           │
 │ + Operation (OperationContext)                            │   │ + Operation (OperationContext)                            │
 │ + Request (TRequest)                                      │   │ + EffectiveRoles (IImmutableSet<Role>)                    │
-│ + RequestType (string)                                    │   │ + Resource (TResource : IAuthorizableResource)            │
+│ + RequestType (string)                                    │   │ + Resource (TResource : IAuthorizableObject)            │
 │                                                           │   │                                                           │
 │ Delegates to Operation for:                               │   │ Delegates to Operation for:                               │
 │ • All user properties & helpers                           │   │ • All user properties & helpers                           │
@@ -82,7 +82,7 @@
               │ 7. Stage 1 – Scope: first-failure short-circuit                      │
               │      Step 0: OwnerScopeEvaluator (if applicable)                     │
               │      Step 1: IScopeEvaluator[] in registration order                 │
-              │ 8. Stage 2 – Resource: one ResourceAuthorizerBase<T>                 │
+              │ 8. Stage 2 – Resource: one AuthorizerBase<T>                 │
               │      FluentValidation rules aggregate within the authorizer;         │
               │      short-circuits to Stage 3 on any failure                        │
               │ 9. Stage 3 – Policy: IPolicyValidator[] filtered by                  │
@@ -295,7 +295,7 @@ authenticated the caller. It's stamped onto `IUserState` by
 
 ### Where It's Used
 
-- **Grant evaluation (Stage 1 Step 0a).** The `GrantEvaluator` uses
+- **Grant evaluation (Stage 1 Step 0a).** The `OperationGrantEvaluator` uses
   `AccessScope` to enforce CRL rules differently per scope. `Global`
   callers must supply an explicit `OwnerId` for writes (no auto-enrich),
   and must supply `OwnerId` for cacheable reads (no unbounded cache bucket).
@@ -309,7 +309,7 @@ authenticated the caller. It's stamped onto `IUserState` by
   implementations can short-circuit on `AccessScope` to enforce
   tenant-only or global-only routes.
 - **Resource authorizers (Stage 2).** A single
-  `ResourceAuthorizerBase<T>` may branch on `context.AccessScope` to
+  `AuthorizerBase<T>` may branch on `context.AccessScope` to
   apply different rule sets per scope.
 - **Policy validators (Stage 3).** Kill-switches and time-window policies
   often apply only to `Tenant` callers, bypassed for `Global`.

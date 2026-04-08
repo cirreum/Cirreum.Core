@@ -1,5 +1,6 @@
 ﻿namespace Cirreum.Authorization;
 
+using Cirreum.Authorization.Operations;
 using Cirreum.Security;
 using System.Collections.Immutable;
 
@@ -12,7 +13,7 @@ using System.Collections.Immutable;
 /// including any roles inherited from others (downward inheritance only, e.g., 
 /// a manager inherits from coordinator, which inherits from user).
 /// </param>
-/// <param name="Resource">The <see cref="IAuthorizableResource"/> object being evaluated.</param>
+/// <param name="Resource">The <see cref="IAuthorizableObject"/> object being evaluated.</param>
 /// <remarks>
 /// <para>
 /// The user may only be assigned a single role by the Identity Provider (IdP), but based on application-defined
@@ -26,7 +27,7 @@ public sealed record AuthorizationContext<TResource>(
 	OperationContext Operation,
 	IImmutableSet<Role> EffectiveRoles,
 	TResource Resource)
-	where TResource : IAuthorizableResource {
+	where TResource : IAuthorizableObject {
 
 	/// <summary>
 	/// The domain feature derived from <typeparamref name="TResource"/>'s namespace convention.
@@ -55,10 +56,10 @@ public sealed record AuthorizationContext<TResource>(
 	/// <summary>
 	/// The distinct set of permissions declared on <typeparamref name="TResource"/> via
 	/// <see cref="RequiresPermissionAttribute"/>. Hoisted once per type from
-	/// <see cref="PermissionSetCache"/>; available to every authorization stage without
+	/// <see cref="RequiredPermissionCache"/>; available to every authorization stage without
 	/// per-request reflection. AND semantics — every listed permission is required.
 	/// </summary>
-	public PermissionSet Permissions => PermissionSetCache.GetFor<TResource>();
+	public PermissionSet Permissions => RequiredPermissionCache.GetFor<TResource>();
 
 	// ExecutionContext properties (for policy validators)
 	public DomainRuntimeType RuntimeType => this.Operation.RuntimeType;

@@ -390,7 +390,7 @@ public class DomainDocumenter : IDomainDocumenter {
 		// NEW: Domain Architecture Tab
 		sb.AppendLine("<div id=\"domain\" class=\"tab-content\">");
 		sb.AppendLine("  <h2>Domain Architecture</h2>");
-		sb.AppendLine("  <p>Complete view of all domain resources (IDomainResource) across your domain, including both protected and anonymous resources.</p>");
+		sb.AppendLine("  <p>Complete view of all domain resources (IDomainObject) across your domain, including both protected and anonymous resources.</p>");
 
 		// Get domain data from the unified provider
 		var htmlCatalog = DomainModel.Instance.GetCatalog();

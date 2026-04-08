@@ -20,9 +20,9 @@ using Cirreum.Authorization;
 /// <see cref="Authorization.Grants.IGrantLookupSelfRequest{TResponse}"/>.
 /// </para>
 /// <para>
-/// By inheriting <see cref="IAuthorizableResource"/>, every request instance may be
+/// By inheriting <see cref="IAuthorizableObject"/>, every request instance may be
 /// treated as its own authorizable resource — validators can inspect request shape
 /// directly without wrapping.
 /// </para>
 /// </remarks>
-public interface IAuthorizableRequestBase : IBaseRequest, IAuthorizableResource;
+public interface IAuthorizableRequestBase : IBaseRequest, IAuthorizableObject;

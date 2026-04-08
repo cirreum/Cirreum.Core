@@ -14,4 +14,4 @@ public interface IRequest<out TResponse> : IBaseRequest;
 /// <summary>
 /// Allows for generic type constraints of objects implementing IRequest or IRequest{TResponse}
 /// </summary>
-public interface IBaseRequest : IDomainResource;
+public interface IBaseRequest : IDomainObject;

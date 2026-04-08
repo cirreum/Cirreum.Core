@@ -68,4 +68,18 @@ public static class DenyCodes {
 	/// operations where the identity match fails.
 	/// </summary>
 	public const string NotResourceOwner = "NOT_RESOURCE_OWNER";
+
+	/// <summary>
+	/// The caller does not have the required permission on the protected resource.
+	/// Emitted by <see cref="Resources.IResourceAccessEvaluator"/> when the resource's
+	/// effective ACL does not grant the requested permission for any of the caller's roles.
+	/// </summary>
+	public const string ResourceAccessDenied = "RESOURCE_ACCESS_DENIED";
+
+	/// <summary>
+	/// The protected resource was not found by its identifier.
+	/// Emitted by <see cref="Resources.IResourceAccessEvaluator"/> when
+	/// <see cref="Resources.IAccessEntryProvider{T}.GetByIdAsync"/> returns <see langword="null"/>.
+	/// </summary>
+	public const string ResourceNotFound = "RESOURCE_NOT_FOUND";
 }

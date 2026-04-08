@@ -15,7 +15,7 @@ using System.Collections.Concurrent;
 /// <para>
 /// Results are cached per-type in a <see cref="ConcurrentDictionary{TKey, TValue}"/>
 /// for zero-cost repeated lookups. Used by <c>AuthorizationContext</c>,
-/// <c>RequestContext</c>, and <c>PermissionSetCache</c> to derive the domain
+/// <c>RequestContext</c>, and <c>RequiredPermissionCache</c> to derive the domain
 /// feature structurally rather than from attributes or marker interfaces.
 /// </para>
 /// </remarks>

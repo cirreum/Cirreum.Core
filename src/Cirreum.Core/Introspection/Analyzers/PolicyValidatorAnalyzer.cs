@@ -256,7 +256,7 @@ public class PolicyValidatorAnalyzer(
 	}
 
 	private static List<Type> FindResourcesWithAttribute(Type attributeType) {
-		// Scan all types that implement IAuthorizableResource in loaded assemblies
+		// Scan all types that implement IAuthorizableObject in loaded assemblies
 		var allAuthorizableResources = AssemblyScanner.ScanAssemblies()
 			.SelectMany(assembly => {
 				try {
@@ -266,7 +266,7 @@ public class PolicyValidatorAnalyzer(
 				}
 			})
 			.Where(type => type.IsClass && !type.IsAbstract &&
-						  typeof(IAuthorizableResource).IsAssignableFrom(type))
+						  typeof(IAuthorizableObject).IsAssignableFrom(type))
 			.Distinct();
 
 		return [.. allAuthorizableResources.Where(resourceType => resourceType.GetCustomAttributes(attributeType, false).Length != 0)];

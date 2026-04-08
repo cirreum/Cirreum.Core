@@ -36,7 +36,7 @@ public abstract class AttributeValidatorBase<TAttribute>
 		TResource resource,
 		DomainRuntimeType runtimeType,
 		DateTimeOffset timestamp)
-		where TResource : notnull, IAuthorizableResource =>
+		where TResource : notnull, IAuthorizableObject =>
 		GetAttributeCached(resource.GetType()) != null;
 
 	/// <summary>
@@ -57,7 +57,7 @@ public abstract class AttributeValidatorBase<TAttribute>
 	public abstract Task<ValidationResult> ValidateAsync<TResource>(
 		AuthorizationContext<TResource> context,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableResource;
+		where TResource : IAuthorizableObject;
 
 	/// <summary>
 	/// Gets the attribute from cache or performs reflection and caches the result.

@@ -11,7 +11,7 @@ using Cirreum.Conductor;
 /// <remarks>
 /// <para>
 /// Convention-based pipeline behavior that automatically enforces authorization for
-/// commands and queries implementing <see cref="IAuthorizableResource"/>.
+/// commands and queries implementing <see cref="IAuthorizableObject"/>.
 /// </para>
 /// <para>
 /// Note: This is just one way to consume authorization validators. The underlying

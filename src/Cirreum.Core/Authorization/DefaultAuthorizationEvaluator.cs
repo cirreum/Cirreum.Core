@@ -1,7 +1,8 @@
 namespace Cirreum.Authorization;
 
 using Cirreum.Authorization.Diagnostics;
-using Cirreum.Authorization.Grants;
+using Cirreum.Authorization.Operations;
+using Cirreum.Authorization.Operations.Grants;
 using Cirreum.Exceptions;
 using Cirreum.Security;
 using FluentValidation;
@@ -25,7 +26,7 @@ using System.Diagnostics;
 /// <b>Stage 1 — Scope</b>
 /// <list type="bullet">
 /// <item><description>
-/// Step 0: grant evaluator (<see cref="GrantEvaluator"/>, optional,
+/// Step 0: grant evaluator (<see cref="OperationGrantEvaluator"/>, optional,
 /// applies only to <see cref="IGrantableMutateBase"/>/<see cref="IGrantableLookupBase"/>/<see cref="IGrantableSearchBase"/>).
 /// </description></item>
 /// <item><description>
@@ -36,7 +37,7 @@ using System.Diagnostics;
 /// First failure in Stage 1 short-circuits the pipeline.
 /// </description></item>
 /// <item><description>
-/// <b>Stage 2 — Resource</b>: resource authorizers (<see cref="IResourceAuthorizer{TResource}"/>).
+/// <b>Stage 2 — Resource</b>: resource authorizers (<see cref="IAuthorizer{TResource}"/>).
 /// All authorizers run; failures are aggregated.
 /// </description></item>
 /// <item><description>
@@ -60,7 +61,7 @@ sealed class DefaultAuthorizationEvaluator(
 	IUserStateAccessor userAccessor,
 	IServiceProvider services,
 	ILogger<DefaultAuthorizationEvaluator> logger,
-	GrantEvaluator? grantEvaluator = null
+	OperationGrantEvaluator? grantEvaluator = null
 ) : IAuthorizationEvaluator {
 
 	/// <inheritdoc/>
@@ -71,7 +72,7 @@ sealed class DefaultAuthorizationEvaluator(
 	public async ValueTask<Result> Evaluate<TResource>(
 		TResource resource,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableResource {
+		where TResource : IAuthorizableObject {
 
 		// Build OperationContext for ad-hoc evaluation
 		var userState = await userAccessor.GetUser().ConfigureAwait(false);
@@ -94,7 +95,7 @@ sealed class DefaultAuthorizationEvaluator(
 		TResource resource,
 		OperationContext operation,
 		CancellationToken cancellationToken = default)
-		where TResource : IAuthorizableResource {
+		where TResource : IAuthorizableObject {
 
 		var resourceRuntimeType = resource.GetType();
 		var resourceName = resourceRuntimeType.Name;
@@ -145,8 +146,8 @@ sealed class DefaultAuthorizationEvaluator(
 		var rawScope = services.GetService<IEnumerable<IScopeEvaluator>>()!;
 		var scopeEvaluators = rawScope as IScopeEvaluator[] ?? [.. rawScope];
 
-		var rawResource = services.GetService<IEnumerable<IResourceAuthorizer<TResource>>>()!;
-		var resourceAuthorizers = rawResource as IResourceAuthorizer<TResource>[] ?? [.. rawResource];
+		var rawResource = services.GetService<IEnumerable<IAuthorizer<TResource>>>()!;
+		var resourceAuthorizers = rawResource as IAuthorizer<TResource>[] ?? [.. rawResource];
 
 		// Policy runtime-type filter is deferred into the foreach below — combined with
 		// AppliesTo so we walk the array once instead of materializing a filtered copy here
@@ -253,7 +254,7 @@ sealed class DefaultAuthorizationEvaluator(
 					.ConfigureAwait(false);
 
 				if (!grantResult.IsValid) {
-					// GrantEvaluator already called RecordDecision() via EmitTelemetry()
+					// OperationGrantEvaluator already called RecordDecision() via EmitTelemetry()
 					AuthorizationTelemetry.RecordDuration(
 						activity, resourceName,
 						Timing.GetElapsedMilliseconds(startTimestamp),
@@ -304,17 +305,17 @@ sealed class DefaultAuthorizationEvaluator(
 			List<ValidationFailure>? stageFailures = null;
 
 			// Run the Resource Authorizer. By contract each TResource has exactly one
-			// ResourceAuthorizerBase<TResource> registered (mirrors AbstractValidator<T>
+			// AuthorizerBase<TResource> registered (mirrors AbstractValidator<T>
 			// per T in FluentValidation). Extra registrations are a misconfiguration and
 			// fail loud at evaluation time.
 			if (resourceAuthorizers.Length > 1) {
 				throw new InvalidOperationException(
-					$"Multiple IResourceAuthorizer<{typeof(TResource).Name}> registrations detected "
-					+ $"({resourceAuthorizers.Length}). Exactly one ResourceAuthorizerBase<T> per "
+					$"Multiple IAuthorizer<{typeof(TResource).Name}> registrations detected "
+					+ $"({resourceAuthorizers.Length}). Exactly one AuthorizerBase<T> per "
 					+ "resource type is the expected contract.");
 			}
 			if (resourceAuthorizers.Length == 1
-				&& resourceAuthorizers[0] is ResourceAuthorizerBase<TResource> authorizer) {
+				&& resourceAuthorizers[0] is AuthorizerBase<TResource> authorizer) {
 				var authResult = await authorizer
 					.ValidateAsync(validationContext, cancellationToken)
 					.ConfigureAwait(false);
@@ -426,7 +427,7 @@ sealed class DefaultAuthorizationEvaluator(
 		TResource resource,
 		DomainRuntimeType runtimeType,
 		DateTimeOffset timestamp)
-		where TResource : IAuthorizableResource {
+		where TResource : IAuthorizableObject {
 
 		// Walk once, keep applicable, sort by Order. Typical sizes are small (2-8) so
 		// List.Sort with the delegate comparer is cheaper than LINQ's OrderBy + stable sort.

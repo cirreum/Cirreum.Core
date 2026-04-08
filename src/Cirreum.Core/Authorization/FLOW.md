@@ -16,7 +16,7 @@ sequenceDiagram
     participant CN as Conductor Dispatcher
     participant AI as Authorization Intercept
     participant AE as IAuthorizationEvaluator
-    participant GE as GrantEvaluator
+    participant GE as OperationGrantEvaluator
     participant RR as IAuthorizationRoleRegistry
     participant US as IUserStateAccessor
 
@@ -47,7 +47,7 @@ sequenceDiagram
 
     alt Resource is Granted (Mutate / Lookup / Search / Self)
         AE->>GE: EvaluateAsync(authContext)
-        Note over GE: Resolve AccessGrant<br/>(L1→L2→cold path)
+        Note over GE: Resolve OperationGrant<br/>(L1→L2→cold path)
         GE->>GE: Grant enforcement<br/>(Mutate / Lookup / Search / Self rules)
         GE-->>AE: ValidationResult
     end
@@ -83,8 +83,8 @@ sequenceDiagram
   the handler. The handler can assume a valid, authorized request.
 - **Grants (Stage 1 Step 0).** When a resource implements a grant interface
   (`IGrantMutateRequest`, `IGrantLookupRequest`, `IGrantSearchRequest`,
-  `IGrantMutateSelfRequest`, `IGrantLookupSelfRequest`), the `GrantEvaluator`
-  resolves the caller's `AccessGrant` (owner-scoped) or performs identity
+  `IGrantMutateSelfRequest`, `IGrantLookupSelfRequest`), the `OperationGrantEvaluator`
+  resolves the caller's `OperationGrant` (owner-scoped) or performs identity
   matching (self-scoped) before any other scope evaluator runs. If the
   resource is not granted, this step is a no-op pass. See the
   [Grants README](Grants/README.md) for details.

@@ -1,6 +1,7 @@
 ﻿namespace Cirreum;
 
 using Cirreum.Authorization;
+using Cirreum.Authorization.Operations;
 using Cirreum.Introspection.Documentation;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Extensions.Internal;
@@ -210,7 +211,7 @@ public static class ServiceCollectionExtensions {
 
 		var validatorOpenGenericType = typeof(IValidator<>);
 		var scopeEvaluatorType = typeof(IScopeEvaluator);
-		var resourceAuthorizerType = typeof(IResourceAuthorizer<>);
+		var resourceAuthorizerType = typeof(IAuthorizer<>);
 		var policyAuthorizerType = typeof(IPolicyValidator);
 
 		var availableTypes = assemblies
