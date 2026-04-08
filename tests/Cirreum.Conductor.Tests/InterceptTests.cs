@@ -762,6 +762,8 @@ public class InterceptTests {
 		services.AddLogging();
 		var conductorSettings = new ConductorSettings();
 		services.AddSingleton(conductorSettings);
+		services.AddSingleton(Shared.DefaultCacheSettings);
+		services.AddScoped<CacheKeyContext>();
 
 		// Act
 		services.AddConductor(builder => {

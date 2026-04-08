@@ -2,25 +2,24 @@ namespace Cirreum.Conductor.Configuration;
 /*
 {
   "Cirreum": {
-    "Cache": {
-      "Provider": "InMemory",
-      "DefaultExpiration": {
-        "Expiration": "00:05:00",
-        "LocalExpiration": "00:02:00",
-        "FailureExpiration": "00:00:30"
-      }
-    },
-    "Conductor": {
-      "PublisherStrategy": "Sequential",
-      "Cache": {
-        "QueryOverrides": {
-          "GetCriticalUserDataQuery": {
-            "Expiration": "00:00:30",
-            "FailureExpiration": "00:00:10"
-          }
-        }
-      }
-    }
+	"Cache": {
+	  "Provider": "InMemory",
+	  "DefaultExpiration": {
+		"Expiration": "00:05:00",
+		"LocalExpiration": "00:02:00",
+		"FailureExpiration": "00:00:30"
+	  }
+	},
+	"Conductor": {
+	  "PublisherStrategy": "Sequential",
+	  "Cache": {
+		"QueryOverrides": {
+		  "GetCriticalUserDataQuery": {
+			"Expiration": "00:00:30"
+		  }
+		}
+	  }
+	}
   }
 }
 */

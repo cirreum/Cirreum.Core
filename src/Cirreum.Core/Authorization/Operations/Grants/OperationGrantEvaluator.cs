@@ -1,5 +1,7 @@
 namespace Cirreum.Authorization.Operations.Grants;
 
+using Cirreum.Caching;
+using Cirreum.Conductor;
 using Cirreum.Security;
 using FluentValidation.Results;
 using System.Diagnostics;
@@ -28,12 +30,15 @@ using System.Diagnostics;
 /// </remarks>
 public sealed class OperationGrantEvaluator(
 	IOperationGrantFactory grantFactory,
-	IOperationGrantAccessor grantAccessor) {
+	IOperationGrantAccessor grantAccessor,
+	CacheKeyContext cacheKeyContext) {
 
 	private readonly IOperationGrantFactory _grantFactory =
 		grantFactory ?? throw new ArgumentNullException(nameof(grantFactory));
 	private readonly IOperationGrantAccessor _grantAccessor =
 		grantAccessor ?? throw new ArgumentNullException(nameof(grantAccessor));
+	private readonly CacheKeyContext _cacheKeyContext =
+		cacheKeyContext ?? throw new ArgumentNullException(nameof(cacheKeyContext));
 
 	/// <summary>
 	/// Evaluates the grant-aware scope gate against the authorizable object in the given context.
@@ -80,7 +85,7 @@ public sealed class OperationGrantEvaluator(
 			? EvaluateSearch(search, grant)
 			: mutate is not null
 			? EvaluateMutate(context, mutate, grant)
-			: EvaluateLookup(context, lookup!, grant);
+			: this.EvaluateLookup(context, lookup!, grant);
 
 		EmitTelemetry(context, result.IsValid ? AuthorizationTelemetry.ReasonPass : DenyReason(result));
 		return result;
@@ -153,7 +158,7 @@ public sealed class OperationGrantEvaluator(
 		return Deny(DenyCodes.OwnerAmbiguous, "OwnerId is required — caller's grant contains multiple owners.");
 	}
 
-	private static ValidationResult EvaluateLookup<TAuthorizableObject>(
+	private ValidationResult EvaluateLookup<TAuthorizableObject>(
 		AuthorizationContext<TAuthorizableObject> context,
 		IGrantableLookupBase lookup,
 		OperationGrant grant)
@@ -163,15 +168,12 @@ public sealed class OperationGrantEvaluator(
 			if (!grant.Contains(lookup.OwnerId!)) {
 				return Deny(DenyCodes.OwnerNotInReach, "Requested owner is not in the caller's granted access.");
 			}
-			// OwnerId supplied and in grant — stamp CallerAuthenticationBoundary for cacheable lookups.
-			if (context.AuthorizableObject is IGrantableCacheableLookupBase cacheableWithOwner) {
-				cacheableWithOwner.CallerAuthenticationBoundary = context.AuthenticationBoundary;
-			}
+			this.StampCacheKeyContext(context, lookup);
 			return Pass();
 		}
 
 		// Cacheable lookup: Global callers MUST supply OwnerId to prevent unbounded cache bucket.
-		if (context.AuthorizableObject is IGrantableCacheableLookupBase) {
+		if (context.AuthorizableObject is ICacheableQuery) {
 			if (context.AuthenticationBoundary == AuthenticationBoundary.Global) {
 				return Deny(DenyCodes.CacheableReadOwnerIdRequired,
 					"OwnerId is required for cross-tenant cacheable lookups.");
@@ -179,10 +181,7 @@ public sealed class OperationGrantEvaluator(
 		}
 
 		// OwnerId null — defer to handler (Pattern C). Grant already stashed on accessor.
-		// Stamp CallerAuthenticationBoundary for cacheable lookups.
-		if (context.AuthorizableObject is IGrantableCacheableLookupBase cacheable) {
-			cacheable.CallerAuthenticationBoundary = context.AuthenticationBoundary;
-		}
+		this.StampCacheKeyContext(context, lookup);
 		return Pass();
 	}
 
@@ -209,6 +208,22 @@ public sealed class OperationGrantEvaluator(
 			return true;
 		}
 		return ctx.UserState.ApplicationUser is IOwnedApplicationUser { IsEnabled: true };
+	}
+
+	// Cache key context ————————————————————————————————————————
+
+	private void StampCacheKeyContext<TAuthorizableObject>(
+		AuthorizationContext<TAuthorizableObject> context,
+		IGrantableLookupBase lookup)
+		where TAuthorizableObject : notnull, IAuthorizableObject {
+
+		if (context.AuthorizableObject is not ICacheableQuery) {
+			return;
+		}
+
+		var boundary = context.AuthenticationBoundary;
+		this._cacheKeyContext.SetPrefix($"owner:{lookup.OwnerId}:boundary:{boundary}");
+		this._cacheKeyContext.SetExtraTags([$"tenant:{lookup.OwnerId}"]);
 	}
 
 	// Helpers ————————————————————————————————————————————————

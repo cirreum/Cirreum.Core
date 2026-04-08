@@ -49,6 +49,10 @@ public static class CacheServiceCollectionExtensions {
 		configureCaching?.Invoke(settings);
 		services.AddSingleton(settings);
 
+		// Scoped cache key context for upstream pipeline stages (e.g., grant evaluation)
+		// to stamp key prefixes and extra tags consumed by QueryCaching.
+		services.TryAddScoped<CacheKeyContext>();
+
 		// Register the cache service based on the provider
 		AddCacheableQueryService(services, settings);
 

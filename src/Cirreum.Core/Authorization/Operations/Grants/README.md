@@ -140,7 +140,7 @@ generic domain parameters:
 | `IGrantMutateRequest` | `IAuthorizableRequest` | `OwnerId` (scalar) | Single-owner write (void) |
 | `IGrantMutateRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerId` (scalar) | Single-owner write with response |
 | `IGrantLookupRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerId` (scalar) | Single-owner read |
-| `IGrantCacheableLookupRequest<TResponse>` | `ICacheableQuery<TResponse>` | `OwnerId` + `CallerAuthenticationBoundary` | Cacheable single-owner read |
+| `IGrantCacheableLookupRequest<TResponse>` | `ICacheableQuery<TResponse>` | `OwnerId` | Cacheable single-owner read |
 | `IGrantSearchRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerIds` (plural) | Cross-owner query |
 
 ### Self-Scoped (user-owned)

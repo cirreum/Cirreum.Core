@@ -94,6 +94,7 @@ public static class Shared {
 		// Central cache settings
 		services.AddSingleton(DefaultCacheSettings);
 		services.AddSingleton<ICacheService, InMemoryCacheService>();
+		services.AddScoped<CacheKeyContext>();
 
 		services.AddDomainContextInitilizer();
 

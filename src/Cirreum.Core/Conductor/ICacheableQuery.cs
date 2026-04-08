@@ -5,13 +5,19 @@ using Cirreum.Caching;
 // ===== Cacheable Query Requests =====
 
 /// <summary>
+/// Non-generic marker for cacheable queries. Allows runtime detection of cacheability
+/// without knowing the response type (e.g., in the grant evaluator).
+/// </summary>
+public interface ICacheableQuery;
+
+/// <summary>
 /// Represents a query that can be cached.
 /// </summary>
 /// <typeparam name="TResponse">
 /// The response type. Must be immutable for safe caching with instance reuse.
 /// Use sealed records with init-only properties and mark with [ImmutableObject(true)].
 /// </typeparam>
-public interface ICacheableQuery<out TResponse> : IRequest<TResponse> {
+public interface ICacheableQuery<out TResponse> : ICacheableQuery, IRequest<TResponse> {
 
 	/// <summary>
 	/// The unique cache key for this query instance.

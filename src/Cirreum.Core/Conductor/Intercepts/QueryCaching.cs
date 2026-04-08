@@ -12,16 +12,19 @@ sealed class QueryCaching<TRequest, TResponse>
 	private readonly ICacheService _cache;
 	private readonly ConductorSettings _conductorSettings;
 	private readonly CacheSettings _cacheSettings;
+	private readonly CacheKeyContext _cacheKeyContext;
 	private readonly ILogger<QueryCaching<TRequest, TResponse>> _logger;
 
 	public QueryCaching(
 		ICacheService cache,
 		ConductorSettings conductorSettings,
 		CacheSettings cacheSettings,
+		CacheKeyContext cacheKeyContext,
 		ILogger<QueryCaching<TRequest, TResponse>> logger) {
 		this._cache = cache;
 		this._conductorSettings = conductorSettings;
 		this._cacheSettings = cacheSettings;
+		this._cacheKeyContext = cacheKeyContext;
 		this._logger = logger;
 
 		// Check once at construction time instead of every request
@@ -44,23 +47,25 @@ sealed class QueryCaching<TRequest, TResponse>
 		RequestHandlerDelegate<TRequest, TResponse> next,
 		CancellationToken cancellationToken) {
 
+		var cacheKey = this.ComposeCacheKey(context.Request.CacheKey);
+		var cacheTags = this.ComposeCacheTags(context.Request.CacheTags);
+
 		if (this._logger.IsEnabled(LogLevel.Debug)) {
 			this._logger.LogDebug(
 				"Processing cacheable query: {QueryType} (CacheKey: {CacheKey})",
 				context.RequestType,
-				context.Request.CacheKey);
+				cacheKey);
 		}
 
 		var effectiveSettings = this.BuildEffectiveSettings(context.Request, context.RequestType);
-		var tags = context.Request.CacheTags;
 
 		// Get from Cache, or Read from real Handler and store in Cache.
 		// Telemetry (hit/miss, duration) is handled by the InstrumentedCacheService decorator.
 		var result = await this._cache.GetOrCreateAsync(
-			context.Request.CacheKey,
+			cacheKey,
 			async (ct) => await next(context, ct), // actual handler that reads data
 			effectiveSettings,
-			tags,
+			cacheTags,
 			cancellationToken);
 
 		if (this._logger.IsEnabled(LogLevel.Debug)) {
@@ -103,6 +108,21 @@ sealed class QueryCaching<TRequest, TResponse>
 			LocalExpiration: localExpiration,
 			FailureExpiration: failureExpiration
 		);
+	}
+
+	private string ComposeCacheKey(string baseKey) =>
+		this._cacheKeyContext.KeyPrefix is not null
+			? $"{this._cacheKeyContext.KeyPrefix}:{baseKey}"
+			: baseKey;
+
+	private string[]? ComposeCacheTags(string[]? baseTags) {
+		var extra = this._cacheKeyContext.ExtraTags;
+		if (extra is null) {
+			return baseTags;
+		}
+		return baseTags is null or { Length: 0 }
+			? extra
+			: [.. extra, .. baseTags];
 	}
 
 }

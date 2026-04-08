@@ -5,6 +5,8 @@ using System.Security.Claims;
 using Cirreum;
 using Cirreum.Authorization;
 using Cirreum.Authorization.Operations.Grants;
+using Cirreum.Caching;
+using Cirreum.Conductor;
 using Cirreum.Security;
 
 [TestClass]
@@ -18,7 +20,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Non_granted_resource_passes_through() {
-		var evaluator = BuildEvaluator(OperationGrant.Denied);
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.Denied);
 		var ctx = BuildContext(
 			authorizableObject: new NonOwnedResource(),
 			authenticationBoundary: AuthenticationBoundary.None,
@@ -34,7 +36,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Loaded_disabled_user_denies_with_UserDisabled() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand(),
 			authenticationBoundary: AuthenticationBoundary.Tenant,
@@ -47,7 +49,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Loaded_non_owned_app_user_denies_with_UserDisabled() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand(),
 			authenticationBoundary: AuthenticationBoundary.Tenant,
@@ -63,7 +65,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Denied_grant_denies_with_GrantDenied() {
-		var evaluator = BuildEvaluator(OperationGrant.Denied);
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.Denied);
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand { OwnerId = CallerTenantId },
 			authenticationBoundary: AuthenticationBoundary.Tenant,
@@ -79,7 +81,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Command_with_OwnerId_in_grant_passes() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand { OwnerId = CallerTenantId },
 			authenticationBoundary: AuthenticationBoundary.Tenant,
@@ -92,7 +94,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Command_with_OwnerId_not_in_grant_denies_with_OwnerNotInReach() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand { OwnerId = OtherTenantId },
 			authenticationBoundary: AuthenticationBoundary.Tenant,
@@ -105,7 +107,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Global_command_without_OwnerId_denies_with_OwnerIdRequired() {
-		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.Unrestricted);
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand { OwnerId = null },
 			authenticationBoundary: AuthenticationBoundary.Global,
@@ -118,7 +120,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Command_enriches_OwnerId_from_single_element_grant() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var authorizableObject =new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -133,7 +135,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Command_without_OwnerId_and_multi_element_grant_denies_with_OwnerAmbiguous() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId, OtherTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId, OtherTenantId]));
 		var authorizableObject =new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -147,7 +149,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Command_with_unrestricted_grant_and_no_OwnerId_denies_with_OwnerIdRequired() {
-		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.Unrestricted);
 		var authorizableObject =new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -164,7 +166,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Read_with_OwnerId_in_grant_passes() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedRead { OwnerId = CallerTenantId },
 			authenticationBoundary: AuthenticationBoundary.Tenant,
@@ -177,7 +179,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Read_with_OwnerId_not_in_grant_denies() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedRead { OwnerId = OtherTenantId },
 			authenticationBoundary: AuthenticationBoundary.Tenant,
@@ -190,7 +192,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Read_without_OwnerId_passes_deferred_Pattern_C() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedRead { OwnerId = null },
 			authenticationBoundary: AuthenticationBoundary.Tenant,
@@ -203,7 +205,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Global_read_without_OwnerId_passes_deferred_Pattern_C() {
-		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.Unrestricted);
 		var ctx = BuildContext(
 			authorizableObject: new GrantedRead { OwnerId = null },
 			authenticationBoundary: AuthenticationBoundary.Global,
@@ -219,7 +221,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Global_cacheable_read_without_OwnerId_denies_with_CacheableReadOwnerIdRequired() {
-		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.Unrestricted);
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCacheableRead { OwnerId = null },
 			authenticationBoundary: AuthenticationBoundary.Global,
@@ -232,7 +234,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task Global_cacheable_read_with_OwnerId_passes_and_stamps_Global_scope() {
-		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.Unrestricted);
 		var authorizableObject =new GrantedCacheableRead { OwnerId = OtherTenantId };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -242,12 +244,12 @@ public class OperationGrantEvaluatorTests {
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(AuthenticationBoundary.Global, authorizableObject.CallerAuthenticationBoundary);
+		StringAssert.Contains(cacheKeyContext.KeyPrefix, "boundary:Global");
 	}
 
 	[TestMethod]
 	public async Task Tenant_cacheable_read_passes_and_stamps_Tenant_scope() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var authorizableObject =new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -257,12 +259,12 @@ public class OperationGrantEvaluatorTests {
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(AuthenticationBoundary.Tenant, authorizableObject.CallerAuthenticationBoundary);
+		StringAssert.Contains(cacheKeyContext.KeyPrefix, "boundary:Tenant");
 	}
 
 	[TestMethod]
 	public async Task Tenant_cacheable_read_defers_null_OwnerId_and_stamps_scope() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var authorizableObject =new GrantedCacheableRead { OwnerId = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -272,12 +274,12 @@ public class OperationGrantEvaluatorTests {
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(AuthenticationBoundary.Tenant, authorizableObject.CallerAuthenticationBoundary);
+		StringAssert.Contains(cacheKeyContext.KeyPrefix, "boundary:Tenant");
 	}
 
 	[TestMethod]
-	public async Task CallerAuthenticationBoundary_is_not_stamped_on_denied_evaluation() {
-		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
+	public async Task CacheKeyContext_is_not_stamped_on_denied_evaluation() {
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.Unrestricted);
 		var authorizableObject =new GrantedCacheableRead { OwnerId = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -287,12 +289,12 @@ public class OperationGrantEvaluatorTests {
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsFalse(result.IsValid);
-		Assert.IsNull(authorizableObject.CallerAuthenticationBoundary);
+		Assert.IsNull(cacheKeyContext.KeyPrefix);
 	}
 
 	[TestMethod]
-	public async Task Same_OwnerId_under_Global_vs_Tenant_produces_distinct_CacheKeys() {
-		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
+	public async Task Same_OwnerId_under_Global_vs_Tenant_produces_distinct_CacheKeyPrefixes() {
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.Unrestricted);
 
 		var globalResource = new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var globalCtx = BuildContext(
@@ -300,26 +302,26 @@ public class OperationGrantEvaluatorTests {
 			authenticationBoundary: AuthenticationBoundary.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 		var globalResult = await evaluator.EvaluateAsync(globalCtx);
+		var globalPrefix = cacheKeyContext.KeyPrefix;
 
-		var tenantEvaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (tenantEvaluator, tenantCacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var tenantResource = new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var tenantCtx = BuildContext(
 			authorizableObject: tenantResource,
 			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 		var tenantResult = await tenantEvaluator.EvaluateAsync(tenantCtx);
+		var tenantPrefix = tenantCacheKeyContext.KeyPrefix;
 
 		Assert.IsTrue(globalResult.IsValid);
 		Assert.IsTrue(tenantResult.IsValid);
-		Assert.AreNotEqual(
-			((ICacheableQuery<string>)globalResource).CacheKey,
-			((ICacheableQuery<string>)tenantResource).CacheKey,
-			"Global and Tenant cacheable reads of the same tenant's data must use distinct cache keys.");
+		Assert.AreNotEqual(globalPrefix, tenantPrefix,
+			"Global and Tenant cacheable reads of the same tenant's data must use distinct cache key prefixes.");
 	}
 
 	[TestMethod]
-	public async Task Composed_CacheKey_contains_owner_scope_and_scoped_key() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+	public async Task CacheKeyContext_prefix_contains_owner_and_boundary() {
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var authorizableObject =new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -329,37 +331,15 @@ public class OperationGrantEvaluatorTests {
 		var result = await evaluator.EvaluateAsync(ctx);
 		Assert.IsTrue(result.IsValid);
 
-		var cacheKey = ((ICacheableQuery<string>)authorizableObject).CacheKey;
-		StringAssert.Contains(cacheKey, $"owner:{CallerTenantId}");
-		StringAssert.Contains(cacheKey, "boundary:Tenant");
-		StringAssert.Contains(cacheKey, authorizableObject.ScopedCacheKey);
+		var prefix = cacheKeyContext.KeyPrefix;
+		Assert.IsNotNull(prefix);
+		StringAssert.Contains(prefix, $"owner:{CallerTenantId}");
+		StringAssert.Contains(prefix, "boundary:Tenant");
 	}
 
 	[TestMethod]
-	public async Task CacheTags_includes_automatic_tenant_tag_and_preserves_extras() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
-		var authorizableObject =new GrantedCacheableRead {
-			OwnerId = CallerTenantId,
-			ExtraTags = ["dashboard", "section:sales"]
-		};
-		var ctx = BuildContext(
-			authorizableObject: authorizableObject,
-			authenticationBoundary: AuthenticationBoundary.Tenant,
-			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
-
-		var result = await evaluator.EvaluateAsync(ctx);
-		Assert.IsTrue(result.IsValid);
-
-		var tags = ((ICacheableQuery<string>)authorizableObject).CacheTags;
-		Assert.IsNotNull(tags);
-		CollectionAssert.Contains(tags, $"tenant:{CallerTenantId}");
-		CollectionAssert.Contains(tags, "dashboard");
-		CollectionAssert.Contains(tags, "section:sales");
-	}
-
-	[TestMethod]
-	public async Task CacheTags_returns_only_tenant_tag_when_no_extras_supplied() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+	public async Task CacheKeyContext_ExtraTags_includes_tenant_tag() {
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var authorizableObject =new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -369,10 +349,27 @@ public class OperationGrantEvaluatorTests {
 		var result = await evaluator.EvaluateAsync(ctx);
 		Assert.IsTrue(result.IsValid);
 
-		var tags = ((ICacheableQuery<string>)authorizableObject).CacheTags;
-		Assert.IsNotNull(tags);
-		Assert.HasCount(1, tags);
-		Assert.AreEqual($"tenant:{CallerTenantId}", tags[0]);
+		var extraTags = cacheKeyContext.ExtraTags;
+		Assert.IsNotNull(extraTags);
+		CollectionAssert.Contains(extraTags, $"tenant:{CallerTenantId}");
+	}
+
+	[TestMethod]
+	public async Task CacheKeyContext_ExtraTags_contains_only_tenant_tag() {
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var authorizableObject =new GrantedCacheableRead { OwnerId = CallerTenantId };
+		var ctx = BuildContext(
+			authorizableObject: authorizableObject,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
+			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
+
+		var result = await evaluator.EvaluateAsync(ctx);
+		Assert.IsTrue(result.IsValid);
+
+		var extraTags = cacheKeyContext.ExtraTags;
+		Assert.IsNotNull(extraTags);
+		Assert.HasCount(1, extraTags);
+		Assert.AreEqual($"tenant:{CallerTenantId}", extraTags[0]);
 	}
 
 	// List — OwnerIds enforcement + stamping
@@ -380,7 +377,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task List_with_null_OwnerIds_stamps_from_grant() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId, OtherTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId, OtherTenantId]));
 		var authorizableObject =new GrantedList { OwnerIds = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -396,7 +393,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task List_with_null_OwnerIds_and_unrestricted_grant_stamps_null() {
-		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.Unrestricted);
 		var authorizableObject =new GrantedList { OwnerIds = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -411,7 +408,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task List_with_OwnerIds_subset_of_grant_passes() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId, OtherTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId, OtherTenantId]));
 		var authorizableObject =new GrantedList { OwnerIds = [CallerTenantId] };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -425,7 +422,7 @@ public class OperationGrantEvaluatorTests {
 
 	[TestMethod]
 	public async Task List_with_OwnerIds_not_subset_of_grant_denies() {
-		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
+		var (evaluator, cacheKeyContext) = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var authorizableObject =new GrantedList { OwnerIds = [CallerTenantId, OtherTenantId] };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
@@ -440,10 +437,12 @@ public class OperationGrantEvaluatorTests {
 	// Helpers
 	// -------------------------------------------------------------
 
-	private static OperationGrantEvaluator BuildEvaluator(OperationGrant grant) {
+	private static (OperationGrantEvaluator evaluator, CacheKeyContext cacheKeyContext) BuildEvaluator(OperationGrant grant) {
 		var factory = new StubOperationGrantFactory(grant);
 		var accessor = new DefaultOperationGrantAccessor();
-		return new OperationGrantEvaluator(factory, accessor);
+		var cacheKeyContext = new CacheKeyContext();
+		var evaluator = new OperationGrantEvaluator(factory, accessor, cacheKeyContext);
+		return (evaluator, cacheKeyContext);
 	}
 
 	private static AuthorizationContext<TAuthorizableObject> BuildContext<TAuthorizableObject>(
@@ -482,26 +481,11 @@ public class OperationGrantEvaluatorTests {
 		public IReadOnlyList<string>? OwnerIds { get; set; }
 	}
 
-	private sealed class GrantedCacheableRead : IGrantableCacheableLookupBase, ICacheableQuery<string>, IAuthorizableObject {
+	private sealed class GrantedCacheableRead : IGrantableLookupBase, ICacheableQuery<string>, IAuthorizableObject {
 		public string? OwnerId { get; set; }
-		public AuthenticationBoundary? CallerAuthenticationBoundary { get; set; }
-		public string ScopedCacheKey => "test-key";
+		public string CacheKey => "test-key";
 		public string[]? ExtraTags { get; set; }
-		public string[]? ScopedCacheTags => this.ExtraTags;
-
-		string ICacheableQuery<string>.CacheKey =>
-			$"owner:{this.OwnerId}:boundary:{this.CallerAuthenticationBoundary}:{this.ScopedCacheKey}";
-
-		string[]? ICacheableQuery<string>.CacheTags {
-			get {
-				var tenantTag = $"tenant:{this.OwnerId}";
-				var extra = this.ScopedCacheTags;
-				if (extra is null || extra.Length == 0) {
-					return [tenantTag];
-				}
-				return [tenantTag, .. extra];
-			}
-		}
+		public string[]? CacheTags => this.ExtraTags;
 	}
 
 	private sealed class StubOperationGrantFactory(OperationGrant grant) : IOperationGrantFactory {
