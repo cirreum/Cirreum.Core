@@ -10,7 +10,7 @@ owners can this caller access?"* — answered before the handler runs, without t
 knowing anything about grant tables or relationships.
 
 Grants integrates into the existing three-stage authorization pipeline as **Stage 1 Step 0**,
-running before scope evaluators, object authorizers, and policy validators. Resources
+running before authorization constraints, object authorizers, and policy validators. Resources
 that don't implement a Granted interface are completely unaffected — the grant gate is
 a no-op pass with zero overhead.
 
@@ -63,7 +63,7 @@ a no-op pass with zero overhead.
                          │ Stage 1 — Scope (first-failure short-circuit)        │
                          │   Step 0: OperationGrantEvaluator (if resource is Granted)    │  ← Grants
                          │   Step 0: OwnerScopeEvaluator (if Owner-Scoped)      │
-                         │   Step 1: IScopeEvaluator[] (app-provided, optional)  │
+                         │   Step 1: IAuthorizationConstraint[] (app-provided, optional)  │
                          │                                                      │
                          │ Stage 2 — Object Authorizers (aggregate, short-circuit)│
                          │   AuthorizerBase<T> (roles, ABAC rules)      │
@@ -589,7 +589,7 @@ additional filters.
 ### Why Grants Lives in Core
 
 Grants is part of the Conductor authorization pipeline — the same layer that owns
-`IAuthorizationEvaluator`, `AuthorizerBase<T>`, and `IScopeEvaluator`. Moving
+`IAuthorizationEvaluator`, `AuthorizerBase<T>`, and `IAuthorizationConstraint`. Moving
 it to a separate package would split the pipeline contract across assemblies. Core
 already has identical patterns: settings POCOs, `IConfiguration` binding, assembly
 scanning, and `ICacheService`.

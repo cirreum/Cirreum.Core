@@ -12,7 +12,7 @@ sequenceDiagram
     participant GE as OperationGrantEvaluator
     participant AR as OperationGrant<br/>Factory
     participant OE as OwnerScope<br/>Evaluator
-    participant SE as IScopeEvaluator[]
+    participant SE as IAuthorizationConstraint[]
     participant RA as IAuthorizer[T]
     participant PV as IPolicyValidator[]
 
@@ -66,7 +66,7 @@ sequenceDiagram
         end
     end
 
-    loop each IScopeEvaluator — Step 1
+    loop each IAuthorizationConstraint — Step 1
         AE->>SE: EvaluateAsync(authContext, ct)
         SE-->>AE: ValidationResult
         alt !IsValid
@@ -165,7 +165,7 @@ at every exit path:
 | No authorizers | `RecordDuration(deny, "no-authorizers")` |
 | No roles | `RecordDuration(deny, "no-roles")` |
 | Stage 1 grant gate deny | `RecordDuration(deny, stage=scope)` — OperationGrantEvaluator also calls `RecordDecision` |
-| Stage 1 scope evaluator deny | `RecordDecision(scope, scope-evaluator, deny)` + `RecordDuration` |
+| Stage 1 constraint deny | `RecordDecision(scope, constraint, deny)` + `RecordDuration` |
 | Stage 2 object authorizer deny | `RecordDecision(object-authorizer, object-authorizer, deny)` + `RecordDuration` |
 | Stage 3 policy validator deny | `RecordDecision(policy, policy-validator, deny)` + `RecordDuration` |
 | Authorized (all stages pass) | `RecordDuration(pass, "pass")` |

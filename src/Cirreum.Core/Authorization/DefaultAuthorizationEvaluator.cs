@@ -30,7 +30,7 @@ using System.Diagnostics;
 /// applies only to <see cref="IGrantableMutateBase"/>/<see cref="IGrantableLookupBase"/>/<see cref="IGrantableSearchBase"/>).
 /// </description></item>
 /// <item><description>
-/// Step 1: generic scope evaluators (<see cref="IScopeEvaluator"/>, zero or more,
+/// Step 1: authorization constraints (<see cref="IAuthorizationConstraint"/>, zero or more,
 /// run in registration order).
 /// </description></item>
 /// </list>
@@ -140,8 +140,8 @@ sealed class DefaultAuthorizationEvaluator(
 		// container ever returns a non-array shape. Call GetService<IEnumerable<T>>()! directly
 		// to bypass GetRequiredService's null-guard + throw-helper — IEnumerable<T> is always
 		// registered by MS.DI (empty array if no components).
-		var rawScope = services.GetService<IEnumerable<IScopeEvaluator>>()!;
-		var scopeEvaluators = rawScope as IScopeEvaluator[] ?? [.. rawScope];
+		var rawConstraints = services.GetService<IEnumerable<IAuthorizationConstraint>>()!;
+		var constraints = rawConstraints as IAuthorizationConstraint[] ?? [.. rawConstraints];
 
 		var rawAuthorizer = services.GetService<IEnumerable<IAuthorizer<TAuthorizableObject>>>()!;
 		var objectAuthorizers = rawAuthorizer as IAuthorizer<TAuthorizableObject>[] ?? [.. rawAuthorizer];
@@ -158,7 +158,7 @@ sealed class DefaultAuthorizationEvaluator(
 				|| authorizableObject is IGrantableSearchBase
 				|| authorizableObject is IGrantableSelfBase);
 
-		if (scopeEvaluators.Length == 0
+		if (constraints.Length == 0
 			&& objectAuthorizers.Length == 0
 			&& policyAuthorizers.Length == 0
 			&& !grantGateApplies) {
@@ -166,7 +166,7 @@ sealed class DefaultAuthorizationEvaluator(
 			//
 			// OBJECT HAS NO AUTHORIZERS AND
 			// RUNTIME HAS NO POLICY VALIDATORS
-			// AND NO SCOPE CHECKS APPLY
+			// AND NO CONSTRAINTS APPLY
 			//
 			//******************************************
 			var emptyAuthContainerEx = new InvalidOperationException(
@@ -243,7 +243,7 @@ sealed class DefaultAuthorizationEvaluator(
 			// STAGE 1 — SCOPE
 			//
 			// Step 0: owner-scope gate
-			// Step 1: generic scope evaluators
+			// Step 1: authorization constraints
 			//
 			// First failure short-circuits.
 			//
@@ -265,27 +265,27 @@ sealed class DefaultAuthorizationEvaluator(
 				}
 			}
 
-			foreach (var evaluator in scopeEvaluators) {
+			foreach (var constraint in constraints) {
 				cancellationToken.ThrowIfCancellationRequested();
 
-				var scopeResult = await evaluator
+				var constraintResult = await constraint
 					.EvaluateAsync(authorizationContext, cancellationToken)
 					.ConfigureAwait(false);
 
-				if (!scopeResult.IsValid) {
+				if (!constraintResult.IsValid) {
 					AuthorizationTelemetry.RecordDecision(
 						stage: AuthorizationTelemetry.StageScope,
-						step: AuthorizationTelemetry.StepScopeEvaluator,
+						step: AuthorizationTelemetry.StepConstraint,
 						decision: AuthorizationTelemetry.DecisionDeny,
-						reason: scopeResult.Errors.FirstOrDefault()?.ErrorCode ?? "UNKNOWN",
-						evaluator: evaluator.GetType().Name,
+						reason: constraintResult.Errors.FirstOrDefault()?.ErrorCode ?? "UNKNOWN",
+						evaluator: constraint.GetType().Name,
 						resourceType: objectName);
 					AuthorizationTelemetry.RecordDuration(
 						activity, objectName,
 						Timing.GetElapsedMilliseconds(startTimestamp),
 						AuthorizationTelemetry.DecisionDeny,
 						denyStage: AuthorizationTelemetry.StageScope);
-					return this.DenyFromStage(scopeResult.Errors, userState.Name, objectName);
+					return this.DenyFromStage(constraintResult.Errors, userState.Name, objectName);
 				}
 			}
 

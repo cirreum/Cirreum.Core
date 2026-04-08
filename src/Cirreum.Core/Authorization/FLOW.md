@@ -85,7 +85,7 @@ sequenceDiagram
   (`IGrantMutateRequest`, `IGrantLookupRequest`, `IGrantSearchRequest`,
   `IGrantMutateSelfRequest`, `IGrantLookupSelfRequest`), the `OperationGrantEvaluator`
   resolves the caller's `OperationGrant` (owner-scoped) or performs identity
-  matching (self-scoped) before any other scope evaluator runs. If the
+  matching (self-scoped) before any authorization constraint runs. If the
   object is not granted, this step is a no-op pass. See the
   [Grants README](Operations/Grants/README.md) for details.
 - **Permissions are general-purpose.** `[RequiresPermission]` attributes are

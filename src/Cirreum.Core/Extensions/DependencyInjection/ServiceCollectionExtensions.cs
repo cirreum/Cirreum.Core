@@ -211,7 +211,7 @@ public static class ServiceCollectionExtensions {
 	static IServiceCollection AddFluentValidationAndAuthorization(this IServiceCollection services, params Assembly?[] assemblies) {
 
 		var validatorOpenGenericType = typeof(IValidator<>);
-		var scopeEvaluatorType = typeof(IScopeEvaluator);
+		var constraintType = typeof(IAuthorizationConstraint);
 		var resourceAuthorizerType = typeof(IAuthorizer<>);
 		var policyAuthorizerType = typeof(IPolicyValidator);
 
@@ -245,21 +245,21 @@ public static class ServiceCollectionExtensions {
 
 		}
 
-		// Scope Evaluators (Stage 1 Step 1)
-		var scopeEvaluators = from type in availableTypes
+		// Authorization Constraints (Stage 1 Step 1)
+		var authConstraints = from type in availableTypes
 							  where type.IsConcreteClass() &&
-									type.IsAssignableTo(scopeEvaluatorType)
+									type.IsAssignableTo(constraintType)
 							  select type;
 
-		foreach (var evaluator in scopeEvaluators) {
+		foreach (var constraint in authConstraints) {
 			services.TryAddEnumerable(new ServiceDescriptor(
-				serviceType: scopeEvaluatorType,
-				implementationType: evaluator,
+				serviceType: constraintType,
+				implementationType: constraint,
 				lifetime: ServiceLifetime.Transient
 			));
 
 			// Service => Service registration
-			services.AddTransient(evaluator, evaluator);
+			services.AddTransient(constraint, constraint);
 		}
 
 		// Resource Authorizers

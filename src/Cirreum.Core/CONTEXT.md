@@ -88,7 +88,7 @@ authorization pipeline and reused by downstream consumers (e.g.,
               │                                                                      │
               │ 7. Stage 1 – Scope: first-failure short-circuit                      │
               │      Step 0: OperationGrantEvaluator (if applicable)                 │
-              │      Step 1: IScopeEvaluator[] in registration order                 │
+              │      Step 1: IAuthorizationConstraint[] in registration order         │
               │ 8. Stage 2 – Object Authorizers: one AuthorizerBase<T>               │
               │      FluentValidation rules aggregate within the authorizer;         │
               │      short-circuits to Stage 3 on any failure                        │
@@ -326,7 +326,7 @@ authenticated the caller. It's stamped onto `IUserState` by
   uses `AuthenticationBoundary` to decide whether the caller is *required* to match
   the resource's `OwnerId`, or is a cross-tenant operator who can bypass
   owner-match (e.g., `Global` callers performing admin-level operations).
-- **Scope evaluators (Stage 1 Step 1).** Custom `IScopeEvaluator`
+- **Authorization constraints (Stage 1 Step 1).** Custom `IAuthorizationConstraint`
   implementations can short-circuit on `AuthenticationBoundary` to enforce
   tenant-only or global-only routes.
 - **Object authorizers (Stage 2).** A single
