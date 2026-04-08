@@ -75,7 +75,8 @@ that tenant."
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                     ResourceAccessEvaluator (sealed, scoped)                    │
 │                                                                                 │
-│   1. Resolve caller's effective roles (lazy, cached per scope)                  │
+│   1. Read caller's identity from IAuthorizationContextAccessor                  │
+│      (pipeline already resolved — zero role resolution cost)                    │
 │   2. Resolve effective access:                                                  │
 │      ├─ L1 cache check (per-request dictionary)                                │
 │      ├─ Merge resource's own AccessList                                         │
@@ -377,7 +378,8 @@ public sealed class UploadDocumentHandler(
 
 ```text
 1. Handler calls CheckAsync<DocumentFolder>("folder-7", Document.Upload)
-2. ResourceAccessEvaluator resolves caller's effective roles (lazy, cached)
+2. ResourceAccessEvaluator reads caller identity from IAuthorizationContextAccessor
+   (already resolved by the authorization pipeline — zero re-resolution)
 3. Loads folder-7 via DocumentFolderAccessEntryProvider.GetByIdAsync
 4. folder-7 has InheritPermissions: true
 5. Walks up: folder-7 → folder-3 → null (root)
@@ -403,8 +405,10 @@ The L1 cache provides two optimizations:
 
 ### Effective Roles
 
-Resolved lazily on first `CheckAsync`/`FilterAsync` call within the scope, then
-cached for all subsequent calls. Zero per-check role resolution overhead.
+`ResourceAccessEvaluator` reads the resolved `AuthorizationContext` directly from
+`IAuthorizationContextAccessor` — the caller's `UserState` and `EffectiveRoles`
+are available immediately with zero role resolution cost. The authorization pipeline
+always runs before the handler, so the context is guaranteed to be populated.
 
 ### No L2 Cache
 

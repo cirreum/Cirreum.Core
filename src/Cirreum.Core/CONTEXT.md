@@ -6,6 +6,12 @@ There is no shared intermediary object. Each context type owns its fields
 directly and delegates only to two statics (`DomainContext` for environment /
 runtime-type, `DomainFeatureResolver` for the namespace-derived domain).
 
+`AuthorizationContext` is split into a **non-generic base** (resolved caller
+identity) and a **generic derived** (adds the specific authorizable object).
+The base is stored on a scoped `IAuthorizationContextAccessor` by the
+authorization pipeline and reused by downstream consumers (e.g.,
+`ResourceAccessEvaluator`) — eliminating redundant role resolution.
+
 ```text
                     [IUserStateAccessor]
                             │
@@ -18,34 +24,35 @@ runtime-type, `DomainFeatureResolver` for the namespace-derived domain).
             │                                                                 │
             ▼                                                                 ▼
 ┌───────────────────────────────────────────────────┐   ┌───────────────────────────────────────────────────┐
-│               RequestContext<TRequest>             │   │       AuthorizationContext<TAuthorizableObject>    │
+│               RequestContext<TRequest>             │   │       AuthorizationContext (non-generic base)      │
 │                                                   │   │                                                   │
 │ Record parameters:                                │   │ Record parameters:                                │
 │ • UserState (IUserState)                          │   │ • UserState (IUserState)                          │
 │ • Request (TRequest)                              │   │ • EffectiveRoles (IImmutableSet<Role>)            │
-│ • RequestType (string)                            │   │ • AuthorizableObject (TAuthorizableObject)        │
-│ • RequestId (string — Activity.SpanId)            │   │                                                   │
-│ • CorrelationId (string — Activity.TraceId)       │   │ Derived / captured:                               │
-│ • StartTimestamp (long — high-precision)           │   │ • Permissions (RequiredPermissionCache)            │
-│                                                   │   │ • DomainFeature (DomainFeatureResolver)            │
-│ Derived / captured:                               │   │ • RuntimeType (DomainContext.RuntimeType)          │
-│ • DomainFeature (DomainFeatureResolver)           │   │ • Timestamp (DateTimeOffset — captured at ctor)   │
-│ • Environment (DomainContext.Environment)          │   │                                                   │
-│ • RuntimeType (DomainContext.RuntimeType)          │   │ User convenience (delegate to UserState):         │
-│ • Timestamp (DateTimeOffset — captured at ctor)   │   │ • UserId, UserName, TenantId, Provider            │
-│                                                   │   │ • AccessScope, IsAuthenticated                    │
-│ User convenience (delegate to UserState):         │   │ • Profile, HasEnrichedProfile                     │
-│ • UserId, UserName, TenantId, Provider            │   │ • ApplicationUser                                 │
+│ • RequestType (string)                            │   │                                                   │
+│ • RequestId (string — Activity.SpanId)            │   │ User convenience (delegate to UserState):         │
+│ • CorrelationId (string — Activity.TraceId)       │   │ • UserId, UserName, TenantId, Provider            │
+│ • StartTimestamp (long — high-precision)           │   │ • AccessScope, IsAuthenticated                    │
+│                                                   │   │ • Profile, HasEnrichedProfile, ApplicationUser    │
+│ Derived / captured:                               │   │                                                   │
+│ • DomainFeature (DomainFeatureResolver)           │   │ Static / captured:                                │
+│ • Environment (DomainContext.Environment)          │   │ • RuntimeType (DomainContext.RuntimeType)          │
+│ • RuntimeType (DomainContext.RuntimeType)          │   │ • Timestamp (DateTimeOffset — captured at ctor)   │
+│ • Timestamp (DateTimeOffset — captured at ctor)   │   │                                                   │
+│                                                   │   │ Helper methods:                                   │
+│ User convenience (delegate to UserState):         │   │ • HasActiveTenant(), IsFromProvider(),             │
+│ • UserId, UserName, TenantId, Provider            │   │   IsInDepartment()                                │
 │ • AccessScope, IsAuthenticated                    │   │                                                   │
-│ • Profile, HasEnrichedProfile                     │   │ Helper methods:                                   │
-│                                                   │   │ • HasActiveTenant()                               │
-│ Timing:                                           │   │ • IsFromProvider(provider)                        │
-│ • ElapsedDuration (computed on demand)            │   │ • IsInDepartment(department)                      │
-│                                                   │   │                                                   │
+│ • Profile, HasEnrichedProfile                     │   │         ▲ stored on IAuthorizationContextAccessor │
+│                                                   │   │         │ (scoped, set by pipeline)               │
+│ Timing:                                           │   ├─────────┴─────────────────────────────────────────┤
+│ • ElapsedDuration (computed on demand)            │   │   AuthorizationContext<TAuthorizableObject>        │
+│                                                   │   │   (sealed, extends base)                          │
 │ Helper methods:                                   │   │                                                   │
-│ • HasActiveTenant()                               │   │                                                   │
-│ • IsFromProvider(provider)                        │   │                                                   │
-│ • IsInDepartment(department)                      │   │                                                   │
+│ • HasActiveTenant()                               │   │ Additional:                                       │
+│ • IsFromProvider(provider)                        │   │ • AuthorizableObject (TAuthorizableObject)        │
+│ • IsInDepartment(department)                      │   │ • Permissions (RequiredPermissionCache)            │
+│                                                   │   │ • DomainFeature (DomainFeatureResolver)            │
 └───────────────────────────────────────────────────┘   └───────────────────────────────────────────────────┘
 ```
 
@@ -125,6 +132,7 @@ runtime-type, `DomainFeatureResolver` for the namespace-derived domain).
 │ • Resolves roles from userState.Profile                                                     │
 │ • Builds: AuthorizationContext<TAuthorizableObject>                                         │
 │   └─> Composes UserState + EffectiveRoles + AuthorizableObject                              │
+│ • Stamps base context on IAuthorizationContextAccessor (scoped)                             │
 │ • Validators work with canonical AuthorizationContext                                       │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -143,28 +151,31 @@ runtime-type, `DomainFeatureResolver` for the namespace-derived domain).
             │                                                                 │
             ▼                                                                 ▼
 ┌──────────────────────────────────┐   ┌──────────────────────────────────────────┐
-│        RequestContext<T>         │   │   AuthorizationContext<TAuthorizableObject>│
-│                                  │   │                                            │
-│ Record params:                   │   │ Record params:                             │
-│ • UserState                      │   │ • UserState                                │
-│ • Request                        │   │ • EffectiveRoles                           │
-│ • RequestType                    │   │ • AuthorizableObject                       │
+│        RequestContext<T>         │   │     AuthorizationContext (base)            │
+│                                  │   │     ── stored on accessor ──              │
+│ Record params:                   │   │                                            │
+│ • UserState                      │   │ Record params:                             │
+│ • Request                        │   │ • UserState                                │
+│ • RequestType                    │   │ • EffectiveRoles                           │
 │ • RequestId                      │   │                                            │
 │ • CorrelationId                  │   │ Delegates to UserState:                    │
 │ • StartTimestamp                 │   │ • UserId, UserName, TenantId               │
 │                                  │   │ • Provider, IsAuthenticated                │
-│ Delegates to UserState:          │   │ • AccessScope                              │
+│ Delegates to UserState:          │   │ • AccessScope, ApplicationUser             │
 │ • UserId, UserName, TenantId    │   │ • Profile, HasEnrichedProfile              │
-│ • Provider, IsAuthenticated     │   │ • ApplicationUser                           │
-│ • AccessScope                    │   │                                            │
-│ • Profile, HasEnrichedProfile   │   │ Derived:                                   │
-│                                  │   │ • Permissions (RequiredPermissionCache)     │
-│ Derived:                         │   │ • RuntimeType (DomainContext)               │
-│ • Environment (DomainContext)    │   │ • DomainFeature (DomainFeatureResolver)     │
-│ • RuntimeType (DomainContext)    │   │ • Timestamp (captured at ctor)              │
-│ • DomainFeature (Resolver)       │   │                                            │
-│ • Timestamp (captured at ctor)   │   │                                            │
+│ • Provider, IsAuthenticated     │   │                                            │
+│ • AccessScope                    │   │ Static / captured:                         │
+│ • Profile, HasEnrichedProfile   │   │ • RuntimeType, Timestamp                   │
+│                                  │   │                                            │
+│ Derived:                         │   │ Helpers: HasActiveTenant, IsFromProvider,  │
+│ • Environment (DomainContext)    │   │   IsInDepartment                           │
+│ • RuntimeType (DomainContext)    │   ├────────────────────────────────────────────┤
+│ • DomainFeature (Resolver)       │   │  AuthorizationContext<TAuthorizableObject> │
+│ • Timestamp (captured at ctor)   │   │  (sealed, extends base)                   │
 │ • ElapsedDuration (computed)     │   │                                            │
+│                                  │   │ • AuthorizableObject                       │
+│                                  │   │ • Permissions (RequiredPermissionCache)     │
+│                                  │   │ • DomainFeature (DomainFeatureResolver)     │
 └──────────────────────────────────┘   └──────────────────────────────────────────┘
 ```
 
@@ -177,7 +188,9 @@ RequestContext created ONCE via RequestContextFactory
     └─> Flows through pipeline to every intercept
 
 AuthorizationContext created ONCE inside DefaultAuthorizationEvaluator
-    └─> Flows to every authorization stage (Scope → Authorizer → Policy)
+    ├─> Flows to every authorization stage (Scope → Authorizer → Policy)
+    └─> Base (non-generic) stored on IAuthorizationContextAccessor
+        └─> Reused by downstream consumers (e.g. ResourceAccessEvaluator)
 ```
 
 ### Zero Rebuilding
@@ -190,8 +203,10 @@ AuthorizationContext created ONCE inside DefaultAuthorizationEvaluator
 3. Authorization intercept passes context.Request + context.UserState
    to IAuthorizationEvaluator
 4. Evaluator resolves effective roles + builds AuthorizationContext<T>
-5. Every stage's validators see the same canonical context
-6. No second GetUser() call — UserState is shared by reference
+5. Evaluator stamps base context on IAuthorizationContextAccessor (scoped)
+6. Every stage's validators see the same canonical context
+7. No second GetUser() call — UserState is shared by reference
+8. ResourceAccessEvaluator reads from accessor — zero re-resolution
 ```
 
 ### Clear Ownership
@@ -257,19 +272,16 @@ Benefits:
 - `Profile` → `UserState.Profile`
 - `HasEnrichedProfile` → `UserState.Profile.IsEnriched`
 
-### AuthorizationContext Core Properties
+### AuthorizationContext (Non-Generic Base) Core Properties
 - `UserState` (IUserState) — complete user identity and profile
 - `EffectiveRoles` (IImmutableSet&lt;Role&gt;) — inheritance-expanded roles
-- `AuthorizableObject` (TAuthorizableObject) — the object being evaluated
 
-### AuthorizationContext Derived Properties
-- `Permissions` → `RequiredPermissionCache.GetFor<TAuthorizableObject>()`
-- `DomainFeature` → `DomainFeatureResolver.Resolve<TAuthorizableObject>()`
+### AuthorizationContext (Non-Generic Base) Derived Properties
 - `RuntimeType` → `DomainContext.RuntimeType`
 - `Timestamp` → `DateTimeOffset.UtcNow` (captured at construction)
 - `ApplicationUser` → `UserState.ApplicationUser`
 
-### AuthorizationContext User Convenience Properties
+### AuthorizationContext (Non-Generic Base) User Convenience Properties
 - `UserId` → `UserState.Id`
 - `UserName` → `UserState.Name`
 - `TenantId` → `UserState.Profile.Organization.OrganizationId`
@@ -278,6 +290,17 @@ Benefits:
 - `IsAuthenticated` → `UserState.IsAuthenticated`
 - `Profile` → `UserState.Profile`
 - `HasEnrichedProfile` → `UserState.Profile.IsEnriched`
+
+### AuthorizationContext&lt;TAuthorizableObject&gt; (Generic Derived) Additional Properties
+- `AuthorizableObject` (TAuthorizableObject) — the object being evaluated
+- `Permissions` → `RequiredPermissionCache.GetFor<TAuthorizableObject>()`
+- `DomainFeature` → `DomainFeatureResolver.Resolve<TAuthorizableObject>()`
+
+### IAuthorizationContextAccessor
+- Scoped accessor holding the resolved `AuthorizationContext` (non-generic base)
+- Set by `DefaultAuthorizationEvaluator` after role resolution
+- Read by downstream consumers (e.g., `ResourceAccessEvaluator`) to avoid re-resolving roles
+- Returns `null` before the authorization pipeline runs (e.g., background jobs)
 
 ## Access Scope
 

@@ -436,26 +436,6 @@ public class ResourceAccessTests {
 		public void ResetLoadCount() => LoadCount = 0;
 	}
 
-	private sealed class TestRoleRegistry : IAuthorizationRoleRegistry {
-
-		private readonly IImmutableSet<Role> _effectiveRoles;
-
-		public TestRoleRegistry(IImmutableSet<Role>? effectiveRoles = null) {
-			_effectiveRoles = effectiveRoles ?? ImmutableHashSet.Create(UserRole);
-		}
-
-		public IImmutableSet<Role> GetRegisteredRoles() => _effectiveRoles;
-		public IImmutableSet<Role> GetInheritedRoles(Role role) => ImmutableHashSet<Role>.Empty;
-		public IImmutableSet<Role> GetInheritingRoles(Role role) => ImmutableHashSet<Role>.Empty;
-		public Role? GetRoleFromString(string roleString) =>
-			_effectiveRoles.FirstOrDefault(r => r.ToString() == roleString);
-		public IImmutableSet<Role> GetEffectiveRoles(IEnumerable<Role> directRoles) => _effectiveRoles;
-	}
-
-	private sealed class TestUserStateAccessor(IUserState userState) : IUserStateAccessor {
-		public ValueTask<IUserState> GetUser() => new(userState);
-	}
-
 	private ResourceAccessEvaluator BuildEvaluator(
 		IEnumerable<TestFolder>? resources = null,
 		IReadOnlyList<AccessEntry>? rootDefaults = null,
@@ -463,11 +443,15 @@ public class ResourceAccessTests {
 		TestFolderProvider? provider = null) {
 
 		provider ??= new TestFolderProvider(resources ?? [], rootDefaults);
-		var registry = new TestRoleRegistry(effectiveRoles);
 
 		// Create an authenticated user with the app:user role claim
 		var userState = TestUserState.CreateAuthenticated();
-		var accessor = new TestUserStateAccessor(userState);
+
+		// Pre-populate the accessor with a resolved context (simulates the pipeline having run)
+		var contextAccessor = new DefaultAuthorizationContextAccessor();
+		contextAccessor.Set(new AuthorizationContext(
+			userState,
+			effectiveRoles ?? ImmutableHashSet.Create(UserRole)));
 
 		var services = new ServiceCollection();
 		services.AddLogging(lb => lb.AddDebug().SetMinimumLevel(LogLevel.Trace));
@@ -475,8 +459,7 @@ public class ResourceAccessTests {
 		var sp = services.BuildServiceProvider();
 
 		return new ResourceAccessEvaluator(
-			registry,
-			accessor,
+			contextAccessor,
 			sp,
 			sp.GetRequiredService<ILogger<ResourceAccessEvaluator>>());
 	}

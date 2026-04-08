@@ -49,6 +49,10 @@ using System.Diagnostics;
 /// </remarks>
 /// <param name="registry">The authorization role registry for resolving effective roles.</param>
 /// <param name="userAccessor">The accessor for retrieving current user state.</param>
+/// <param name="contextAccessor">
+/// Scoped accessor that receives the resolved <see cref="AuthorizationContext"/> after role
+/// resolution, making it available to downstream consumers (e.g., <c>ResourceAccessEvaluator</c>).
+/// </param>
 /// <param name="services">The service provider for resolving validators.</param>
 /// <param name="logger">The logger for authorization events.</param>
 /// <param name="grantEvaluator">
@@ -59,6 +63,7 @@ using System.Diagnostics;
 sealed class DefaultAuthorizationEvaluator(
 	IAuthorizationRoleRegistry registry,
 	IUserStateAccessor userAccessor,
+	IAuthorizationContextAccessor contextAccessor,
 	IServiceProvider services,
 	ILogger<DefaultAuthorizationEvaluator> logger,
 	OperationGrantEvaluator? grantEvaluator = null
@@ -228,6 +233,10 @@ sealed class DefaultAuthorizationEvaluator(
 				userState,
 				effectiveRoles,
 				authorizableObject);
+
+			// Stamp the resolved caller identity so downstream consumers
+			// (e.g. ResourceAccessEvaluator) can read it without re-resolving roles.
+			contextAccessor.Set(authorizationContext);
 
 			//******************************************
 			//

@@ -14,23 +14,18 @@ using System.Runtime.CompilerServices;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Registered as <b>Scoped</b> — the L1 cache lives for a single request. The evaluator
-/// resolves the caller's effective roles lazily on first use and reuses them for all
-/// subsequent checks within the same scope.
+/// Registered as <b>Scoped</b> — the L1 cache lives for a single request. The caller's
+/// identity and effective roles are read from <see cref="IAuthorizationContextAccessor"/>,
+/// which the authorization pipeline populates before the handler runs.
 /// </para>
 /// </remarks>
 internal sealed class ResourceAccessEvaluator(
-	IAuthorizationRoleRegistry roleRegistry,
-	IUserStateAccessor userStateAccessor,
+	IAuthorizationContextAccessor contextAccessor,
 	IServiceProvider services,
 	ILogger<ResourceAccessEvaluator> logger) : IResourceAccessEvaluator {
 
 	// L1 per-request cache keyed by "{TypeName}:{ResourceId}"
 	private readonly Dictionary<string, EffectiveAccess> _cache = [];
-
-	// Effective roles resolved lazily on first use
-	private IImmutableSet<Role>? _effectiveRoles;
-	private IUserState? _userState;
 
 	/// <inheritdoc/>
 	public async ValueTask<Result> CheckAsync<T>(
@@ -39,7 +34,7 @@ internal sealed class ResourceAccessEvaluator(
 		CancellationToken cancellationToken = default)
 		where T : IProtectedResource {
 
-		var (userState, effectiveRoles) = await ResolveCallerAsync().ConfigureAwait(false);
+		var (userState, effectiveRoles) = this.ResolveCaller();
 
 		if (effectiveRoles.Count == 0) {
 			logger.LogResourceAccessDenied(
@@ -55,14 +50,14 @@ internal sealed class ResourceAccessEvaluator(
 		}
 
 		var provider = services.GetRequiredService<IAccessEntryProvider<T>>();
-		var effective = await ResolveEffectiveAccessAsync(resource, provider, cancellationToken).ConfigureAwait(false);
+		var effective = await this.ResolveEffectiveAccessAsync(resource, provider, cancellationToken).ConfigureAwait(false);
 
 		if (effective.IsAuthorized(permission, effectiveRoles)) {
 			logger.LogResourceAccessAllowed(
 				userState.Name,
 				typeof(T).Name,
 				resource.ResourceId,
-				permission.ToString());
+				permission);
 
 			EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionPass, AuthorizationTelemetry.ReasonPass);
 			return Result.Success;
@@ -92,7 +87,7 @@ internal sealed class ResourceAccessEvaluator(
 		// null resourceId → root defaults
 		if (resourceId is null) {
 			var rootAccess = new EffectiveAccess(provider.RootDefaults);
-			var (userState, effectiveRoles) = await ResolveCallerAsync().ConfigureAwait(false);
+			var (userState, effectiveRoles) = this.ResolveCaller();
 
 			if (effectiveRoles.Count == 0) {
 				EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceAccessDenied);
@@ -117,7 +112,7 @@ internal sealed class ResourceAccessEvaluator(
 			return Result.Fail(new NotFoundException(resourceId));
 		}
 
-		return await CheckAsync(resource, permission, cancellationToken).ConfigureAwait(false);
+		return await this.CheckAsync(resource, permission, cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <inheritdoc/>
@@ -127,7 +122,7 @@ internal sealed class ResourceAccessEvaluator(
 		CancellationToken cancellationToken = default)
 		where T : IProtectedResource {
 
-		var (_, effectiveRoles) = await ResolveCallerAsync().ConfigureAwait(false);
+		var (_, effectiveRoles) = this.ResolveCaller();
 
 		if (effectiveRoles.Count == 0) {
 			return [];
@@ -139,7 +134,7 @@ internal sealed class ResourceAccessEvaluator(
 		foreach (var resource in resources) {
 			cancellationToken.ThrowIfCancellationRequested();
 
-			var effective = await ResolveEffectiveAccessAsync(resource, provider, cancellationToken).ConfigureAwait(false);
+			var effective = await this.ResolveEffectiveAccessAsync(resource, provider, cancellationToken).ConfigureAwait(false);
 			if (effective.IsAuthorized(permission, effectiveRoles)) {
 				result.Add(resource);
 			}
@@ -151,25 +146,17 @@ internal sealed class ResourceAccessEvaluator(
 	// ———————————————————————— Private helpers ————————————————————————
 
 	/// <summary>
-	/// Resolves effective roles lazily and caches for the request lifetime.
+	/// Returns the caller's resolved identity from the authorization context.
+	/// The pipeline always runs before the handler, so the context is guaranteed
+	/// to be populated by the time any handler calls into this evaluator.
 	/// </summary>
-	private async ValueTask<(IUserState UserState, IImmutableSet<Role> EffectiveRoles)> ResolveCallerAsync() {
-		if (_effectiveRoles is not null) {
-			return (_userState!, _effectiveRoles);
-		}
+	private (IUserState UserState, IImmutableSet<Role> EffectiveRoles) ResolveCaller() {
+		var authContext = contextAccessor.Current
+			?? throw new InvalidOperationException(
+				"IAuthorizationContextAccessor.Current is null. "
+				+ "ResourceAccessEvaluator requires the authorization pipeline to have run.");
 
-		_userState = await userStateAccessor.GetUser().ConfigureAwait(false);
-
-		var roles = _userState.Profile.Roles
-			.Select(roleRegistry.GetRoleFromString)
-			.OfType<Role>()
-			.ToImmutableList();
-
-		_effectiveRoles = roles.Count > 0
-			? roleRegistry.GetEffectiveRoles(roles)
-			: ImmutableHashSet<Role>.Empty;
-
-		return (_userState, _effectiveRoles);
+		return (authContext.UserState, authContext.EffectiveRoles);
 	}
 
 	/// <summary>
@@ -185,7 +172,7 @@ internal sealed class ResourceAccessEvaluator(
 		var cacheKey = BuildCacheKey<T>(resource.ResourceId);
 
 		// L1 cache check
-		if (cacheKey is not null && _cache.TryGetValue(cacheKey, out var cached)) {
+		if (cacheKey is not null && this._cache.TryGetValue(cacheKey, out var cached)) {
 			return cached;
 		}
 
@@ -213,7 +200,7 @@ internal sealed class ResourceAccessEvaluator(
 
 				// Sibling optimization: check if parent was already resolved
 				var parentCacheKey = BuildCacheKey<T>(parentId);
-				if (parentCacheKey is not null && _cache.TryGetValue(parentCacheKey, out var parentCached)) {
+				if (parentCacheKey is not null && this._cache.TryGetValue(parentCacheKey, out var parentCached)) {
 					entries.AddRange(parentCached.Entries);
 					// Parent's effective already includes its ancestors + root defaults
 					reachedRoot = true;
@@ -255,7 +242,7 @@ internal sealed class ResourceAccessEvaluator(
 
 		// Cache the result
 		if (cacheKey is not null) {
-			_cache[cacheKey] = effective;
+			this._cache[cacheKey] = effective;
 		}
 
 		return effective;

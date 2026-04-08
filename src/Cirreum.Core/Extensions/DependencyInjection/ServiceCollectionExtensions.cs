@@ -31,6 +31,7 @@ public static class ServiceCollectionExtensions {
 	public static void AddDefaultAuthorizationEvaluator(
 		this IServiceCollection services) {
 		services.TryAddScoped<IAuthorizationEvaluator, DefaultAuthorizationEvaluator>();
+		services.TryAddScoped<IAuthorizationContextAccessor, DefaultAuthorizationContextAccessor>();
 	}
 
 

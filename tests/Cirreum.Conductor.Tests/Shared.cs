@@ -105,6 +105,7 @@ public static class Shared {
 		});
 
 		services.AddSingleton<IAuthorizationEvaluator, DefaultAuthorizationEvaluator>();
+		services.AddSingleton<IAuthorizationContextAccessor, DefaultAuthorizationContextAccessor>();
 
 		services.AddSingleton<IUserStateAccessor, MockUserStateAccessor>();
 
