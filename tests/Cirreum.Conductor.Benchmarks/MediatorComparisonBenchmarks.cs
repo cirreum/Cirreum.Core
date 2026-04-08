@@ -33,7 +33,7 @@ public class MediatorComparisonBenchmarks {
 
 			// Handler that supports both systems
 			services.AddSingleton<PingHandler>();
-			services.AddSingleton<Conductor.IRequestHandler<ConductorPing, PingResponse>>(sp => sp.GetRequiredService<PingHandler>());
+			services.AddSingleton<Conductor.IOperationHandler<ConductorPing, PingResponse>>(sp => sp.GetRequiredService<PingHandler>());
 			services.AddSingleton<MediatR.IRequestHandler<MediatRPing, PingResponse>>(sp => sp.GetRequiredService<PingHandler>());
 
 		});

@@ -4,9 +4,9 @@ using Cirreum;
 using Cirreum.Authorization;
 using Cirreum.Authorization.Operations;
 using Cirreum.Authorization.Operations.Grants;
+using Cirreum.Conductor;
 using Cirreum.Introspection.Modeling.Export;
 using Cirreum.Introspection.Modeling.Types;
-using Cirreum.Conductor;
 using FluentValidation;
 using FluentValidation.Internal;
 using FluentValidation.Validators;
@@ -116,7 +116,7 @@ public class DomainModel() {
 			// IsCacheableQuery: is an ICacheableQuery (the query results are cached and returned to prevent re-query)
 			var isCacheableQuery = IsCacheableQuery(resourceType);
 
-			// RequiresAuthorization: is an IAuthorizableRequestBase (flows through pipeline, must have authorizer)
+			// RequiresAuthorization: is an IAuthorizableOperationBase (flows through pipeline, must have authorizer)
 			var requiresAuthorization = !isAnonymous && ImplementsAuthorizableRequest(resourceType);
 
 			// Permission metadata: domain feature and required permissions are available
@@ -335,19 +335,19 @@ public class DomainModel() {
 	}
 
 	/// <summary>
-	/// Determines whether the specified type implements <see cref="IAuthorizableRequestBase"/>.
+	/// Determines whether the specified type implements <see cref="IAuthorizableOperationBase"/>.
 	/// </summary>
 	/// <param name="type">The type to inspect.</param>
 	/// <returns>
-	/// true if the specified type implements <see cref="IAuthorizableRequestBase"/>; otherwise, false.
+	/// true if the specified type implements <see cref="IAuthorizableOperationBase"/>; otherwise, false.
 	/// </returns>
 	/// <remarks>
-	/// <see cref="IAuthorizableRequestBase"/> is the single pipeline discriminator for authorization —
-	/// all request marker interfaces (<c>IAuthorizableRequest</c>, <c>IAuthorizableRequest&lt;T&gt;</c>,
+	/// <see cref="IAuthorizableOperationBase"/> is the single pipeline discriminator for authorization —
+	/// all request marker interfaces (<c>IAuthorizableOperation</c>, <c>IAuthorizableOperation&lt;T&gt;</c>,
 	/// and the grant interfaces) inherit from it.
 	/// </remarks>
 	private static bool ImplementsAuthorizableRequest(Type type) {
-		return type.GetInterfaces().Any(i => i.Name == nameof(IAuthorizableRequestBase));
+		return type.GetInterfaces().Any(i => i.Name == nameof(IAuthorizableOperationBase));
 	}
 
 	private static bool IsResourceAuthorizer(Type type) {

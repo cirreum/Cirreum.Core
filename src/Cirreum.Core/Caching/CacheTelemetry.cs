@@ -13,7 +13,7 @@ using System.Runtime.CompilerServices;
 /// <remarks>
 /// <para>
 /// Cache operations are already children of Conductor or Authorization
-/// activities, so no dedicated <see cref="System.Diagnostics.ActivitySource"/>
+/// activities, so no dedicated <see cref="ActivitySource"/>
 /// is needed — only metrics.
 /// </para>
 /// </remarks>

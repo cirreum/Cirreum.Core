@@ -20,10 +20,10 @@ sealed class Dispatcher(
 	#region IDispatcher Implementation
 
 	/// <inheritdoc />
-	public Task<Result> DispatchAsync<TRequest>(
-		TRequest request,
+	public Task<Result> DispatchAsync<TOperation>(
+		TOperation request,
 		CancellationToken cancellationToken = default)
-		where TRequest : IRequest {
+		where TOperation : IOperation {
 
 		ArgumentNullException.ThrowIfNull(request);
 
@@ -41,7 +41,7 @@ sealed class Dispatcher(
 
 	/// <inheritdoc />
 	public Task<Result<TResponse>> DispatchAsync<TResponse>(
-		IRequest<TResponse> request,
+		IOperation<TResponse> request,
 		CancellationToken cancellationToken = default) {
 
 		ArgumentNullException.ThrowIfNull(request);

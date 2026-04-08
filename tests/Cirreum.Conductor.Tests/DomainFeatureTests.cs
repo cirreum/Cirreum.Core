@@ -94,7 +94,7 @@ public class DomainFeatureTests {
 	// Non-Domain namespace test double (stays in Cirreum.Conductor.Tests namespace)
 
 	[RequiresPermission("delete")]
-	private sealed class NonGrantedWithNameOnly : IAuthorizableRequest;
+	private sealed class NonGrantedWithNameOnly : IAuthorizableOperation;
 }
 }
 
@@ -105,37 +105,38 @@ public class DomainFeatureTests {
 namespace Cirreum.Conductor.Tests.Domain.Issues {
 
 	using Cirreum.Authorization;
+	using Cirreum.Authorization.Operations;
 	using Cirreum.Authorization.Operations.Grants;
 	using Cirreum.Conductor;
 
 	[RequiresPermission("delete")]
-	internal sealed class DeleteIssueCmd : IGrantMutateRequest {
+	internal sealed class DeleteIssueCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 
 	[RequiresPermission("issues", "archive")]
-	internal sealed class ArchiveIssueCmd : IGrantMutateRequest {
+	internal sealed class ArchiveIssueCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 
 	[RequiresPermission("audit", "write")]
-	internal sealed class CrossDomainCmd : IGrantMutateRequest {
+	internal sealed class CrossDomainCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 
 	[RequiresPermission("write")]
 	[RequiresPermission("audit")]
-	internal sealed class MultiPermCmd : IGrantMutateRequest {
+	internal sealed class MultiPermCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 
 	[RequiresPermission("delete")]
 	[RequiresPermission("issues", "delete")]
-	internal sealed class DuplicatePermCmd : IGrantMutateRequest {
+	internal sealed class DuplicatePermCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 
-	internal sealed class NoPermCmd : IGrantMutateRequest {
+	internal sealed class NoPermCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 }

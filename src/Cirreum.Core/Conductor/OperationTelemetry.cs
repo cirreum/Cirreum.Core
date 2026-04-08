@@ -8,7 +8,7 @@ using System.Runtime.CompilerServices;
 /// <summary>
 /// Provides telemetry capabilities for request processing including metrics and distributed tracing.
 /// </summary>
-internal static class RequestTelemetry {
+internal static class OperationTelemetry {
 
 	private static readonly ActivitySource _activitySource =
 		new(CirreumTelemetry.ActivitySources.ConductorDispatcher, CirreumTelemetry.Version);
@@ -17,21 +17,21 @@ internal static class RequestTelemetry {
 		new(CirreumTelemetry.Meters.ConductorDispatcher, CirreumTelemetry.Version);
 
 	private static readonly Counter<long> _requestCounter = _meter.CreateCounter<long>(
-		ConductorTelemetry.RequestsTotalMetric,
-		description: "Total number of requests dispatched");
+		ConductorTelemetry.OperationsTotalMetric,
+		description: "Total number of operations dispatched");
 
 	private static readonly Counter<long> _requestFailedCounter = _meter.CreateCounter<long>(
-		ConductorTelemetry.RequestsFailedTotalMetric,
-		description: "Total number of failed requests");
+		ConductorTelemetry.OperationsFailedTotalMetric,
+		description: "Total number of failed operations");
 
 	private static readonly Counter<long> _requestCanceledCounter = _meter.CreateCounter<long>(
-		ConductorTelemetry.RequestsCanceledTotalMetric,
-		description: "Total number of canceled requests");
+		ConductorTelemetry.OperationsCanceledTotalMetric,
+		description: "Total number of canceled operations");
 
 	private static readonly Histogram<double> _requestDuration = _meter.CreateHistogram<double>(
-		ConductorTelemetry.RequestsDurationHistogram,
+		ConductorTelemetry.OperationsDurationHistogram,
 		unit: "ms",
-		description: "Request processing duration in milliseconds");
+		description: "Operation processing duration in milliseconds");
 
 
 	// Helper to check if metrics should be recorded
@@ -53,11 +53,11 @@ internal static class RequestTelemetry {
 		string? responseType = null) {
 
 		var activity = _activitySource.StartActivity(
-			"Dispatch Request",
+			"Dispatch Operation",
 			DomainContext.CurrentActivityKind);
 
-		activity?.SetTag(ConductorTelemetry.RequestTypeTag, requestName);
-		activity?.SetTag(ConductorTelemetry.RequestHasResponseTag, hasResponse);
+		activity?.SetTag(ConductorTelemetry.OperationTypeTag, requestName);
+		activity?.SetTag(ConductorTelemetry.OperationHasResponseTag, hasResponse);
 
 		if (hasResponse && responseType is not null) {
 			activity?.SetTag(ConductorTelemetry.ResponseTypeTag, responseType);
@@ -80,7 +80,7 @@ internal static class RequestTelemetry {
 		if (activity is not null) {
 			activity.SetStatus(ActivityStatusCode.Error, ex.Message);
 			activity.SetTag(ConductorTelemetry.ErrorTypeTag, ex.GetType().Name);
-			activity.SetTag(ConductorTelemetry.RequestFailedTag, true);
+			activity.SetTag(ConductorTelemetry.OperationFailedTag, true);
 			activity.AddException(ex);
 		}
 	}
@@ -91,7 +91,7 @@ internal static class RequestTelemetry {
 	internal static void SetActivityCanceled(Activity? activity, OperationCanceledException oce) {
 		if (activity is not null) {
 			activity.SetStatus(ActivityStatusCode.Error, "Canceled");
-			activity.SetTag(ConductorTelemetry.RequestCanceledTag, true);
+			activity.SetTag(ConductorTelemetry.OperationCanceledTag, true);
 			activity.AddException(oce);
 		}
 	}
@@ -161,11 +161,11 @@ internal static class RequestTelemetry {
 		string? errorType = null) {
 
 		var tags = new TagList {
-			{ ConductorTelemetry.RequestTypeTag, requestName },
-			{ ConductorTelemetry.RequestSucceededTag, success },
-			{ ConductorTelemetry.RequestFailedTag, !success && !canceled },
-			{ ConductorTelemetry.RequestCanceledTag, canceled },
-			{ ConductorTelemetry.RequestStatusTag, canceled ? "canceled" : success ? "success" : "failure" }
+			{ ConductorTelemetry.OperationTypeTag, requestName },
+			{ ConductorTelemetry.OperationSucceededTag, success },
+			{ ConductorTelemetry.OperationFailedTag, !success && !canceled },
+			{ ConductorTelemetry.OperationCanceledTag, canceled },
+			{ ConductorTelemetry.OperationStatusTag, canceled ? "canceled" : success ? "success" : "failure" }
 		};
 
 		if (responseType is not null) {

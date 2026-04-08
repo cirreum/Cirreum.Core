@@ -28,7 +28,7 @@ sequenceDiagram
     HTTP->>CT: Enrich ClaimsPrincipal
     CT->>CT: Load IOwnedApplicationUser<br/>from store (cached)
     CT-->>HTTP: Enriched principal
-    HTTP->>CN: Dispatch IRequest / IRequest[T]
+    HTTP->>CN: Dispatch IOperation / IOperation[T]
 
     CN->>CN: Resolve handler + intercepts
     Note over CN: Typical path: 4 nested intercepts<br/>Validation ⟶ Authorization ⟶<br/>HandlerPerformance ⟶ QueryCaching ⟶ Handler<br/>(each wraps the next; handler at center)
@@ -82,8 +82,8 @@ sequenceDiagram
 - **Intercept placement.** Authorization runs after Validation but before
   the handler. The handler can assume a valid, authorized request.
 - **Grants (Stage 1 Step 0).** When an authorizable object implements a grant interface
-  (`IGrantMutateRequest`, `IGrantLookupRequest`, `IGrantSearchRequest`,
-  `IGrantMutateSelfRequest`, `IGrantLookupSelfRequest`), the `OperationGrantEvaluator`
+  (`IOwnerMutateOperation`, `IOwnerLookupOperation`, `IOwnerSearchOperation`,
+  `ISelfMutateOperation`, `ISelfLookupOperation`), the `OperationGrantEvaluator`
   resolves the caller's `OperationGrant` (owner-scoped) or performs identity
   matching (self-scoped) before any authorization constraint runs. If the
   object is not granted, this step is a no-op pass. See the

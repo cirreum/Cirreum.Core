@@ -38,7 +38,7 @@ A flat context system where each context owns its fields directly and delegates 
 
 ```csharp
 // Created once in RequestHandlerWrapperImpl<T> (typical path)
-var requestContext = RequestContext<TRequest>.Create(
+var requestContext = RequestContext<TOperation>.Create(
     userState, request, requestType, requestId, correlationId, startTimestamp);
 
 // Built inside DefaultAuthorizationEvaluator
@@ -129,22 +129,22 @@ A high-performance mediator implementation with comprehensive pipeline support f
 - Pub/sub notification system with multiple publishing strategies
 - OpenTelemetry integration with zero overhead when disabled
 
-**Request Abstractions**
-- `IRequest` / `IRequest<TResponse>` - Base request contracts
-- `IAuthorizableCommand` / `IAuthorizableCommand<TResponse>` - Authorized write operations
-- `IAuthorizableQuery<TResponse>` - Authorized read operations
-- `IAuthorizableCacheableQuery<TResponse>` - Authorized, cacheable read operations
-- `IAuthorizableOwnerScopedCommand` / `IAuthorizableOwnerScopedQuery<TResponse>` / `IAuthorizableOwnerScopedCacheableQuery<TResponse>` - Owner-scoped variants that opt into the Stage 1 owner gate
+**Operation Abstractions**
+- `IOperation` / `IOperation<TResponse>` - Base operation contracts
+- `IAuthorizableOperation` / `IAuthorizableOperation<TResponse>` - Authorized operations
+- `IOwnerMutateOperation` / `IOwnerLookupOperation<TResponse>` / `IOwnerSearchOperation<TResponse>` - Owner-scoped grant-aware operations
+- `IOwnerCacheableLookupOperation<TResponse>` - Owner-scoped cacheable lookups
+- `ISelfMutateOperation` / `ISelfLookupOperation<TResponse>` - Self-scoped identity operations
 - `ICacheableQuery<TResponse>` - Query result caching with sliding/absolute expiration + cache tags
 
 **Built-in Intercepts** (outermost → innermost, wrapping the handler)
 - **Validation** - FluentValidation integration
 - **Authorization** - Three-stage Scope / Resource / Policy pipeline
-- **HandlerPerformance** - Request timing and metrics
+- **HandlerPerformance** - Operation timing and metrics
 - **QueryCaching** - Automatic result caching with configurable providers
 
 **Discriminator**
-- `IAuthorizableRequestBase` - Single pipeline discriminator for authorization; inherits `IAuthorizableObject` so every request is its own authorizable resource (no wrapping required)
+- `IAuthorizableOperationBase` - Single pipeline discriminator for authorization; inherits `IAuthorizableObject` so every operation is its own authorizable resource (no wrapping required)
 
 ### 📊 Observability
 
@@ -224,10 +224,10 @@ Definitions that support Cirreum's architectural patterns:
 | `IAuthorizableOwnerScopedCommand` / `<T>` | ✓ | ✗ | ✓ | Protected mutations of owned resources |
 | `IAuthorizableOwnerScopedQuery<T>` | ✓ | ✗ | ✓ | Protected reads of owned resources |
 | `IAuthorizableOwnerScopedCacheableQuery<T>` | ✓ | ✓ | ✓ | Protected, cached reads of owned resources |
-| `IGrantMutateRequest` / `<TResponse>` | ✓ | ✗ | ✓ | Grant-aware writes |
-| `IGrantLookupRequest<TResponse>` | ✓ | ✗ | ✓ | Grant-aware point-reads |
-| `IGrantCacheableLookupRequest<TResponse>` | ✓ | ✓ | ✓ | Grant-aware cached reads |
-| `IGrantSearchRequest<TResponse>` | ✓ | ✗ | ✓ | Grant-aware cross-owner queries |
+| `IOwnerMutateOperation` / `<TResponse>` | ✓ | ✗ | ✓ | Grant-aware writes |
+| `IOwnerLookupOperation<TResponse>` | ✓ | ✗ | ✓ | Grant-aware point-reads |
+| `IOwnerCacheableLookupOperation<TResponse>` | ✓ | ✓ | ✓ | Grant-aware cached reads |
+| `IOwnerSearchOperation<TResponse>` | ✓ | ✗ | ✓ | Grant-aware cross-owner queries |
 
 ### 4. Utilities & Helpers
 
@@ -348,7 +348,7 @@ knowing about grant tables:
 ```csharp
 // 1. Define grant-aware requests (domain derived from namespace convention)
 [RequiresPermission("delete")]
-public sealed record DeleteIssue(string Id) : IGrantMutateRequest {
+public sealed record DeleteIssue(string Id) : IOwnerMutateOperation {
     public string? OwnerId { get; set; }
 }
 

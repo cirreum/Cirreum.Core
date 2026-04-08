@@ -3,11 +3,11 @@
 /// <summary>
 /// Defines a handler for a request that does not return a value.
 /// </summary>
-/// <typeparam name="TRequest">
-/// The type of request being handled. Must implement <see cref="IRequest"/>.
+/// <typeparam name="TOperation">
+/// The type of request being handled. Must implement <see cref="IOperation"/>.
 /// </typeparam>
-public interface IRequestHandler<in TRequest>
-	where TRequest : IRequest {
+public interface IOperationHandler<in TOperation>
+	where TOperation : IOperation {
 
 	/// <summary>
 	/// Handles the request asynchronously.
@@ -21,21 +21,21 @@ public interface IRequestHandler<in TRequest>
 	/// success or failure of the operation.
 	/// </returns>
 	Task<Result> HandleAsync(
-		TRequest request,
+		TOperation request,
 		CancellationToken cancellationToken = default);
 }
 
 /// <summary>
 /// Defines a handler for a request that returns a <see cref="Result{TResponse}"/>.
 /// </summary>
-/// <typeparam name="TRequest">
-/// The type of request being handled. Must implement <see cref="IRequest{TResponse}"/>.
+/// <typeparam name="TOperation">
+/// The type of request being handled. Must implement <see cref="IOperation{TResponse}"/>.
 /// </typeparam>
 /// <typeparam name="TResponse">
 /// The type of response returned when the request is handled.
 /// </typeparam>
-public interface IRequestHandler<in TRequest, TResponse>
-	where TRequest : IRequest<TResponse> {
+public interface IOperationHandler<in TOperation, TResponse>
+	where TOperation : IOperation<TResponse> {
 
 	/// <summary>
 	/// Handles the request asynchronously and produces a response.
@@ -49,6 +49,6 @@ public interface IRequestHandler<in TRequest, TResponse>
 	/// that represents the outcome of the operation and the response value.
 	/// </returns>
 	Task<Result<TResponse>> HandleAsync(
-		TRequest request,
+		TOperation request,
 		CancellationToken cancellationToken = default);
 }

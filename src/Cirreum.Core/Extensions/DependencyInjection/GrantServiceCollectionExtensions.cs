@@ -4,10 +4,10 @@ using Cirreum.Authorization.Operations.Grants;
 using Cirreum.Authorization.Operations.Grants.Caching;
 using Cirreum.Caching;
 using Cirreum.Extensions.Internal;
-using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using System.Reflection;
 /// <summary>
 /// Extension methods for registering Cirreum grant-based access control services.
 /// </summary>

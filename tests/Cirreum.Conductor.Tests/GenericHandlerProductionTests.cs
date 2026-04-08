@@ -14,24 +14,24 @@ public class GenericHandlerProductionTests {
 	public class Product { public int Id { get; set; } = 123; }
 
 	// Concrete generic request/handler for User
-	public class GetUserRequest : IRequest<User> { }
-	public class GetUserHandler : IRequestHandler<GetUserRequest, User> {
+	public class GetUserRequest : IOperation<User> { }
+	public class GetUserHandler : IOperationHandler<GetUserRequest, User> {
 		public Task<Result<User>> HandleAsync(GetUserRequest request, CancellationToken cancellationToken) {
 			return Task.FromResult(Result<User>.Success(new User()));
 		}
 	}
 
 	// Concrete generic request/handler for Product  
-	public class GetProductRequest : IRequest<Product> { }
-	public class GetProductHandler : IRequestHandler<GetProductRequest, Product> {
+	public class GetProductRequest : IOperation<Product> { }
+	public class GetProductHandler : IOperationHandler<GetProductRequest, Product> {
 		public Task<Result<Product>> HandleAsync(GetProductRequest request, CancellationToken cancellationToken) {
 			return Task.FromResult(Result<Product>.Success(new Product()));
 		}
 	}
 
 	// Generic base handler that can be inherited
-	public abstract class EntityHandlerBase<TRequest, TEntity> : IRequestHandler<TRequest, TEntity>
-		where TRequest : IRequest<TEntity>
+	public abstract class EntityHandlerBase<TRequest, TEntity> : IOperationHandler<TRequest, TEntity>
+		where TRequest : IOperation<TEntity>
 		where TEntity : new() {
 
 		public virtual Task<Result<TEntity>> HandleAsync(TRequest request, CancellationToken cancellationToken) {
@@ -40,10 +40,10 @@ public class GenericHandlerProductionTests {
 	}
 
 	// Concrete handlers that inherit from generic base
-	public class CreateUserRequest : IRequest<User> { }
+	public class CreateUserRequest : IOperation<User> { }
 	public class CreateUserHandler : EntityHandlerBase<CreateUserRequest, User> { }
 
-	public class CreateProductRequest : IRequest<Product> { }
+	public class CreateProductRequest : IOperation<Product> { }
 	public class CreateProductHandler : EntityHandlerBase<CreateProductRequest, Product> { }
 
 	[TestMethod]
@@ -85,11 +85,11 @@ public class GenericHandlerProductionTests {
 		var provider = services.BuildServiceProvider();
 
 		// Verify handlers inheriting from generic base are registered
-		var userHandler = provider.GetService<IRequestHandler<CreateUserRequest, User>>();
+		var userHandler = provider.GetService<IOperationHandler<CreateUserRequest, User>>();
 		Assert.IsNotNull(userHandler, "CreateUserHandler should be registered");
 		Assert.IsInstanceOfType<CreateUserHandler>(userHandler);
 
-		var productHandler = provider.GetService<IRequestHandler<CreateProductRequest, Product>>();
+		var productHandler = provider.GetService<IOperationHandler<CreateProductRequest, Product>>();
 		Assert.IsNotNull(productHandler, "CreateProductHandler should be registered");
 		Assert.IsInstanceOfType<CreateProductHandler>(productHandler);
 	}

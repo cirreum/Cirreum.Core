@@ -1,12 +1,13 @@
-namespace Cirreum.Authorization.Operations.Grants;
+namespace Cirreum.Authorization.Operations;
 
+using Cirreum.Authorization.Operations.Grants;
 using Cirreum.Conductor;
 
 /// <summary>
-/// Grant-aware cacheable point-lookup. Composes <see cref="IGrantLookupRequest{TResponse}"/>
+/// Grant-aware cacheable point-lookup. Composes <see cref="IOwnerLookupOperation{TResponse}"/>
 /// with <see cref="ICacheableQuery{TResponse}"/> caching contract. The framework automatically
 /// composes the final cache key as <c>{owner}:{boundary}:{CacheKey}</c> and adds a
-/// <c>tenant:{OwnerId}</c> tag via <see cref="Cirreum.Caching.CacheKeyContext"/>, which isolates
+/// <c>tenant:{OwnerId}</c> tag via <see cref="Caching.CacheKeyContext"/>, which isolates
 /// tenants from each other and cross-tenant operators from tenant-scoped callers.
 /// </summary>
 /// <remarks>
@@ -19,7 +20,7 @@ using Cirreum.Conductor;
 /// get the same result.
 /// </para>
 /// <para>
-/// <b>Global-scope callers</b> (those with <see cref="Cirreum.Security.AuthenticationBoundary.Global"/>)
+/// <b>Global-scope callers</b> (those with <see cref="Security.AuthenticationBoundary.Global"/>)
 /// <b>must</b> supply a non-null <c>OwnerId</c>.
 /// Omitting it denies with <see cref="DenyCodes.CacheableReadOwnerIdRequired"/>. This
 /// prevents an unbounded "null-owner" cache bucket shared across all operator callers.
@@ -33,5 +34,5 @@ using Cirreum.Conductor;
 /// <typeparam name="TResponse">
 /// The type of response returned by the lookup. Must be immutable for safe caching.
 /// </typeparam>
-public interface IGrantCacheableLookupRequest<TResponse>
-	: IGrantLookupRequest<TResponse>, ICacheableQuery<TResponse>;
+public interface IOwnerCacheableLookupOperation<TResponse>
+	: IOwnerLookupOperation<TResponse>, ICacheableQuery<TResponse>;

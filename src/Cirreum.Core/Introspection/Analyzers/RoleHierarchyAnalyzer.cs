@@ -1,7 +1,7 @@
 namespace Cirreum.Introspection.Analyzers;
 
-using System.Collections.Immutable;
 using Cirreum.Authorization;
+using System.Collections.Immutable;
 
 /// <summary>
 /// Analyzes role hierarchy for structural issues, inheritance patterns, and security implications.

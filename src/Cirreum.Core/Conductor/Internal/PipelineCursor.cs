@@ -21,18 +21,18 @@ using Cirreum.Conductor;
 /// <see cref="Unit"/> that the interceptor contract expects.
 /// </para>
 /// </remarks>
-/// <typeparam name="TRequest">The concrete request type.</typeparam>
-internal sealed class PipelineCursor<TRequest>
-	where TRequest : class, IRequest {
+/// <typeparam name="TOperation">The concrete request type.</typeparam>
+internal sealed class PipelineCursor<TOperation>
+	where TOperation : class, IOperation {
 
-	private readonly IIntercept<TRequest, Unit>[] _intercepts;
-	private readonly IRequestHandler<TRequest> _handler;
+	private readonly IIntercept<TOperation, Unit>[] _intercepts;
+	private readonly IOperationHandler<TOperation> _handler;
 	private int _index;
-	public readonly RequestHandlerDelegate<TRequest, Unit> NextDelegate;
+	public readonly OperationHandlerDelegate<TOperation, Unit> NextDelegate;
 
 	public PipelineCursor(
-		IIntercept<TRequest, Unit>[] intercepts,
-		IRequestHandler<TRequest> handler) {
+		IIntercept<TOperation, Unit>[] intercepts,
+		IOperationHandler<TOperation> handler) {
 
 		this._intercepts = intercepts;
 		this._handler = handler;
@@ -40,13 +40,13 @@ internal sealed class PipelineCursor<TRequest>
 	}
 
 	private Task<Result<Unit>> Next(
-		RequestContext<TRequest> context,
+		OperationContext<TOperation> context,
 		CancellationToken cancellationToken) {
 
 		if (this._index >= this._intercepts.Length) {
 			// Terminal: handler returns Task<Result>, interceptors expect Task<Result<Unit>>.
 			// Only the terminal step needs the async conversion — walking is sync.
-			return TerminateAsync(this._handler.HandleAsync(context.Request, cancellationToken));
+			return TerminateAsync(this._handler.HandleAsync(context.Operation, cancellationToken));
 		}
 		var current = this._intercepts[this._index++];
 		return current.HandleAsync(context, this.NextDelegate, cancellationToken);

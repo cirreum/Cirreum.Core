@@ -3,8 +3,8 @@
 using Cirreum.Conductor;
 
 /// <summary>
-/// Intercept behavior that enforces authorization rules for any <see cref="IAuthorizableRequestBase"/>
-/// implementations. See <see cref="IAuthorizableRequest"/>, <see cref="IAuthorizableRequest{TResponse}"/>,
+/// Intercept behavior that enforces authorization rules for any <see cref="IAuthorizableOperationBase"/>
+/// implementations. See <see cref="IAuthorizableOperation"/>, <see cref="IAuthorizableOperation{TResponse}"/>,
 /// and the grant interfaces for the interfaces that should be implemented directly.
 /// </summary>
 /// <remarks>
@@ -18,19 +18,19 @@ using Cirreum.Conductor;
 /// anywhere in the application.
 /// </para>
 /// </remarks>
-sealed class Authorization<TRequest, TResponse>(
+sealed class Authorization<TOperation, TResponse>(
 	IAuthorizationEvaluator authorizer
-) : IIntercept<TRequest, TResponse>
-	where TRequest : IAuthorizableRequestBase {
+) : IIntercept<TOperation, TResponse>
+	where TOperation : IAuthorizableOperationBase {
 
 	public async Task<Result<TResponse>> HandleAsync(
-		RequestContext<TRequest> context,
-		RequestHandlerDelegate<TRequest, TResponse> next,
+		OperationContext<TOperation> context,
+		OperationHandlerDelegate<TOperation, TResponse> next,
 		CancellationToken cancellationToken) {
 
 		var authResult = await authorizer
 			.Evaluate(
-				context.Request,
+				context.Operation,
 				context.UserState,
 				cancellationToken)
 			.ConfigureAwait(false);

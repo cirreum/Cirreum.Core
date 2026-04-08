@@ -18,11 +18,11 @@
 /// cursor/snapshot and re-dispatch explicitly rather than calling <c>next</c> repeatedly.
 /// </para>
 /// </remarks>
-/// <typeparam name="TRequest">The type of the request to be intercepted. Must be a non-nullable type.</typeparam>
+/// <typeparam name="TOperation">The type of the request to be intercepted. Must be a non-nullable type.</typeparam>
 /// <typeparam name="TResponse">The type of the response returned after processing the request.</typeparam>
-public interface IIntercept<TRequest, TResponse> where TRequest : notnull {
+public interface IIntercept<TOperation, TResponse> where TOperation : notnull {
 	Task<Result<TResponse>> HandleAsync(
-		RequestContext<TRequest> context,
-		RequestHandlerDelegate<TRequest, TResponse> next,
+		OperationContext<TOperation> context,
+		OperationHandlerDelegate<TOperation, TResponse> next,
 		CancellationToken cancellationToken);
 }

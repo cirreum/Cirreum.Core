@@ -1,6 +1,5 @@
 namespace Cirreum.Introspection.Analyzers;
 
-using Cirreum.Authorization.Operations.Grants;
 using Cirreum.Introspection.Modeling;
 using Cirreum.Introspection.Modeling.Types;
 
@@ -65,7 +64,7 @@ public class GrantedResourceAnalyzer : IDomainAnalyzer {
 					"AuthorizationContext.Permissions for use in resource authorizers.",
 				RelatedTypeNames: [.. permissionsWithoutGrants.Select(TypeName)],
 				Recommendation: "If grant-based access control is intended, add the appropriate Granted " +
-					"interface (e.g., IGrantMutateRequest). Otherwise, ensure the resource authorizer " +
+					"interface (e.g., IOwnerMutateOperation). Otherwise, ensure the resource authorizer " +
 					"consumes Permissions for authorization decisions."));
 		}
 
@@ -109,7 +108,7 @@ public class GrantedResourceAnalyzer : IDomainAnalyzer {
 					string.Join(", ", unusedDomains) + ".",
 				RelatedTypeNames: unusedDomains,
 				Recommendation: "If these domains should use grant-based access control, add the appropriate " +
-					"Granted interface (IGrantMutateRequest, IGrantLookupRequest<T>, etc.) to their resources."));
+					"Granted interface (IOwnerMutateOperation, IOwnerLookupOperation<T>, etc.) to their resources."));
 		}
 
 		// ──────────────────────────────────────────────

@@ -115,7 +115,7 @@ sequenceDiagram
 
 | Stage | Purpose | Strategy | Short-circuit |
 |---|---|---|---|
-| **1 Step 0a** — Grant gate | Resolve `OperationGrant` and enforce grant timing for `IGrantMutateRequest`, `IGrantLookupRequest`, `IGrantSearchRequest`, `IGrantMutateSelfRequest`, `IGrantLookupSelfRequest` | First failure | Within Stage 1 |
+| **1 Step 0a** — Grant gate | Resolve `OperationGrant` and enforce grant timing for `IOwnerMutateOperation`, `IOwnerLookupOperation`, `IOwnerSearchOperation`, `ISelfMutateOperation`, `ISelfLookupOperation` | First failure | Within Stage 1 |
 | **1 Step 0b** — Owner gate | Enforce `OwnerId` presence + match for `IAuthorizableOwnerScopedResource` | First failure | Within Stage 1 |
 | **1 Step 1** — Scope evaluators | Tenant / access-scope / ambient constraints | First failure, registration order | Within Stage 1 |
 | **2** — Object authorizer | Role and rule checks specific to this authorizable object type | Single `AuthorizerBase<T>` per `T`; multiple FluentValidation rules aggregate within it | Stage 2 → Stage 3 |

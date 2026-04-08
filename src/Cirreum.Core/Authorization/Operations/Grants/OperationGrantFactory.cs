@@ -2,7 +2,6 @@ namespace Cirreum.Authorization.Operations.Grants;
 
 using Cirreum.Authorization.Operations.Grants.Caching;
 using Cirreum.Caching;
-using Cirreum.Diagnostics;
 
 /// <summary>
 /// Core's <see cref="IOperationGrantFactory"/> implementation. Composes an

@@ -3,7 +3,7 @@ namespace Cirreum.Authorization.Operations.Grants;
 /// <summary>
 /// Base detection interface for grant-aware mutations. Carries the scalar
 /// <c>OwnerId</c> that the grant evaluator enforces before the handler runs.
-/// Does not inherit <see cref="IAuthorizableRequest"/> — used by
+/// Does not inherit <see cref="IAuthorizableOperation"/> — used by
 /// <see cref="OperationGrantEvaluator"/> for runtime detection via <c>is</c> casts.
 /// </summary>
 public interface IGrantableMutateBase {

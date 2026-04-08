@@ -15,8 +15,8 @@ public sealed class LifetimeTests {
 		where TRequest : notnull {
 
 		public async Task<Result<TResponse>> HandleAsync(
-			RequestContext<TRequest> context,
-			RequestHandlerDelegate<TRequest, TResponse> next,
+			OperationContext<TRequest> context,
+			OperationHandlerDelegate<TRequest, TResponse> next,
 			CancellationToken cancellationToken) {
 			var result = await next(context, cancellationToken);
 			return result;
@@ -375,7 +375,7 @@ public sealed class LifetimeTests {
 
 		var handlerDescriptor = services.First(sd =>
 			sd.ServiceType.IsGenericType &&
-			sd.ServiceType.GetGenericTypeDefinition() == typeof(IRequestHandler<,>));
+			sd.ServiceType.GetGenericTypeDefinition() == typeof(IOperationHandler<,>));
 
 		Assert.AreEqual(ServiceLifetime.Transient, handlerDescriptor.Lifetime);
 	}

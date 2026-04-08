@@ -37,7 +37,7 @@ namespace Cirreum.Authorization;
 /// <example>
 /// <code>
 /// [RequiresPermission("delete")]
-/// public sealed record DeleteIssue(string Id) : IGrantMutateRequest {
+/// public sealed record DeleteIssue(string Id) : IOwnerMutateOperation {
 ///     public string? OwnerId { get; set; }
 /// }
 /// </code>

@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Immutable;
-using System.Diagnostics;
 
 /// <summary>
 /// The default implementation of the <see cref="IAuthorizationEvaluator"/>.

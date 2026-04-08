@@ -6,13 +6,13 @@ using System.Diagnostics;
 
 internal static class RequestContextFactory {
 
-	public static Task<RequestContext<TRequest>> CreateRequestContext<TRequest>(
+	public static Task<OperationContext<TOperation>> CreateRequestContext<TOperation>(
 		this IServiceProvider serviceProvider,
 		Activity? activity,
 		long startTimestamp,
-		TRequest typedRequest,
+		TOperation typedRequest,
 		string requestTypeName
-	) where TRequest : notnull {
+	) where TOperation : notnull {
 
 		// GetService<T>()! — IUserStateAccessor is registered by Cirreum bootstrap; skip
 		// GetRequiredService's null-guard + throw-helper overhead on the hot path.
@@ -32,31 +32,31 @@ internal static class RequestContextFactory {
 			userStateVt, activity, startTimestamp, typedRequest, requestTypeName);
 	}
 
-	private static async Task<RequestContext<TRequest>> CreateRequestContextAsync<TRequest>(
+	private static async Task<OperationContext<TOperation>> CreateRequestContextAsync<TOperation>(
 		ValueTask<IUserState> userStateVt,
 		Activity? activity,
 		long startTimestamp,
-		TRequest typedRequest,
+		TOperation typedRequest,
 		string requestTypeName
-	) where TRequest : notnull {
+	) where TOperation : notnull {
 		var userState = await userStateVt;
 		return BuildContext(userState, activity, startTimestamp, typedRequest, requestTypeName);
 	}
 
-	private static RequestContext<TRequest> BuildContext<TRequest>(
+	private static OperationContext<TOperation> BuildContext<TOperation>(
 		IUserState userState,
 		Activity? activity,
 		long startTimestamp,
-		TRequest typedRequest,
+		TOperation typedRequest,
 		string requestTypeName
-	) where TRequest : notnull {
+	) where TOperation : notnull {
 
 		var requestId = activity?.SpanId.ToString()
 			?? ActivitySpanId.CreateRandom().ToHexString();
 		var correlationId = activity?.TraceId.ToString()
 			?? ActivityTraceId.CreateRandom().ToHexString();
 
-		return RequestContext<TRequest>.Create(
+		return OperationContext<TOperation>.Create(
 			userState,
 			typedRequest,
 			requestTypeName,

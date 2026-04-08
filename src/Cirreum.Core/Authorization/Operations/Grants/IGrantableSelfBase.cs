@@ -39,7 +39,7 @@ public interface IGrantableSelfBase {
 
 	/// <summary>
 	/// The external identity (IdP identifier) extracted from <see cref="Id"/>. The grant
-	/// evaluator compares this value against <see cref="AuthorizationContext{TAuthorizableObject}.UserId"/>
+	/// evaluator compares this value against <see cref="AuthorizationContext.UserId"/>
 	/// (which originates from <c>IUserState.Id</c>).
 	/// Override when <see cref="Id"/> is a composite key to extract the identity portion.
 	/// Defaults to <see cref="Id"/>.
@@ -53,4 +53,3 @@ public interface IGrantableSelfBase {
 	/// </summary>
 	bool IsValidId => this.Id is not null;
 }
-

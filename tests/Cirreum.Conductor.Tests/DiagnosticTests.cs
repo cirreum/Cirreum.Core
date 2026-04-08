@@ -10,7 +10,7 @@ public class DiagnosticTests {
 		Assert.IsTrue(result.IsFailure, "Expected failure when no handler exists.");
 	}
 
-	public class TestRequest : IRequest<string> {
+	public class TestRequest : IOperation<string> {
 	}
 
 	public TestContext TestContext { get; set; }

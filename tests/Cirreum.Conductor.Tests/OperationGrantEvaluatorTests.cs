@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.Security.Claims;
 using Cirreum;
 using Cirreum.Authorization;
+using Cirreum.Authorization.Operations;
 using Cirreum.Authorization.Operations.Grants;
 using Cirreum.Caching;
 using Cirreum.Conductor;
@@ -469,7 +470,7 @@ public class OperationGrantEvaluatorTests {
 
 	private sealed class NonOwnedResource : IAuthorizableObject;
 
-	private sealed class GrantedCommand : IGrantMutateRequest {
+	private sealed class GrantedCommand : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 

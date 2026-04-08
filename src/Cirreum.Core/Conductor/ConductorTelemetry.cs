@@ -7,24 +7,24 @@ public static class ConductorTelemetry {
 	// Metrics
 
 	/// <summary>
-	/// Metric: Total number of requests.
+	/// Metric: Total number of operations.
 	/// </summary>
-	public const string RequestsTotalMetric = "conductor.requests.total";
+	public const string OperationsTotalMetric = "conductor.operations.total";
 
 	/// <summary>
-	/// Metric: Total number of failed requests.
+	/// Metric: Total number of failed operations.
 	/// </summary>
-	public const string RequestsFailedTotalMetric = "conductor.requests.failed";
+	public const string OperationsFailedTotalMetric = "conductor.operations.failed";
 
 	/// <summary>
-	/// Metric: Total number of canceled requests.
+	/// Metric: Total number of canceled operations.
 	/// </summary>
-	public const string RequestsCanceledTotalMetric = "conductor.requests.canceled";
+	public const string OperationsCanceledTotalMetric = "conductor.operations.canceled";
 
 	/// <summary>
-	/// Metric: Histogram of request duration.
+	/// Metric: Histogram of operation duration.
 	/// </summary>
-	public const string RequestsDurationHistogram = "conductor.requests.duration";
+	public const string OperationsDurationHistogram = "conductor.operations.duration";
 
 	// Tags/Attributes
 
@@ -34,14 +34,14 @@ public static class ConductorTelemetry {
 	public const string ErrorTypeTag = "error.type";
 
 	/// <summary>
-	/// Tag: Request type.
+	/// Tag: Operation type.
 	/// </summary>
-	public const string RequestTypeTag = "request.type";
+	public const string OperationTypeTag = "operation.type";
 
 	/// <summary>
-	/// Tag: Does this request have a response.
+	/// Tag: Does this operation have a response.
 	/// </summary>
-	public const string RequestHasResponseTag = "request.has_response";
+	public const string OperationHasResponseTag = "operation.has_response";
 
 	/// <summary>
 	/// Tag: Response type.
@@ -49,22 +49,22 @@ public static class ConductorTelemetry {
 	public const string ResponseTypeTag = "response.type";
 
 	/// <summary>
-	/// Tag: Request status (success/failure/canceled).
+	/// Tag: Operation status (success/failure/canceled).
 	/// </summary>
-	public const string RequestStatusTag = "request.status";
+	public const string OperationStatusTag = "operation.status";
 
 	/// <summary>
-	/// Tag: Request succeeded (true/false).
+	/// Tag: Operation succeeded (true/false).
 	/// </summary>
-	public const string RequestSucceededTag = "request.succeeded";
+	public const string OperationSucceededTag = "operation.succeeded";
 
 	/// <summary>
-	/// Tag: Request failed (true/false).
+	/// Tag: Operation failed (true/false).
 	/// </summary>
-	public const string RequestFailedTag = "request.failed";
+	public const string OperationFailedTag = "operation.failed";
 
 	/// <summary>
-	/// Tag: Request canceled (true/false).
+	/// Tag: Operation canceled (true/false).
 	/// </summary>
-	public const string RequestCanceledTag = "request.canceled";
+	public const string OperationCanceledTag = "operation.canceled";
 }

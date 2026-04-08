@@ -14,19 +14,19 @@ using Cirreum.Conductor;
 /// past the intended interceptor. All built-in interceptors comply. Custom interceptors
 /// that need retry/loop/fan-out semantics must snapshot state and build their own cursor.
 /// </remarks>
-/// <typeparam name="TRequest">The concrete request type.</typeparam>
+/// <typeparam name="TOperation">The concrete request type.</typeparam>
 /// <typeparam name="TResponse">The typed response.</typeparam>
-internal sealed class PipelineCursor<TRequest, TResponse>
-	where TRequest : class, IRequest<TResponse> {
+internal sealed class PipelineCursor<TOperation, TResponse>
+	where TOperation : class, IOperation<TResponse> {
 
-	private readonly IIntercept<TRequest, TResponse>[] _intercepts;
-	private readonly IRequestHandler<TRequest, TResponse> _handler;
+	private readonly IIntercept<TOperation, TResponse>[] _intercepts;
+	private readonly IOperationHandler<TOperation, TResponse> _handler;
 	private int _index;
-	public readonly RequestHandlerDelegate<TRequest, TResponse> NextDelegate;
+	public readonly OperationHandlerDelegate<TOperation, TResponse> NextDelegate;
 
 	public PipelineCursor(
-		IIntercept<TRequest, TResponse>[] intercepts,
-		IRequestHandler<TRequest, TResponse> handler) {
+		IIntercept<TOperation, TResponse>[] intercepts,
+		IOperationHandler<TOperation, TResponse> handler) {
 
 		this._intercepts = intercepts;
 		this._handler = handler;
@@ -34,11 +34,11 @@ internal sealed class PipelineCursor<TRequest, TResponse>
 	}
 
 	private Task<Result<TResponse>> Next(
-		RequestContext<TRequest> context,
+		OperationContext<TOperation> context,
 		CancellationToken cancellationToken) {
 
 		if (this._index >= this._intercepts.Length) {
-			return this._handler.HandleAsync(context.Request, cancellationToken);
+			return this._handler.HandleAsync(context.Operation, cancellationToken);
 		}
 		var current = this._intercepts[this._index++];
 		return current.HandleAsync(context, this.NextDelegate, cancellationToken);

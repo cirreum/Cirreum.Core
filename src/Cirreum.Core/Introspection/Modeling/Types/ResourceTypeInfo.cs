@@ -1,7 +1,7 @@
 namespace Cirreum.Introspection.Modeling.Types;
 
-using Cirreum.Introspection.Modeling.Export;
 using Cirreum.Authorization;
+using Cirreum.Introspection.Modeling.Export;
 
 /// <summary>
 /// Internal type used during analysis that includes CLR Type references.

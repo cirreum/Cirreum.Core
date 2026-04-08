@@ -24,7 +24,7 @@ public class AuthorizableResourceAnalyzer(
 				: "Critical: These requests will fail authorization. Create an authorizer for each resource or mark them as anonymous if public access is intended.";
 
 			return new(
-				$"Found {count} resource(s) that implement IAuthorizableRequestBase but have no authorizer defined",
+				$"Found {count} resource(s) that implement IAuthorizableOperationBase but have no authorizer defined",
 				recommendation);
 		}
 
@@ -116,7 +116,7 @@ public class AuthorizableResourceAnalyzer(
 		var requestResources = unprotectedResources.Where(r => r.RequiresAuthorization).ToList();
 		var nonRequestResources = unprotectedResources.Where(r => !r.RequiresAuthorization).ToList();
 
-		// CRITICAL: IAuthorizableRequestBase without authorizer = security gap in the pipeline
+		// CRITICAL: IAuthorizableOperationBase without authorizer = security gap in the pipeline
 		if (requestResources.Count > 0) {
 			var issue = Issues.RequestsWithNoAuthorizer(requestResources.Count);
 			issues.Add(new AnalysisIssue(

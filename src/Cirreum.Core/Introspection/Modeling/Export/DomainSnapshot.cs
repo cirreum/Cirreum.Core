@@ -2,7 +2,6 @@ namespace Cirreum.Introspection.Modeling.Export;
 
 using Cirreum.Authorization;
 using Cirreum.Introspection;
-using Cirreum.Introspection.Analyzers;
 using Cirreum.Introspection.Documentation.Formatters;
 
 /// <summary>

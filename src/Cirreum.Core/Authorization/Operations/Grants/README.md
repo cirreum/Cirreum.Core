@@ -127,9 +127,9 @@ and `RequestContext.DomainFeature`.
 
 ---
 
-## Request Interfaces
+## Operation Interfaces
 
-Grants provides composable interfaces that layer on top of existing Conductor request
+Grants provides composable interfaces that layer on top of existing Conductor operation
 types. Each operation pattern requires **one interface** — no marker interfaces or
 generic domain parameters:
 
@@ -137,45 +137,45 @@ generic domain parameters:
 
 | Interface | Base | Property | Scope |
 |-----------|------|----------|-------|
-| `IGrantMutateRequest` | `IAuthorizableRequest` | `OwnerId` (scalar) | Single-owner write (void) |
-| `IGrantMutateRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerId` (scalar) | Single-owner write with response |
-| `IGrantLookupRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerId` (scalar) | Single-owner read |
-| `IGrantCacheableLookupRequest<TResponse>` | `ICacheableQuery<TResponse>` | `OwnerId` | Cacheable single-owner read |
-| `IGrantSearchRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerIds` (plural) | Cross-owner query |
+| `IOwnerMutateOperation` | `IAuthorizableOperation` | `OwnerId` (scalar) | Single-owner write (void) |
+| `IOwnerMutateOperation<TResponse>` | `IAuthorizableOperation<TResponse>` | `OwnerId` (scalar) | Single-owner write with response |
+| `IOwnerLookupOperation<TResponse>` | `IAuthorizableOperation<TResponse>` | `OwnerId` (scalar) | Single-owner read |
+| `IOwnerCacheableLookupOperation<TResponse>` | `ICacheableQuery<TResponse>` | `OwnerId` | Cacheable single-owner read |
+| `IOwnerSearchOperation<TResponse>` | `IAuthorizableOperation<TResponse>` | `OwnerIds` (plural) | Cross-owner query |
 
 ### Self-Scoped (user-owned)
 
 | Interface | Base | Property | Scope |
 |-----------|------|----------|-------|
-| `IGrantMutateSelfRequest` | `IAuthorizableRequest` | `Id` / `ExternalId` | User-owned write (void) |
-| `IGrantMutateSelfRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `Id` / `ExternalId` | User-owned write with response |
-| `IGrantLookupSelfRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `Id` / `ExternalId` | User-owned read |
+| `ISelfMutateOperation` | `IAuthorizableOperation` | `Id` / `ExternalId` | User-owned write (void) |
+| `ISelfMutateOperation<TResponse>` | `IAuthorizableOperation<TResponse>` | `Id` / `ExternalId` | User-owned write with response |
+| `ISelfLookupOperation<TResponse>` | `IAuthorizableOperation<TResponse>` | `Id` / `ExternalId` | User-owned read |
 
 ### Example
 
 ```csharp
 // Owner-scoped: which tenant?
 [RequiresPermission("delete")]
-public sealed record DeleteIssue(string Id) : IGrantMutateRequest {
+public sealed record DeleteIssue(string Id) : IOwnerMutateOperation {
     public string? OwnerId { get; set; }
 }
 
 [RequiresPermission("read")]
-public sealed record GetIssue(string Id) : IGrantLookupRequest<Issue> {
+public sealed record GetIssue(string Id) : IOwnerLookupOperation<Issue> {
     public string? OwnerId { get; set; }
 }
 
 [RequiresPermission("read")]
-public sealed record ListIssues : IGrantSearchRequest<IReadOnlyList<Issue>> {
+public sealed record ListIssues : IOwnerSearchOperation<IReadOnlyList<Issue>> {
     public IReadOnlyList<string>? OwnerIds { get; set; }
 }
 
 // Self-scoped: is this mine?
-public sealed record GetMyProfile : IGrantLookupSelfRequest<UserProfile> {
+public sealed record GetMyProfile : ISelfLookupOperation<UserProfile> {
     public string? Id { get; set; }
 }
 
-public sealed record UpdateMyProfile(string DisplayName) : IGrantMutateSelfRequest {
+public sealed record UpdateMyProfile(string DisplayName) : ISelfMutateOperation {
     public string? Id { get; set; }
 }
 ```
@@ -250,15 +250,15 @@ authorizers (Stage 2) and policy validators (Stage 3).
 ```csharp
 // Single-arg — feature auto-resolved from namespace convention
 [RequiresPermission("delete")]
-public sealed record DeleteIssue : IGrantMutateRequest { ... }
+public sealed record DeleteIssue : IOwnerMutateOperation { ... }
 
 // Two-arg explicit — feature validated against namespace-derived domain
 [RequiresPermission("issues", "delete")]
-public sealed record ArchiveIssue : IGrantMutateRequest { ... }
+public sealed record ArchiveIssue : IOwnerMutateOperation { ... }
 
 // Permission constant — feature validated
 [RequiresPermission(Permissions.Issues.Delete)]
-public sealed record PurgeIssue : IGrantMutateRequest { ... }
+public sealed record PurgeIssue : IOwnerMutateOperation { ... }
 ```
 
 ### Feature Validation
@@ -269,7 +269,7 @@ throws `InvalidOperationException` at startup:
 ```csharp
 // Runtime error — feature "audit" does not match domain "issues"
 [RequiresPermission("audit", "write")]
-public sealed record BadAction : IGrantMutateRequest { ... }
+public sealed record BadAction : IOwnerMutateOperation { ... }
 ```
 
 Cross-cutting concerns (audit logging, rate limiting) belong in Stage 2 resource

@@ -9,39 +9,39 @@ using System.Runtime.CompilerServices;
 /// <summary>
 /// Concrete wrapper implementation for requests without typed responses.
 /// </summary>
-/// <typeparam name="TRequest">The type of request being handled.</typeparam>
-internal sealed class RequestHandlerWrapperImpl<TRequest>
+/// <typeparam name="TOperation">The type of request being handled.</typeparam>
+internal sealed class RequestHandlerWrapperImpl<TOperation>
 	: RequestHandlerWrapper
-	where TRequest : class, IRequest {
+	where TOperation : class, IOperation {
 
-	private static readonly string requestTypeName = typeof(TRequest).Name;
+	private static readonly string requestTypeName = typeof(TOperation).Name;
 
 	public override Task<Result> HandleAsync(
-		IRequest request,
+		IOperation request,
 		IServiceProvider serviceProvider,
 		CancellationToken cancellationToken) {
 
 		// ----- 1. RESOLVE HANDLER -----
-		var handler = serviceProvider.GetService<IRequestHandler<TRequest>>();
+		var handler = serviceProvider.GetService<IOperationHandler<TOperation>>();
 		if (handler is null) {
 			return Task.FromResult(Result.Fail(new InvalidOperationException(
 				$"No handler registered for request type '{requestTypeName}'")));
 		}
 
 		// ----- 2. RESOLVE INTERCEPTS -----
-		var intercepts = serviceProvider.GetServices<IIntercept<TRequest, Unit>>();
+		var intercepts = serviceProvider.GetServices<IIntercept<TOperation, Unit>>();
 
 		// ----- 3. FAST PATH: zero intercepts — no telemetry, no context, no cursor, no async -----
-		if (intercepts is ICollection<IIntercept<TRequest, Unit>> { Count: 0 }) {
+		if (intercepts is ICollection<IIntercept<TOperation, Unit>> { Count: 0 }) {
 			try {
-				return handler.HandleAsync(Unsafe.As<TRequest>(request), cancellationToken);
+				return handler.HandleAsync(Unsafe.As<TOperation>(request), cancellationToken);
 			} catch (Exception ex) when (!ex.IsFatal()) {
 				return Task.FromResult(Result.Fail(ex));
 			}
 		}
 
 		// ----- 4. PIPELINE PATH: intercepts present — full telemetry + context -----
-		return RequestHandlerWrapperImpl<TRequest>.HandleWithPipelineAsync(request, serviceProvider, handler, intercepts, cancellationToken);
+		return RequestHandlerWrapperImpl<TOperation>.HandleWithPipelineAsync(request, serviceProvider, handler, intercepts, cancellationToken);
 	}
 
 	/// <summary>
@@ -50,14 +50,14 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 	/// (zero-intercept) path above.
 	/// </summary>
 	private static async Task<Result> HandleWithPipelineAsync(
-		IRequest request,
+		IOperation request,
 		IServiceProvider serviceProvider,
-		IRequestHandler<TRequest> handler,
-		IEnumerable<IIntercept<TRequest, Unit>> intercepts,
+		IOperationHandler<TOperation> handler,
+		IEnumerable<IIntercept<TOperation, Unit>> intercepts,
 		CancellationToken cancellationToken) {
 
 		// ----- 0. START ACTIVITY & TIMING -----
-		using var activity = RequestTelemetry.StartActivity(
+		using var activity = OperationTelemetry.StartActivity(
 			requestTypeName,
 			hasResponse: false);
 
@@ -67,16 +67,16 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 
 			// Materialize array (cast if DI already returned one) and walk
 			// the pipeline via a single-alloc cursor.
-			var interceptArray = intercepts as IIntercept<TRequest, Unit>[]
+			var interceptArray = intercepts as IIntercept<TOperation, Unit>[]
 				?? [.. intercepts];
 
 			var requestContext = await serviceProvider.CreateRequestContext(
 				activity,
 				startTimestamp,
-				Unsafe.As<TRequest>(request),
+				Unsafe.As<TOperation>(request),
 				requestTypeName);
 
-			var cursor = new PipelineCursor<TRequest>(interceptArray, handler);
+			var cursor = new PipelineCursor<TOperation>(interceptArray, handler);
 			var finalResult = await cursor.NextDelegate(requestContext, cancellationToken);
 
 			// ----- POST-PROCESSING (TELEMETRY) -----
@@ -111,14 +111,14 @@ internal sealed class RequestHandlerWrapperImpl<TRequest>
 		var elapsed = Timing.GetElapsedMilliseconds(startTimestamp);
 
 		if (canceled) {
-			RequestTelemetry.SetActivityCanceled(activity, (OperationCanceledException)error!);
-			RequestTelemetry.RecordCanceled(requestTypeName, null, elapsed, (OperationCanceledException)error!);
+			OperationTelemetry.SetActivityCanceled(activity, (OperationCanceledException)error!);
+			OperationTelemetry.RecordCanceled(requestTypeName, null, elapsed, (OperationCanceledException)error!);
 		} else if (success) {
-			RequestTelemetry.SetActivitySuccess(activity);
-			RequestTelemetry.RecordSuccess(requestTypeName, null, elapsed);
+			OperationTelemetry.SetActivitySuccess(activity);
+			OperationTelemetry.RecordSuccess(requestTypeName, null, elapsed);
 		} else {
-			RequestTelemetry.SetActivityError(activity, error!);
-			RequestTelemetry.RecordFailure(requestTypeName, null, elapsed, error!);
+			OperationTelemetry.SetActivityError(activity, error!);
+			OperationTelemetry.RecordFailure(requestTypeName, null, elapsed, error!);
 		}
 	}
 

@@ -12,7 +12,7 @@ public interface IDispatcher {
 	/// This overload is intended for requests that do not return a typed response,
 	/// such as commands that perform state changes or side effects.
 	/// </remarks>
-	/// <param name="request">The request to dispatch. Must implement <see cref="IRequest"/>.</param>
+	/// <param name="request">The request to dispatch. Must implement <see cref="IOperation"/>.</param>
 	/// <param name="cancellationToken">
 	/// A token to monitor for cancellation requests. The default value is <see cref="CancellationToken.None"/>.
 	/// </param>
@@ -20,10 +20,10 @@ public interface IDispatcher {
 	/// A <see cref="Task{TResult}"/> representing the asynchronous operation.
 	/// The returned <see cref="Result"/> indicates whether the request was handled successfully.
 	/// </returns>
-	Task<Result> DispatchAsync<TRequest>(
-		TRequest request,
+	Task<Result> DispatchAsync<TOperation>(
+		TOperation request,
 		CancellationToken cancellationToken = default)
-		where TRequest : IRequest;
+		where TOperation : IOperation;
 
 	/// <summary>
 	/// Dispatches the specified request asynchronously and returns a <see cref="Result{T}"/> containing the response.
@@ -33,7 +33,7 @@ public interface IDispatcher {
 	/// such as queries that retrieve data or commands that return confirmation values.
 	/// </remarks>
 	/// <typeparam name="TResponse">The type of the response returned by the request.</typeparam>
-	/// <param name="request">The request to dispatch. Must implement <see cref="IRequest{TResponse}"/>.</param>
+	/// <param name="request">The request to dispatch. Must implement <see cref="IOperation{TResponse}"/>.</param>
 	/// <param name="cancellationToken">
 	/// A token to monitor for cancellation requests. The default value is <see cref="CancellationToken.None"/>.
 	/// </param>
@@ -42,7 +42,7 @@ public interface IDispatcher {
 	/// The returned <see cref="Result{T}"/> contains the response of type <typeparamref name="TResponse"/>.
 	/// </returns>
 	Task<Result<TResponse>> DispatchAsync<TResponse>(
-		IRequest<TResponse> request,
+		IOperation<TResponse> request,
 		CancellationToken cancellationToken = default);
 
 }

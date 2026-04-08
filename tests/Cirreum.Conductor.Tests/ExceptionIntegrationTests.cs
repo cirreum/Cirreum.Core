@@ -9,52 +9,52 @@ using Microsoft.Extensions.DependencyInjection;
 [TestClass]
 public class ExceptionIntegrationTests {
 
-	public class Ping : IRequest<Pong> {
+	public class Ping : IOperation<Pong> {
 	}
 
 	public class Pong {
 	}
 
-	public class VoidPing : IRequest {
+	public class VoidPing : IOperation {
 	}
 
 	public class Pinged : INotification {
 	}
 
-	public class NullPing : IRequest<Pong> {
+	public class NullPing : IOperation<Pong> {
 	}
 
-	public class VoidNullPing : IRequest {
+	public class VoidNullPing : IOperation {
 	}
 
 	public class NullPinged : INotification {
 	}
 
-	public class NullPingHandler : IRequestHandler<NullPing, Pong> {
+	public class NullPingHandler : IOperationHandler<NullPing, Pong> {
 		public Task<Result<Pong>> HandleAsync(NullPing request, CancellationToken cancellationToken) {
 			return Task.FromResult(Result<Pong>.Success(new Pong()));
 		}
 	}
 
-	public class VoidNullPingHandler : IRequestHandler<VoidNullPing> {
+	public class VoidNullPingHandler : IOperationHandler<VoidNullPing> {
 		public Task<Result> HandleAsync(VoidNullPing request, CancellationToken cancellationToken) {
 			return Task.FromResult(Result.Success);
 		}
 	}
 
-	public class PingException : IRequest {
+	public class PingException : IOperation {
 	}
 
-	public class PingExceptionHandler : IRequestHandler<PingException> {
+	public class PingExceptionHandler : IOperationHandler<PingException> {
 		public Task<Result> HandleAsync(PingException request, CancellationToken cancellationToken) {
 			throw new NotImplementedException();
 		}
 	}
 
-	public class PingExceptionWithResponse : IRequest<Pong> {
+	public class PingExceptionWithResponse : IOperation<Pong> {
 	}
 
-	public class PingExceptionWithResponseHandler : IRequestHandler<PingExceptionWithResponse, Pong> {
+	public class PingExceptionWithResponseHandler : IOperationHandler<PingExceptionWithResponse, Pong> {
 		public Task<Result<Pong>> HandleAsync(PingExceptionWithResponse request, CancellationToken cancellationToken) {
 			throw new NotImplementedException();
 		}

@@ -12,27 +12,27 @@ using System;
 /// auditing, diagnostics, and tracing. Created once per pipeline invocation by
 /// <see cref="Internal.RequestContextFactory"/>.
 /// </remarks>
-/// <typeparam name="TRequest">The type of the request payload associated with this context.</typeparam>
+/// <typeparam name="TOperation">The type of the request payload associated with this context.</typeparam>
 /// <param name="UserState">The current user's state, including identity and authentication information.</param>
-/// <param name="Request">The request payload containing the data or command to be processed.</param>
-/// <param name="RequestType">The type name of the request, useful for logging and diagnostics.</param>
-/// <param name="RequestId">A unique identifier for this request (typically the <c>Activity.SpanId</c>).</param>
-/// <param name="CorrelationId">An identifier used to correlate this request with related operations (typically the <c>Activity.TraceId</c>).</param>
+/// <param name="Operation">The payload containing the data or command to be processed.</param>
+/// <param name="OperationType">The type name of the operation, useful for logging and diagnostics.</param>
+/// <param name="OperationId">A unique identifier for this operation (typically the <c>Activity.SpanId</c>).</param>
+/// <param name="CorrelationId">An identifier used to correlate this operation with related operations (typically the <c>Activity.TraceId</c>).</param>
 /// <param name="StartTimestamp">The high-precision timestamp for accurate duration calculation.</param>
-public sealed record RequestContext<TRequest>(
+public sealed record OperationContext<TOperation>(
 	IUserState UserState,
-	TRequest Request,
-	string RequestType,
-	string RequestId,
+	TOperation Operation,
+	string OperationType,
+	string OperationId,
 	string CorrelationId,
 	long StartTimestamp)
-	where TRequest : notnull {
+	where TOperation : notnull {
 
 	/// <summary>
-	/// The domain feature derived from <typeparamref name="TRequest"/>'s namespace convention.
+	/// The domain feature derived from <typeparamref name="TOperation"/>'s namespace convention.
 	/// Cached per-type via <see cref="DomainFeatureResolver"/> — zero per-request cost.
 	/// </summary>
-	public string? DomainFeature => DomainFeatureResolver.Resolve<TRequest>();
+	public string? DomainFeature => DomainFeatureResolver.Resolve<TOperation>();
 
 	// Static environment — set once at startup via DomainContext
 	public string Environment => DomainContext.Environment;
@@ -67,11 +67,11 @@ public sealed record RequestContext<TRequest>(
 		string.Equals(this.Profile.Department, department, StringComparison.OrdinalIgnoreCase);
 
 	/// <summary>
-	/// Creates a <see cref="RequestContext{TRequest}"/> for the current runtime.
+	/// Creates a <see cref="OperationContext{TOperation}"/> for the current runtime.
 	/// </summary>
-	public static RequestContext<TRequest> Create(
+	public static OperationContext<TOperation> Create(
 		IUserState userState,
-		TRequest request,
+		TOperation request,
 		string requestType,
 		string requestId,
 		string correlationId,

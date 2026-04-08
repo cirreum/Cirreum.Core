@@ -195,8 +195,8 @@ public static class ConductorServiceCollectionExtensions {
 		this IServiceCollection services,
 		Assembly[] assemblies) {
 
-		var voidHandlerType = typeof(IRequestHandler<>);
-		var typedHandlerType = typeof(IRequestHandler<,>);
+		var voidHandlerType = typeof(IOperationHandler<>);
+		var typedHandlerType = typeof(IOperationHandler<,>);
 
 		var availableTypes = assemblies
 			.SelectMany(a => a.GetExportedTypes())

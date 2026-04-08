@@ -4,7 +4,7 @@ public sealed record PingResponse(string Echo);
 
 public sealed record MediatRPing(string Message) : MediatR.IRequest<PingResponse>; // MediatR request
 
-public sealed record ConductorPing(string Message) : Conductor.IRequest<PingResponse>;
+public sealed record ConductorPing(string Message) : Conductor.IOperation<PingResponse>;
 
 //public sealed class PingRequestValidator : AbstractValidator<ConductorPing> {
 //	public PingRequestValidator() {
@@ -25,7 +25,7 @@ public sealed record ConductorPing(string Message) : Conductor.IRequest<PingResp
 /// rather than business logic.
 /// </summary>
 public sealed class PingHandler :
-	IRequestHandler<ConductorPing, PingResponse>,
+	IOperationHandler<ConductorPing, PingResponse>,
 	MediatR.IRequestHandler<MediatRPing, PingResponse> {
 
 	public async Task<Result<PingResponse>> HandleAsync(
@@ -33,7 +33,7 @@ public sealed class PingHandler :
 		CancellationToken cancellationToken) {
 
 		// Minimal work
-		var irequest = (IRequest<PingResponse>)request;
+		var irequest = (IOperation<PingResponse>)request;
 		var ping = (ConductorPing)irequest;
 		var response = new PingResponse(ping.Message);
 
@@ -70,32 +70,32 @@ public sealed class PingHandler :
 /// </summary>
 public sealed class PassThroughIntercept1 : IIntercept<ConductorPing, PingResponse> {
 	public Task<Result<PingResponse>> HandleAsync(
-		RequestContext<ConductorPing> context,
-		RequestHandlerDelegate<ConductorPing, PingResponse> next,
+		OperationContext<ConductorPing> context,
+		OperationHandlerDelegate<ConductorPing, PingResponse> next,
 		CancellationToken cancellationToken) =>
 		next(context, cancellationToken);
 }
 
 public sealed class PassThroughIntercept2 : IIntercept<ConductorPing, PingResponse> {
 	public Task<Result<PingResponse>> HandleAsync(
-		RequestContext<ConductorPing> context,
-		RequestHandlerDelegate<ConductorPing, PingResponse> next,
+		OperationContext<ConductorPing> context,
+		OperationHandlerDelegate<ConductorPing, PingResponse> next,
 		CancellationToken cancellationToken) =>
 		next(context, cancellationToken);
 }
 
 public sealed class PassThroughIntercept3 : IIntercept<ConductorPing, PingResponse> {
 	public Task<Result<PingResponse>> HandleAsync(
-		RequestContext<ConductorPing> context,
-		RequestHandlerDelegate<ConductorPing, PingResponse> next,
+		OperationContext<ConductorPing> context,
+		OperationHandlerDelegate<ConductorPing, PingResponse> next,
 		CancellationToken cancellationToken) =>
 		next(context, cancellationToken);
 }
 
 public sealed class PassThroughIntercept4 : IIntercept<ConductorPing, PingResponse> {
 	public Task<Result<PingResponse>> HandleAsync(
-		RequestContext<ConductorPing> context,
-		RequestHandlerDelegate<ConductorPing, PingResponse> next,
+		OperationContext<ConductorPing> context,
+		OperationHandlerDelegate<ConductorPing, PingResponse> next,
 		CancellationToken cancellationToken) =>
 		next(context, cancellationToken);
 }

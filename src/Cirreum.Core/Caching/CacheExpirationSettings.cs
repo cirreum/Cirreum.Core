@@ -16,7 +16,7 @@
 /// data locally while still benefiting from L2.
 /// </param>
 /// <param name="FailureExpiration">
-/// The expiration duration for cache entries storing failed results (<see cref="Cirreum.Result"/>
+/// The expiration duration for cache entries storing failed results (<see cref="Result"/>
 /// with <c>IsSuccess = false</c>). Should be shorter than <paramref name="Expiration"/>
 /// to avoid caching transient failures for too long. If <see langword="null"/>, uses
 /// the standard <paramref name="Expiration"/>.

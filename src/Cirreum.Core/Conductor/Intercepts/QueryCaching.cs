@@ -5,22 +5,22 @@ using Cirreum.Conductor;
 using Cirreum.Conductor.Configuration;
 using Microsoft.Extensions.Logging;
 
-sealed class QueryCaching<TRequest, TResponse>
-  : IIntercept<TRequest, TResponse>
-	where TRequest : ICacheableQuery<TResponse> {
+sealed class QueryCaching<TOperation, TResponse>
+  : IIntercept<TOperation, TResponse>
+	where TOperation : ICacheableQuery<TResponse> {
 
 	private readonly ICacheService _cache;
 	private readonly ConductorSettings _conductorSettings;
 	private readonly CacheSettings _cacheSettings;
 	private readonly CacheKeyContext _cacheKeyContext;
-	private readonly ILogger<QueryCaching<TRequest, TResponse>> _logger;
+	private readonly ILogger<QueryCaching<TOperation, TResponse>> _logger;
 
 	public QueryCaching(
 		ICacheService cache,
 		ConductorSettings conductorSettings,
 		CacheSettings cacheSettings,
 		CacheKeyContext cacheKeyContext,
-		ILogger<QueryCaching<TRequest, TResponse>> logger) {
+		ILogger<QueryCaching<TOperation, TResponse>> logger) {
 		this._cache = cache;
 		this._conductorSettings = conductorSettings;
 		this._cacheSettings = cacheSettings;
@@ -43,21 +43,21 @@ sealed class QueryCaching<TRequest, TResponse>
 	}
 
 	public async Task<Result<TResponse>> HandleAsync(
-		RequestContext<TRequest> context,
-		RequestHandlerDelegate<TRequest, TResponse> next,
+		OperationContext<TOperation> context,
+		OperationHandlerDelegate<TOperation, TResponse> next,
 		CancellationToken cancellationToken) {
 
-		var cacheKey = this.ComposeCacheKey(context.Request.CacheKey);
-		var cacheTags = this.ComposeCacheTags(context.Request.CacheTags);
+		var cacheKey = this.ComposeCacheKey(context.Operation.CacheKey);
+		var cacheTags = this.ComposeCacheTags(context.Operation.CacheTags);
 
 		if (this._logger.IsEnabled(LogLevel.Debug)) {
 			this._logger.LogDebug(
 				"Processing cacheable query: {QueryType} (CacheKey: {CacheKey})",
-				context.RequestType,
+				context.OperationType,
 				cacheKey);
 		}
 
-		var effectiveSettings = this.BuildEffectiveSettings(context.Request, context.RequestType);
+		var effectiveSettings = this.BuildEffectiveSettings(context.Operation, context.OperationType);
 
 		// Get from Cache, or Read from real Handler and store in Cache.
 		// Telemetry (hit/miss, duration) is handled by the InstrumentedCacheService decorator.
@@ -71,14 +71,14 @@ sealed class QueryCaching<TRequest, TResponse>
 		if (this._logger.IsEnabled(LogLevel.Debug)) {
 			this._logger.LogDebug(
 				"Query {QueryType} completed: Status={Status}",
-				context.RequestType,
+				context.OperationType,
 				result.IsSuccess ? "Success" : "Failed");
 		}
 
 		return result;
 	}
 
-	private CacheExpirationSettings BuildEffectiveSettings(TRequest request, string queryTypeName) {
+	private CacheExpirationSettings BuildEffectiveSettings(TOperation request, string queryTypeName) {
 		var querySettings = request.CacheExpiration;
 		var cacheOptions = this._conductorSettings.Cache;
 

@@ -1,6 +1,6 @@
 ﻿# 📘 **CONDUCTOR.md**
 
-## In-Process Request / Notification Pipeline for Cirreum Applications
+## In-Process Operation / Notification Pipeline for Cirreum Applications
 
 Conductor is the core runtime engine that powers Cirreum’s handler-based execution model.  
 It provides:
@@ -81,7 +81,7 @@ the handler returns (see [Notification Publishing](#-notification-publishing)).
 | **Intercepts** | Middleware-like components that wrap handler execution. Must call `next` at most once per invocation. |
 | **Handlers** | Business logic units (Requests, Queries, Commands). |
 | **RequestContext&lt;T&gt;** | Per-request envelope. Owns the caller identity (`IUserState`), request payload, timing, and correlation identifiers as first-class fields. Flows through the intercept chain. |
-| **RequestHandlerWrapper** | Per-`TRequest` dispatcher wrapper: resolves the handler, materializes the intercept array, creates `RequestContext`, walks the pipeline, and records telemetry. |
+| **RequestHandlerWrapper** | Per-`TOperation` dispatcher wrapper: resolves the handler, materializes the intercept array, creates `RequestContext`, walks the pipeline, and records telemetry. |
 | **PipelineCursor** | Walks the intercept chain with one allocation + one reusable delegate per request, replacing a per-interceptor closure chain. |
 | **Settings** | Publisher strategy, caching options, etc. |
 | **ConductorBuilder** | Registers handlers & intercepts (raw mode). |
@@ -299,7 +299,7 @@ cursor's bound delegate is reused at every hop.
 ### Skipped Work
 
 - **`Unsafe.As<T>(request)`** instead of `(T)request` — dispatcher cache
-  is keyed by `typeof(TRequest)`, so the isinst check is guaranteed
+  is keyed by `typeof(TOperation)`, so the isinst check is guaranteed
   redundant.
 - **`GetService<IEnumerable<T>>()!`** instead of `GetServices<T>()` —
   skips `GetRequiredService`'s null-guard + throw-helper. `IEnumerable<T>`
@@ -377,7 +377,7 @@ builder.RegisterFromAssemblies(assemblies);
 
 This wiring registers:
 
-- `IRequestHandler<TRequest, TResponse>` implementations  
+- `IRequestHandler<TOperation, TResponse>` implementations  
 - `INotificationHandler<TNotification>` implementations  
 
 All handlers are registered as **Transient** to avoid stale state and ensure request isolation.

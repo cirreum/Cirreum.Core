@@ -12,16 +12,16 @@ public sealed class DispatcherTests {
 
 	// ===== Fakes =====
 
-	public sealed class CancelAwareEchoHandler : IRequestHandler<Echo, string> {
+	public sealed class CancelAwareEchoHandler : IOperationHandler<Echo, string> {
 		public async Task<Result<string>> HandleAsync(Echo r, CancellationToken ct) {
 			await Task.Delay(200, ct); // should cancel
 			return Result<string>.Success(r.Text);
 		}
 	}
 
-	private sealed record Ping() : IRequest;
+	private sealed record Ping() : IOperation;
 
-	private sealed class PingHandler : IRequestHandler<Ping> {
+	private sealed class PingHandler : IOperationHandler<Ping> {
 		public bool Called { get; private set; }
 
 		public Task<Result> HandleAsync(Ping request, CancellationToken cancellationToken = default) {
@@ -30,44 +30,44 @@ public sealed class DispatcherTests {
 		}
 	}
 
-	private sealed class ThrowingPingHandler : IRequestHandler<Ping> {
+	private sealed class ThrowingPingHandler : IOperationHandler<Ping> {
 		public Task<Result> HandleAsync(Ping request, CancellationToken cancellationToken = default)
 			=> throw new InvalidOperationException("dispatch failure");
 	}
 
-	public sealed record Echo(string Text) : IRequest<string>;
+	public sealed record Echo(string Text) : IOperation<string>;
 
-	private sealed class EchoHandler : IRequestHandler<Echo, string> {
+	private sealed class EchoHandler : IOperationHandler<Echo, string> {
 		public Task<Result<string>> HandleAsync(Echo request, CancellationToken cancellationToken = default)
 			=> Task.FromResult(Result<string>.Success(request.Text));
 	}
 
-	private sealed record Fail() : IRequest;
+	private sealed record Fail() : IOperation;
 
-	private sealed class FailHandler : IRequestHandler<Fail> {
+	private sealed class FailHandler : IOperationHandler<Fail> {
 		public Task<Result> HandleAsync(Fail request, CancellationToken cancellationToken = default)
 			=> Task.FromResult(Result.Fail(new("boom")));
 	}
 
-	public sealed class BoomRequest : IRequest<string> { }
+	public sealed class BoomRequest : IOperation<string> { }
 
-	public sealed class BoomHandler : IRequestHandler<BoomRequest, string> {
+	public sealed class BoomHandler : IOperationHandler<BoomRequest, string> {
 		public Task<Result<string>> HandleAsync(BoomRequest request, CancellationToken cancellationToken) {
 			throw new InvalidOperationException("Boom!");
 		}
 	}
 
-	public sealed class FatalRequest : IRequest<string> { }
+	public sealed class FatalRequest : IOperation<string> { }
 
-	public sealed class FatalHandler : IRequestHandler<FatalRequest, string> {
+	public sealed class FatalHandler : IOperationHandler<FatalRequest, string> {
 		public Task<Result<string>> HandleAsync(FatalRequest request, CancellationToken cancellationToken) {
 			throw new OutOfMemoryException("Simulated OOM");
 		}
 	}
 
-	private sealed record AuthRequest() : IAuthorizableRequest;
+	private sealed record AuthRequest() : IAuthorizableOperation;
 
-	private sealed class AuthRequestHandler : IRequestHandler<AuthRequest> {
+	private sealed class AuthRequestHandler : IOperationHandler<AuthRequest> {
 		public bool Called { get; private set; }
 		public Task<Result> HandleAsync(AuthRequest request, CancellationToken cancellationToken = default) {
 			this.Called = true;
@@ -93,7 +93,7 @@ public sealed class DispatcherTests {
 		var services = new ServiceCollection();
 		var dispatcher = Shared.ArrangeSimpleDispatcher(services => {
 			services.AddTransient<IDispatcher, Dispatcher>();
-			services.AddTransient<IRequestHandler<FatalRequest, string>, FatalHandler>();
+			services.AddTransient<IOperationHandler<FatalRequest, string>, FatalHandler>();
 		});
 
 		// Act & Assert
@@ -110,7 +110,7 @@ public sealed class DispatcherTests {
 		var services = new ServiceCollection();
 		var dispatcher = Shared.ArrangeSimpleDispatcher(services => {
 			services.AddTransient<IDispatcher, Dispatcher>();
-			services.AddTransient<IRequestHandler<Echo, string>, CancelAwareEchoHandler>();
+			services.AddTransient<IOperationHandler<Echo, string>, CancelAwareEchoHandler>();
 		});
 
 		using var cts = new CancellationTokenSource();
@@ -135,7 +135,7 @@ public sealed class DispatcherTests {
 		// Arrange
 		var dispatcher = Shared.ArrangeSimpleDispatcher(services => {
 			// handler registration
-			services.AddTransient<IRequestHandler<BoomRequest, string>, BoomHandler>();
+			services.AddTransient<IOperationHandler<BoomRequest, string>, BoomHandler>();
 		});
 
 		// Act
@@ -153,7 +153,7 @@ public sealed class DispatcherTests {
 		// Arrange
 		var pingHandler = new PingHandler();
 		var dispatcher = Shared.ArrangeSimpleDispatcher(builder => {
-			builder.AddSingleton<IRequestHandler<Ping>>(pingHandler);
+			builder.AddSingleton<IOperationHandler<Ping>>(pingHandler);
 		});
 
 		// Act
@@ -168,7 +168,7 @@ public sealed class DispatcherTests {
 	public async Task Dispatch_TResponseRequest_InvokesHandler_AndReturnsPayload() {
 		// Arrange
 		var dispatcher = Shared.ArrangeSimpleDispatcher(builder => {
-			builder.AddTransient<IRequestHandler<Echo, string>, EchoHandler>();
+			builder.AddTransient<IOperationHandler<Echo, string>, EchoHandler>();
 		});
 
 		// Act
@@ -196,7 +196,7 @@ public sealed class DispatcherTests {
 	public async Task DispatchAsync_PropagatesCancellation_WhenHandlerHonorsToken() {
 
 		var dispatcher = Shared.ArrangeSimpleDispatcher(sp => {
-			sp.AddTransient<IRequestHandler<Echo, string>, CancelAwareEchoHandler>();
+			sp.AddTransient<IOperationHandler<Echo, string>, CancelAwareEchoHandler>();
 		});
 
 		using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(10));
@@ -214,7 +214,7 @@ public sealed class DispatcherTests {
 		var authHandler = new AuthRequestHandler();
 		var services = Shared.ArrangeServices(sp => {
 			sp.AddTransient<IAuthorizer<AuthRequest>, AuthRequestAuthorizer>();
-			sp.AddTransient<IRequestHandler<AuthRequest>>(sp => authHandler);
+			sp.AddTransient<IOperationHandler<AuthRequest>>(sp => authHandler);
 			sp.AddConductor(options => {
 				options.AddOpenIntercept(typeof(Authorization<,>));
 			});
@@ -240,7 +240,7 @@ public sealed class DispatcherTests {
 		var authHandler = new AuthRequestHandler();
 		var services = Shared.ArrangeServices(sp => {
 			sp.AddTransient<IAuthorizer<AuthRequest>, AuthAdminRequestAuthorizer>();
-			sp.AddTransient<IRequestHandler<AuthRequest>>(sp => authHandler);
+			sp.AddTransient<IOperationHandler<AuthRequest>>(sp => authHandler);
 			sp.AddConductor(options => {
 				options.AddOpenIntercept(typeof(Authorization<,>));
 			});

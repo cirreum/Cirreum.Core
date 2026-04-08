@@ -17,7 +17,7 @@ public interface ICacheableQuery;
 /// The response type. Must be immutable for safe caching with instance reuse.
 /// Use sealed records with init-only properties and mark with [ImmutableObject(true)].
 /// </typeparam>
-public interface ICacheableQuery<out TResponse> : ICacheableQuery, IRequest<TResponse> {
+public interface ICacheableQuery<out TResponse> : ICacheableQuery, IOperation<TResponse> {
 
 	/// <summary>
 	/// The unique cache key for this query instance.

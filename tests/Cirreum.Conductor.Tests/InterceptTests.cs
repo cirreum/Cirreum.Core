@@ -25,8 +25,8 @@ public class InterceptTests {
 	public sealed class FatalIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
 		where TRequest : notnull {
 		public Task<Result<TResponse>> HandleAsync(
-			RequestContext<TRequest> context,
-			RequestHandlerDelegate<TRequest, TResponse> next,
+			OperationContext<TRequest> context,
+			OperationHandlerDelegate<TRequest, TResponse> next,
 			CancellationToken cancellationToken) {
 			throw new OutOfMemoryException("From intercept");
 		}
@@ -34,10 +34,10 @@ public class InterceptTests {
 
 
 	// Simple request/handler for testing
-	public class TestRequest : IRequest<string> {
+	public class TestRequest : IOperation<string> {
 		public string Value { get; set; } = "";
 	}
-	public class TestRequestHandler : IRequestHandler<TestRequest, string> {
+	public class TestRequestHandler : IOperationHandler<TestRequest, string> {
 		public Task<Result<string>> HandleAsync(TestRequest request, CancellationToken cancellationToken) {
 			ExecutionLog.Add("Handler executed");
 			return Task.FromResult(Result<string>.Success($"Handled: {request.Value}"));
@@ -46,10 +46,10 @@ public class InterceptTests {
 
 
 	// Test with a different request type to prove open generics work for any type
-	public class AnotherRequest : IRequest<int> {
+	public class AnotherRequest : IOperation<int> {
 		public int Value { get; set; }
 	}
-	public class AnotherRequestHandler : IRequestHandler<AnotherRequest, int> {
+	public class AnotherRequestHandler : IOperationHandler<AnotherRequest, int> {
 		public Task<Result<int>> HandleAsync(AnotherRequest request, CancellationToken cancellationToken) {
 			ExecutionLog.Add("AnotherHandler executed");
 			return Task.FromResult(Result<int>.Success(request.Value * 2));
@@ -58,10 +58,10 @@ public class InterceptTests {
 
 
 	// Test void request with intercept
-	public class VoidTestRequest : IRequest {
+	public class VoidTestRequest : IOperation {
 		public string Value { get; set; } = "";
 	}
-	public class VoidTestRequestHandler : IRequestHandler<VoidTestRequest> {
+	public class VoidTestRequestHandler : IOperationHandler<VoidTestRequest> {
 		public Task<Result> HandleAsync(VoidTestRequest request, CancellationToken cancellationToken) {
 			ExecutionLog.Add("VoidHandler executed");
 			return Task.FromResult(Result.Success);
@@ -69,25 +69,25 @@ public class InterceptTests {
 	}
 
 	// Another request type for open generic intercept testing
-	public sealed class DupRequest : IRequest<string> {
+	public sealed class DupRequest : IOperation<string> {
 		public string Value { get; init; } = "";
 	}
-	public sealed class DupHandler : IRequestHandler<DupRequest, string> {
+	public sealed class DupHandler : IOperationHandler<DupRequest, string> {
 		public Task<Result<string>> HandleAsync(DupRequest r, CancellationToken ct)
 			=> Task.FromResult(Result<string>.Success($"Handled: {r.Value}"));
 	}
 
 	// Request/handler that throws to test error handling intercept
-	public sealed class ErrRequest : IRequest<string> { }
-	public sealed class ThrowingErrHandler : IRequestHandler<ErrRequest, string> {
+	public sealed class ErrRequest : IOperation<string> { }
+	public sealed class ThrowingErrHandler : IOperationHandler<ErrRequest, string> {
 		public Task<Result<string>> HandleAsync(ErrRequest r, CancellationToken ct)
 			=> throw new InvalidOperationException("boom");
 	}
 
 	// For Authorization tests
 	public record AuthorizableTestRequest(string UserId)
-		: IAuthorizableRequest<string>;
-	public class AuthorizableTestHandler : IRequestHandler<AuthorizableTestRequest, string> {
+		: IAuthorizableOperation<string>;
+	public class AuthorizableTestHandler : IOperationHandler<AuthorizableTestRequest, string> {
 		public Task<Result<string>> HandleAsync(
 			AuthorizableTestRequest request,
 			CancellationToken cancellationToken) {
@@ -104,7 +104,7 @@ public class InterceptTests {
 		};
 		public string[]? CacheTags { get; } = ["test-queries"];
 	}
-	public class CacheableTestHandler : IRequestHandler<CacheableTestQuery, string> {
+	public class CacheableTestHandler : IOperationHandler<CacheableTestQuery, string> {
 		public Task<Result<string>> HandleAsync(
 			CacheableTestQuery request,
 			CancellationToken cancellationToken) {
@@ -114,8 +114,8 @@ public class InterceptTests {
 
 	// Authorizable query composite (replaces obsolete IDomainQuery<T>)
 	public record DomainTestRequest(string UserId)
-		: IAuthorizableRequest<string>;
-	public class DomainTestHandler : IRequestHandler<DomainTestRequest, string> {
+		: IAuthorizableOperation<string>;
+	public class DomainTestHandler : IOperationHandler<DomainTestRequest, string> {
 		public Task<Result<string>> HandleAsync(
 			DomainTestRequest request,
 			CancellationToken cancellationToken) {
@@ -125,11 +125,11 @@ public class InterceptTests {
 
 	// Cacheable authorizable query composite (replaces obsolete IDomainCacheableQuery<T>)
 	public record DomainCacheableTestRequest(string UserId)
-		: IAuthorizableRequest<string>, ICacheableQuery<string> {
+		: IAuthorizableOperation<string>, ICacheableQuery<string> {
 		public string CacheKey => nameof(DomainCacheableTestRequest);
 	}
 
-	public class DomainCacheableTestHandler : IRequestHandler<DomainCacheableTestRequest, string> {
+	public class DomainCacheableTestHandler : IOperationHandler<DomainCacheableTestRequest, string> {
 		public Task<Result<string>> HandleAsync(
 			DomainCacheableTestRequest request,
 			CancellationToken cancellationToken) {
@@ -143,8 +143,8 @@ public class InterceptTests {
 		where TRequest : notnull {
 
 		public async Task<Result<TResponse>> HandleAsync(
-			RequestContext<TRequest> context,
-			RequestHandlerDelegate<TRequest, TResponse> next,
+			OperationContext<TRequest> context,
+			OperationHandlerDelegate<TRequest, TResponse> next,
 			CancellationToken cancellationToken) {
 			ExecutionLog.Add($"LoggingIntercept: Before {typeof(TRequest).Name}");
 			var result = await next(context, cancellationToken);
@@ -158,8 +158,8 @@ public class InterceptTests {
 		where TRequest : notnull {
 
 		public async Task<Result<TResponse>> HandleAsync(
-			RequestContext<TRequest> context,
-			RequestHandlerDelegate<TRequest, TResponse> next,
+			OperationContext<TRequest> context,
+			OperationHandlerDelegate<TRequest, TResponse> next,
 			CancellationToken cancellationToken) {
 			ExecutionLog.Add($"TimingIntercept: Start {typeof(TRequest).Name}");
 			var result = await next(context, cancellationToken);
@@ -171,8 +171,8 @@ public class InterceptTests {
 	// Specific intercept for TestRequest only
 	public class SpecificIntercept : IIntercept<TestRequest, string> {
 		public async Task<Result<string>> HandleAsync(
-			RequestContext<TestRequest> context,
-			RequestHandlerDelegate<TestRequest, string> next,
+			OperationContext<TestRequest> context,
+			OperationHandlerDelegate<TestRequest, string> next,
 			CancellationToken cancellationToken) {
 			ExecutionLog.Add("SpecificIntercept: Before");
 			var result = await next(context, cancellationToken);
@@ -184,7 +184,7 @@ public class InterceptTests {
 	// Intercept that modifies the result
 	public class ResultModifyingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
 		where TRequest : notnull {
-		public async Task<Result<TResponse>> HandleAsync(RequestContext<TRequest> context, RequestHandlerDelegate<TRequest, TResponse> next, CancellationToken cancellationToken) {
+		public async Task<Result<TResponse>> HandleAsync(OperationContext<TRequest> context, OperationHandlerDelegate<TRequest, TResponse> next, CancellationToken cancellationToken) {
 			var result = await next(context, cancellationToken);
 
 			if (result.IsSuccess && result.Value is string str) {
@@ -202,8 +202,8 @@ public class InterceptTests {
 		where TRequest : notnull {
 
 		public async Task<Result<TResponse>> HandleAsync(
-			RequestContext<TRequest> context,
-			RequestHandlerDelegate<TRequest, TResponse> next,
+			OperationContext<TRequest> context,
+			OperationHandlerDelegate<TRequest, TResponse> next,
 			CancellationToken cancellationToken) {
 			try {
 				return await next(context, cancellationToken);
@@ -217,15 +217,15 @@ public class InterceptTests {
 
 	public sealed class ShortCircuitIntercept : IIntercept<TestRequest, string> {
 		public Task<Result<string>> HandleAsync(
-			RequestContext<TestRequest> context,
-			RequestHandlerDelegate<TestRequest, string> next,
+			OperationContext<TestRequest> context,
+			OperationHandlerDelegate<TestRequest, string> next,
 			CancellationToken cancellationToken) => Task.FromResult(Result<string>.Fail(new("blocked")));
 	}
 
 	public sealed class VoidShortCircuit : IIntercept<VoidTestRequest, Unit> {
 		public Task<Result<Unit>> HandleAsync(
-			RequestContext<VoidTestRequest> context,
-			RequestHandlerDelegate<VoidTestRequest, Unit> next,
+			OperationContext<VoidTestRequest> context,
+			OperationHandlerDelegate<VoidTestRequest, Unit> next,
 			CancellationToken cancellationToken) => Task.FromResult(Result<Unit>.Fail(new("nope")));
 	}
 
@@ -750,7 +750,7 @@ public class InterceptTests {
 
 		// Verify it resolves for authorizable requests
 		var intercept = sp.GetService<IIntercept<AuthorizableTestRequest, string>>();
-		Assert.IsNotNull(intercept, "Authorization should resolve for IAuthorizableRequestBase");
+		Assert.IsNotNull(intercept, "Authorization should resolve for IAuthorizableOperationBase");
 		Assert.IsInstanceOfType<Authorization<AuthorizableTestRequest, string>>(intercept);
 
 	}

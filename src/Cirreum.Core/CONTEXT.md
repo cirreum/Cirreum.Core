@@ -24,11 +24,11 @@ authorization pipeline and reused by downstream consumers (e.g.,
             │                                                                 │
             ▼                                                                 ▼
 ┌───────────────────────────────────────────────────┐   ┌───────────────────────────────────────────────────┐
-│               RequestContext<TRequest>             │   │       AuthorizationContext (non-generic base)      │
+│               RequestContext<TOperation>             │   │       AuthorizationContext (non-generic base)      │
 │                                                   │   │                                                   │
 │ Record parameters:                                │   │ Record parameters:                                │
 │ • UserState (IUserState)                          │   │ • UserState (IUserState)                          │
-│ • Request (TRequest)                              │   │ • EffectiveRoles (IImmutableSet<Role>)            │
+│ • Request (TOperation)                              │   │ • EffectiveRoles (IImmutableSet<Role>)            │
 │ • RequestType (string)                            │   │                                                   │
 │ • RequestId (string — Activity.SpanId)            │   │ User convenience (delegate to UserState):         │
 │ • CorrelationId (string — Activity.TraceId)       │   │ • UserId, UserName, TenantId, Provider            │
@@ -120,7 +120,7 @@ authorization pipeline and reused by downstream consumers (e.g.,
 ┌─────────────────────────────────────────────────────────────────────────────────────────────┐
 │                             Authorization Intercept                                         │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Receives: RequestContext<TRequest>                                                          │
+│ Receives: RequestContext<TOperation>                                                          │
 │ Calls: evaluator.Evaluate(context.Request, context.UserState)                               │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
                                          │
@@ -249,7 +249,7 @@ Benefits:
 
 ### RequestContext Core Properties
 - `UserState` (IUserState) — complete user identity and profile
-- `Request` (TRequest) — the request payload
+- `Request` (TOperation) — the request payload
 - `RequestType` (string) — type name for logging/diagnostics
 - `RequestId` (string) — unique identifier (from Activity.SpanId)
 - `CorrelationId` (string) — trace identifier (from Activity.TraceId)
@@ -258,7 +258,7 @@ Benefits:
 ### RequestContext Derived Properties
 - `Environment` → `DomainContext.Environment`
 - `RuntimeType` → `DomainContext.RuntimeType`
-- `DomainFeature` → `DomainFeatureResolver.Resolve<TRequest>()`
+- `DomainFeature` → `DomainFeatureResolver.Resolve<TOperation>()`
 - `Timestamp` → `DateTimeOffset.UtcNow` (captured at construction)
 - `ElapsedDuration` → `Timing.GetElapsedTime(StartTimestamp)`
 

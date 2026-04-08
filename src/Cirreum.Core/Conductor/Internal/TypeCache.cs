@@ -26,12 +26,12 @@ using System.Collections.Concurrent;
 internal static class TypeCache {
 
 	/// <summary>
-	/// Cache for void request handlers (IRequest with no return value).
+	/// Cache for void request handlers (IOperation with no return value).
 	/// </summary>
 	internal static readonly ConcurrentDictionary<Type, RequestHandlerWrapper> VoidHandlers = new();
 
 	/// <summary>
-	/// Cache for typed request handlers (IRequest&lt;TResponse&gt;).
+	/// Cache for typed request handlers (IOperation&lt;TResponse&gt;).
 	/// Stores as object because different TResponse types share the same cache.
 	/// </summary>
 	internal static readonly ConcurrentDictionary<Type, object> ResponseHandlers = new();

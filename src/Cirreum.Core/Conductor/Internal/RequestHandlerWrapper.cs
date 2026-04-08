@@ -7,7 +7,7 @@ internal abstract class RequestHandlerWrapper {
 	/// Handles the request by resolving the handler and building the intercept pipeline.
 	/// </summary>
 	public abstract Task<Result> HandleAsync(
-		IRequest request,
+		IOperation request,
 		IServiceProvider serviceProvider,
 		CancellationToken cancellationToken);
 }

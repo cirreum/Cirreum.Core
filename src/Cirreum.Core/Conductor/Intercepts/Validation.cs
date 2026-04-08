@@ -5,25 +5,25 @@ using FluentValidation.Results;
 using System.Collections.Generic;
 using System.Threading;
 
-sealed class Validation<TRequest, TResponse>
-	: IIntercept<TRequest, TResponse>
-	where TRequest : notnull {
+sealed class Validation<TOperation, TResponse>
+	: IIntercept<TOperation, TResponse>
+	where TOperation : notnull {
 
-	private readonly IReadOnlyList<IValidator<TRequest>> _validators;
+	private readonly IReadOnlyList<IValidator<TOperation>> _validators;
 	private readonly bool _hasValidators;
 
-	public Validation(IEnumerable<IValidator<TRequest>> validators) {
+	public Validation(IEnumerable<IValidator<TOperation>> validators) {
 
 		// Materialize once, no matter how DI gives it to us
-		this._validators = validators as IReadOnlyList<IValidator<TRequest>>
+		this._validators = validators as IReadOnlyList<IValidator<TOperation>>
 					  ?? [.. validators];
 
 		this._hasValidators = this._validators.Count > 0;
 	}
 
 	public async Task<Result<TResponse>> HandleAsync(
-		RequestContext<TRequest> context,
-		RequestHandlerDelegate<TRequest, TResponse> next,
+		OperationContext<TOperation> context,
+		OperationHandlerDelegate<TOperation, TResponse> next,
 		CancellationToken cancellationToken) {
 
 		// FAST PATH: no validators → just forward, no async state machine
@@ -31,7 +31,7 @@ sealed class Validation<TRequest, TResponse>
 			return await next(context, cancellationToken).ConfigureAwait(false);
 		}
 
-		var validationContext = new ValidationContext<TRequest>(context.Request);
+		var validationContext = new ValidationContext<TOperation>(context.Operation);
 
 		List<ValidationFailure> failures = [];
 

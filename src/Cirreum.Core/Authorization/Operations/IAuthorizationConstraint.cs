@@ -17,7 +17,7 @@ using FluentValidation.Results;
 /// <para>
 /// Constraints do NOT know about override roles or
 /// <see cref="IApplicationUser"/> — those concerns live only in
-/// <see cref="Operations.Grants.OperationGrantEvaluator"/>.
+/// <see cref="Grants.OperationGrantEvaluator"/>.
 /// </para>
 /// <para>
 /// Zero or more constraints may be registered. They run in registration order;

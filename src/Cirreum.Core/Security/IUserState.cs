@@ -37,7 +37,7 @@ public interface IUserState : IUserSession {
 
 	/// <summary>
 	/// The caller's stable identity, resolved from claims by
-	/// <see cref="ClaimsHelper.ResolveId(System.Security.Claims.ClaimsPrincipal)"/>.
+	/// <see cref="ClaimsHelper.ResolveId(ClaimsPrincipal)"/>.
 	/// </summary>
 	/// <remarks>
 	/// <para>

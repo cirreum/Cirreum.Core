@@ -64,10 +64,10 @@ public class PipelineComparisonBenchmarks {
 
 			// Handler that supports both systems
 			services.AddSingleton<PingHandler>();
-			services.AddSingleton<IRequestHandler<ConductorPing, PingResponse>>(sp => sp.GetRequiredService<PingHandler>());
+			services.AddSingleton<IOperationHandler<ConductorPing, PingResponse>>(sp => sp.GetRequiredService<PingHandler>());
 			services.AddSingleton<MediatR.IRequestHandler<MediatRPing, PingResponse>>(sp => sp.GetRequiredService<PingHandler>());
 
-			// Pipeline path requires IUserStateAccessor for RequestContext
+			// Pipeline path requires IUserStateAccessor for OperationContext
 			services.AddSingleton<Security.IUserStateAccessor, MockUserStateAccessor>();
 		});
 
