@@ -1,6 +1,5 @@
-﻿namespace Cirreum.Conductor.Intercepts;
+﻿namespace Cirreum.Authorization.Operations;
 
-using Cirreum.Authorization;
 using Cirreum.Conductor;
 
 /// <summary>

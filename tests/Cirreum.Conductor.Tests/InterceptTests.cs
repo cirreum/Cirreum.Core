@@ -1,6 +1,7 @@
 ﻿namespace Cirreum.Conductor.Tests;
 
 using Cirreum.Authorization;
+using Cirreum.Authorization.Operations;
 using Cirreum.Caching;
 using Cirreum.Conductor;
 using Cirreum.Conductor.Configuration;

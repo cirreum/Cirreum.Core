@@ -1,5 +1,6 @@
 ﻿namespace Cirreum.Conductor.Configuration;
 
+using Cirreum.Authorization.Operations;
 using Cirreum.Conductor.Intercepts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

@@ -1,6 +1,6 @@
-namespace Cirreum.Conductor;
+namespace Cirreum.Authorization.Operations;
 
-using Cirreum.Authorization;
+using Cirreum.Conductor;
 
 /// <summary>
 /// The single pipeline discriminator for authorization. Any request that participates
@@ -13,11 +13,11 @@ using Cirreum.Authorization;
 /// request marker interfaces instead:
 /// <see cref="IAuthorizableRequest"/> or <see cref="IAuthorizableRequest{TResponse}"/>.
 /// For grant-aware (grant-based) operations, use the grant interfaces:
-/// <see cref="Authorization.Grants.IGrantMutateRequest"/>,
-/// <see cref="Authorization.Grants.IGrantLookupRequest{TResponse}"/>,
-/// <see cref="Authorization.Grants.IGrantSearchRequest{TResponse}"/>,
-/// <see cref="Authorization.Grants.IGrantMutateSelfRequest"/>, or
-/// <see cref="Authorization.Grants.IGrantLookupSelfRequest{TResponse}"/>.
+/// <see cref="Operations.Grants.IGrantMutateRequest"/>,
+/// <see cref="Operations.Grants.IGrantLookupRequest{TResponse}"/>,
+/// <see cref="Operations.Grants.IGrantSearchRequest{TResponse}"/>,
+/// <see cref="Operations.Grants.IGrantMutateSelfRequest"/>, or
+/// <see cref="Operations.Grants.IGrantLookupSelfRequest{TResponse}"/>.
 /// </para>
 /// <para>
 /// By inheriting <see cref="IAuthorizableObject"/>, every request instance may be

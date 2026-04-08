@@ -1,4 +1,6 @@
-namespace Cirreum.Conductor;
+namespace Cirreum.Authorization.Operations;
+
+using Cirreum.Conductor;
 
 /// <summary>
 /// Marker for an authorized request with no response (void).
@@ -7,11 +9,11 @@ namespace Cirreum.Conductor;
 /// Implements <see cref="IAuthorizableRequestBase"/> for authorization pipeline participation
 /// and <see cref="IRequest"/> for conductor routing.
 /// For grant-aware (grant-based) operations, use the grant interfaces:
-/// <see cref="Authorization.Grants.IGrantMutateRequest"/>,
-/// <see cref="Authorization.Grants.IGrantLookupRequest{TResponse}"/>,
-/// <see cref="Authorization.Grants.IGrantSearchRequest{TResponse}"/>,
-/// <see cref="Authorization.Grants.IGrantMutateSelfRequest"/>, or
-/// <see cref="Authorization.Grants.IGrantLookupSelfRequest{TResponse}"/>.
+/// <see cref="Operations.Grants.IGrantMutateRequest"/>,
+/// <see cref="Operations.Grants.IGrantLookupRequest{TResponse}"/>,
+/// <see cref="Operations.Grants.IGrantSearchRequest{TResponse}"/>,
+/// <see cref="Operations.Grants.IGrantMutateSelfRequest"/>, or
+/// <see cref="Operations.Grants.IGrantLookupSelfRequest{TResponse}"/>.
 /// </remarks>
 public interface IAuthorizableRequest : IAuthorizableRequestBase, IRequest;
 
@@ -23,10 +25,10 @@ public interface IAuthorizableRequest : IAuthorizableRequestBase, IRequest;
 /// Implements <see cref="IAuthorizableRequestBase"/> for authorization pipeline participation
 /// and <see cref="IRequest{TResponse}"/> for conductor routing.
 /// For grant-aware (grant-based) operations, use the grant interfaces:
-/// <see cref="Authorization.Grants.IGrantMutateRequest{TResponse}"/>,
-/// <see cref="Authorization.Grants.IGrantLookupRequest{TResponse}"/>,
-/// <see cref="Authorization.Grants.IGrantSearchRequest{TResponse}"/>,
-/// <see cref="Authorization.Grants.IGrantMutateSelfRequest{TResponse}"/>, or
-/// <see cref="Authorization.Grants.IGrantLookupSelfRequest{TResponse}"/>.
+/// <see cref="Operations.Grants.IGrantMutateRequest{TResponse}"/>,
+/// <see cref="Operations.Grants.IGrantLookupRequest{TResponse}"/>,
+/// <see cref="Operations.Grants.IGrantSearchRequest{TResponse}"/>,
+/// <see cref="Operations.Grants.IGrantMutateSelfRequest{TResponse}"/>, or
+/// <see cref="Operations.Grants.IGrantLookupSelfRequest{TResponse}"/>.
 /// </remarks>
 public interface IAuthorizableRequest<out TResponse> : IAuthorizableRequestBase, IRequest<TResponse>;
