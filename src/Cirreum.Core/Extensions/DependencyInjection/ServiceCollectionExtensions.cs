@@ -53,13 +53,13 @@ public static class ServiceCollectionExtensions {
 
 
 	/// <summary>
-	/// Registers the <see cref="DefaultAccessScopeResolver"/> as the default
-	/// <see cref="IAccessScopeResolver"/> if one is not already registered.
+	/// Registers the <see cref="DefaultAuthenticationScopeResolver"/> as the default
+	/// <see cref="IAuthenticationScopeResolver"/> if one is not already registered.
 	/// </summary>
 	/// <param name="services">The current <see cref="IServiceCollection"/> to register with.</param>
-	public static void AddDefaultAccessScopeResolver(
+	public static void AddDefaultAuthenticationScopeResolver(
 		this IServiceCollection services) {
-		services.TryAddSingleton<IAccessScopeResolver, DefaultAccessScopeResolver>();
+		services.TryAddSingleton<IAuthenticationScopeResolver, DefaultAuthenticationScopeResolver>();
 	}
 
 
@@ -198,7 +198,7 @@ public static class ServiceCollectionExtensions {
 		//
 		// Access Scope
 		//
-		services.AddDefaultAccessScopeResolver();
+		services.AddDefaultAuthenticationScopeResolver();
 
 		//
 		// Domain Context Initializer

@@ -44,9 +44,14 @@ public sealed record RequestContext<TRequest>(
 	// User convenience properties
 	public string UserId => this.UserState.Id;
 	public string UserName => this.UserState.Name;
+	/// <summary>
+	/// The caller's tenant (organization) identifier, or <see langword="null"/> when
+	/// no organization is associated with the user profile. Sourced from the OIDC
+	/// <c>tid</c> claim (or provider-equivalent) via <c>UserState.Profile.Organization.OrganizationId</c>.
+	/// </summary>
 	public string? TenantId => this.UserState.Profile.Organization.OrganizationId;
 	public IdentityProviderType Provider => this.UserState.Provider;
-	public AccessScope AccessScope => this.UserState.AccessScope;
+	public AuthenticationScope AuthenticationScope => this.UserState.AuthenticationScope;
 	public bool IsAuthenticated => this.UserState.IsAuthenticated;
 	public UserProfile Profile => this.UserState.Profile;
 	public bool HasEnrichedProfile => this.UserState.Profile.IsEnriched;

@@ -6,84 +6,84 @@ using Cirreum.Authorization;
 using Cirreum.Security;
 
 [TestClass]
-public class AccessScopeTests {
+public class AuthenticationScopeTests {
 
 	// IUserState default interface member
 	// -------------------------------------------------------------
 
 	[TestMethod]
-	public void IUserState_default_AccessScope_is_None_when_not_overridden() {
+	public void IUserState_default_AuthenticationScope_is_None_when_not_overridden() {
 		IUserState user = new MinimalUserState();
-		Assert.AreEqual(AccessScope.None, user.AccessScope);
+		Assert.AreEqual(AuthenticationScope.None, user.AuthenticationScope);
 	}
 
 	[TestMethod]
-	public void IUserState_default_IsAccessScopeResolved_is_false() {
+	public void IUserState_default_IsAuthenticationScopeResolved_is_false() {
 		IUserState user = new MinimalUserState();
-		Assert.IsFalse(user.IsAccessScopeResolved);
+		Assert.IsFalse(user.IsAuthenticationScopeResolved);
 	}
 
 	// UserStateBase backing field + setter
 	// -------------------------------------------------------------
 
 	[TestMethod]
-	public void UserStateBase_AccessScope_defaults_to_None() {
+	public void UserStateBase_AuthenticationScope_defaults_to_None() {
 		var user = new TestUserState();
-		Assert.AreEqual(AccessScope.None, user.AccessScope);
+		Assert.AreEqual(AuthenticationScope.None, user.AuthenticationScope);
 	}
 
 	[TestMethod]
-	public void UserStateBase_IsAccessScopeResolved_defaults_to_false() {
+	public void UserStateBase_IsAuthenticationScopeResolved_defaults_to_false() {
 		var user = new TestUserState();
-		Assert.IsFalse(user.IsAccessScopeResolved);
+		Assert.IsFalse(user.IsAuthenticationScopeResolved);
 	}
 
 	[TestMethod]
-	public void UserStateBase_SetAccessScope_persists_value() {
-		var user = new AccessScopeExposingUserState();
-		user.StampScope(AccessScope.Global);
-		Assert.AreEqual(AccessScope.Global, user.AccessScope);
+	public void UserStateBase_SetAuthenticationScope_persists_value() {
+		var user = new AuthenticationScopeExposingUserState();
+		user.StampScope(AuthenticationScope.Global);
+		Assert.AreEqual(AuthenticationScope.Global, user.AuthenticationScope);
 
-		user.StampScope(AccessScope.Tenant);
-		Assert.AreEqual(AccessScope.Tenant, user.AccessScope);
+		user.StampScope(AuthenticationScope.Tenant);
+		Assert.AreEqual(AuthenticationScope.Tenant, user.AuthenticationScope);
 	}
 
 	[TestMethod]
-	public void UserStateBase_SetAccessScope_marks_resolved() {
-		var user = new AccessScopeExposingUserState();
-		Assert.IsFalse(user.IsAccessScopeResolved);
+	public void UserStateBase_SetAuthenticationScope_marks_resolved() {
+		var user = new AuthenticationScopeExposingUserState();
+		Assert.IsFalse(user.IsAuthenticationScopeResolved);
 
-		user.StampScope(AccessScope.Global);
-		Assert.IsTrue(user.IsAccessScopeResolved);
+		user.StampScope(AuthenticationScope.Global);
+		Assert.IsTrue(user.IsAuthenticationScopeResolved);
 	}
 
 	[TestMethod]
-	public void UserStateBase_SetAccessScope_to_None_still_marks_resolved() {
-		var user = new AccessScopeExposingUserState();
-		user.StampScope(AccessScope.None);
+	public void UserStateBase_SetAuthenticationScope_to_None_still_marks_resolved() {
+		var user = new AuthenticationScopeExposingUserState();
+		user.StampScope(AuthenticationScope.None);
 
-		Assert.AreEqual(AccessScope.None, user.AccessScope);
-		Assert.IsTrue(user.IsAccessScopeResolved, "Explicitly setting None should still mark as resolved");
+		Assert.AreEqual(AuthenticationScope.None, user.AuthenticationScope);
+		Assert.IsTrue(user.IsAuthenticationScopeResolved, "Explicitly setting None should still mark as resolved");
 	}
 
 	// AuthorizationContext<T> passthrough
 	// -------------------------------------------------------------
 
 	[TestMethod]
-	public void AuthorizationContext_AccessScope_reflects_UserState() {
-		var user = new AccessScopeExposingUserState();
-		user.StampScope(AccessScope.Tenant);
+	public void AuthorizationContext_AuthenticationScope_reflects_UserState() {
+		var user = new AuthenticationScopeExposingUserState();
+		user.StampScope(AuthenticationScope.Tenant);
 
 		var authCtx = new AuthorizationContext<TestResource>(
 			UserState: user,
 			EffectiveRoles: ImmutableHashSet<Role>.Empty,
 			AuthorizableObject: new TestResource());
 
-		Assert.AreEqual(AccessScope.Tenant, authCtx.AccessScope);
+		Assert.AreEqual(AuthenticationScope.Tenant, authCtx.AuthenticationScope);
 	}
 
 	[TestMethod]
-	public void AuthorizationContext_AccessScope_is_None_when_UserState_is_None() {
+	public void AuthorizationContext_AuthenticationScope_is_None_when_UserState_is_None() {
 		var user = new TestUserState();
 
 		var authCtx = new AuthorizationContext<TestResource>(
@@ -91,22 +91,22 @@ public class AccessScopeTests {
 			EffectiveRoles: ImmutableHashSet<Role>.Empty,
 			AuthorizableObject: new TestResource());
 
-		Assert.AreEqual(AccessScope.None, authCtx.AccessScope);
+		Assert.AreEqual(AuthenticationScope.None, authCtx.AuthenticationScope);
 	}
 
 	private sealed class TestResource : IAuthorizableObject;
 
 	/// <summary>
-	/// Subclass that publicly exposes the protected SetAccessScope setter
+	/// Subclass that publicly exposes the protected SetAuthenticationScope setter
 	/// for assertion purposes.
 	/// </summary>
-	private sealed class AccessScopeExposingUserState : UserStateBase {
+	private sealed class AuthenticationScopeExposingUserState : UserStateBase {
 		public override bool IsAuthenticationComplete => true;
-		public void StampScope(AccessScope scope) => base.SetAccessScope(scope);
+		public void StampScope(AuthenticationScope scope) => base.SetAuthenticationScope(scope);
 	}
 
 	/// <summary>
-	/// Minimal IUserState implementation with no AccessScope override — exercises
+	/// Minimal IUserState implementation with no AuthenticationScope override — exercises
 	/// the default interface member on IUserState.
 	/// </summary>
 	private sealed class MinimalUserState : IUserState {

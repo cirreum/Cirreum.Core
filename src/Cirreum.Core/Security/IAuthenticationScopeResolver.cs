@@ -1,7 +1,7 @@
 namespace Cirreum.Security;
 
 /// <summary>
-/// Resolves the <see cref="AccessScope"/> for an authenticated user state.
+/// Resolves the <see cref="AuthenticationScope"/> for an authenticated user state.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -16,19 +16,19 @@ namespace Cirreum.Security;
 /// </remarks>
 /// <example>
 /// A minimal custom resolver that treats any caller whose scheme starts with
-/// <c>"internal-"</c> as <see cref="AccessScope.Global"/>:
+/// <c>"internal-"</c> as <see cref="AuthenticationScope.Global"/>:
 /// <code>
-/// internal sealed class PrefixAccessScopeResolver : IAccessScopeResolver {
-///     public AccessScope Resolve(IUserState userState, string? authenticationScheme) {
-///         if (!userState.IsAuthenticated) return AccessScope.None;
+/// internal sealed class PrefixAuthenticationScopeResolver : IAuthenticationScopeResolver {
+///     public AuthenticationScope Resolve(IUserState userState, string? authenticationScheme) {
+///         if (!userState.IsAuthenticated) return AuthenticationScope.None;
 ///         return authenticationScheme?.StartsWith("internal-") == true
-///             ? AccessScope.Global
-///             : AccessScope.Tenant;
+///             ? AuthenticationScope.Global
+///             : AuthenticationScope.Tenant;
 ///     }
 /// }
 /// </code>
 /// </example>
-public interface IAccessScopeResolver {
+public interface IAuthenticationScopeResolver {
 
 	/// <summary>
 	/// Computes the access scope for the given user state and authentication scheme.
@@ -38,5 +38,5 @@ public interface IAccessScopeResolver {
 	/// The authentication scheme name that authenticated the caller, or <see langword="null"/>
 	/// when scheme is not applicable (e.g., Blazor WASM, Azure Functions binding context).
 	/// </param>
-	AccessScope Resolve(IUserState userState, string? authenticationScheme);
+	AuthenticationScope Resolve(IUserState userState, string? authenticationScheme);
 }

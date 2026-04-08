@@ -8,7 +8,7 @@ using Cirreum.Security;
 /// with the <see cref="IGrantableCacheableLookupBase"/> detection surface and
 /// <see cref="ICacheableQuery{TResponse}"/> caching contract. The framework composes
 /// the final cache key as
-/// <c>owner:{OwnerId}:scope:{CallerAccessScope}:{ScopedCacheKey}</c>, which isolates
+/// <c>owner:{OwnerId}:scope:{CallerAuthenticationScope}:{ScopedCacheKey}</c>, which isolates
 /// tenants from each other and cross-tenant operators from tenant-scoped callers.
 /// </summary>
 /// <remarks>
@@ -50,7 +50,7 @@ public interface IGrantCacheableLookupRequest<TResponse>
 
 	/// <inheritdoc />
 	string ICacheableQuery<TResponse>.CacheKey =>
-		$"owner:{this.OwnerId}:scope:{this.CallerAccessScope}:{this.ScopedCacheKey}";
+		$"owner:{this.OwnerId}:scope:{this.CallerAuthenticationScope}:{this.ScopedCacheKey}";
 
 	/// <inheritdoc />
 	string[]? ICacheableQuery<TResponse>.CacheTags {

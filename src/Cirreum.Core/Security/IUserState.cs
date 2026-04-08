@@ -70,31 +70,31 @@ public interface IUserState : IUserSession {
 	IdentityProviderType Provider { get; }
 
 	/// <summary>
-	/// The resolved <see cref="Security.AccessScope"/> for this caller. Defaults to
-	/// <see cref="AccessScope.None"/> when no <see cref="IAccessScopeResolver"/>
+	/// The resolved <see cref="Security.AuthenticationScope"/> for this caller. Defaults to
+	/// <see cref="AuthenticationScope.None"/> when no <see cref="IAuthenticationScopeResolver"/>
 	/// has stamped a value.
 	/// </summary>
-	AccessScope AccessScope => AccessScope.None;
+	AuthenticationScope AuthenticationScope => AuthenticationScope.None;
 
 	/// <summary>
-	/// Gets a value indicating whether the <see cref="AccessScope"/> has been resolved
-	/// for this user state — either by an <see cref="IAccessScopeResolver"/> or by
+	/// Gets a value indicating whether the <see cref="AuthenticationScope"/> has been resolved
+	/// for this user state — either by an <see cref="IAuthenticationScopeResolver"/> or by
 	/// explicit assignment.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// When <see langword="false"/>, the <see cref="AccessScope"/> value is the
-	/// unresolved default (<see cref="AccessScope.None"/>). Consumers should not
-	/// interpret <see cref="AccessScope.None"/> as meaningful until this property
+	/// When <see langword="false"/>, the <see cref="AuthenticationScope"/> value is the
+	/// unresolved default (<see cref="AuthenticationScope.None"/>). Consumers should not
+	/// interpret <see cref="AuthenticationScope.None"/> as meaningful until this property
 	/// is <see langword="true"/>.
 	/// </para>
 	/// <para>
-	/// This becomes <see langword="true"/> when <c>SetAccessScope</c> is called,
+	/// This becomes <see langword="true"/> when <c>SetAuthenticationScope</c> is called,
 	/// regardless of the resolved value — including when the resolver explicitly
-	/// returns <see cref="AccessScope.None"/> for an anonymous caller.
+	/// returns <see cref="AuthenticationScope.None"/> for an anonymous caller.
 	/// </para>
 	/// </remarks>
-	bool IsAccessScopeResolved => false;
+	bool IsAuthenticationScopeResolved => false;
 
 	/// <summary>
 	/// Gets the configured Authentication Library Type.

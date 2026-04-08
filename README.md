@@ -63,7 +63,7 @@ Flexible, policy-based authorization with support for RBAC, ABAC, and grant-base
 - `IScopeEvaluator` / `OwnerScopeEvaluatorBase` - Stage 1 scope gates (tenant, owner, access-scope)
 - `OperationGrantEvaluator` / `IOperationGrantProvider` - Stage 1 grant-aware scope gate with Mutate/Lookup/Search/Self enforcement
 - `IPolicyValidator` - Stage 3 cross-cutting policy validators (hours, quotas, kill-switches)
-- `AccessScope` (None / Global / Tenant) - Coarse authorization dimension resolved by `IAccessScopeResolver`
+- `AuthenticationScope` (None / Global / Tenant) - Authentication boundary resolved by `IAuthenticationScopeResolver`
 - `OperationGrant` - Computed set of accessible owners per operation (Denied / Unrestricted / Bounded)
 - Role resolution with inheritance support via `IAuthorizationRoleRegistry`
 - Flexible AuthN/AuthZ with support for OIDC/MSAL/BYOID

@@ -32,7 +32,7 @@ authorization pipeline and reused by downstream consumers (e.g.,
 │ • RequestType (string)                            │   │                                                   │
 │ • RequestId (string — Activity.SpanId)            │   │ User convenience (delegate to UserState):         │
 │ • CorrelationId (string — Activity.TraceId)       │   │ • UserId, UserName, TenantId, Provider            │
-│ • StartTimestamp (long — high-precision)           │   │ • AccessScope, IsAuthenticated                    │
+│ • StartTimestamp (long — high-precision)           │   │ • AuthenticationScope, IsAuthenticated                    │
 │                                                   │   │ • Profile, HasEnrichedProfile, ApplicationUser    │
 │ Derived / captured:                               │   │                                                   │
 │ • DomainFeature (DomainFeatureResolver)           │   │ Static / captured:                                │
@@ -42,7 +42,7 @@ authorization pipeline and reused by downstream consumers (e.g.,
 │                                                   │   │ Helper methods:                                   │
 │ User convenience (delegate to UserState):         │   │ • HasActiveTenant(), IsFromProvider(),             │
 │ • UserId, UserName, TenantId, Provider            │   │   IsInDepartment()                                │
-│ • AccessScope, IsAuthenticated                    │   │                                                   │
+│ • AuthenticationScope, IsAuthenticated                    │   │                                                   │
 │ • Profile, HasEnrichedProfile                     │   │         ▲ stored on IAuthorizationContextAccessor │
 │                                                   │   │         │ (scoped, set by pipeline)               │
 │ Timing:                                           │   ├─────────┴─────────────────────────────────────────┤
@@ -161,10 +161,10 @@ authorization pipeline and reused by downstream consumers (e.g.,
 │ • CorrelationId                  │   │ Delegates to UserState:                    │
 │ • StartTimestamp                 │   │ • UserId, UserName, TenantId               │
 │                                  │   │ • Provider, IsAuthenticated                │
-│ Delegates to UserState:          │   │ • AccessScope, ApplicationUser             │
+│ Delegates to UserState:          │   │ • AuthenticationScope, ApplicationUser             │
 │ • UserId, UserName, TenantId    │   │ • Profile, HasEnrichedProfile              │
 │ • Provider, IsAuthenticated     │   │                                            │
-│ • AccessScope                    │   │ Static / captured:                         │
+│ • AuthenticationScope                    │   │ Static / captured:                         │
 │ • Profile, HasEnrichedProfile   │   │ • RuntimeType, Timestamp                   │
 │                                  │   │                                            │
 │ Derived:                         │   │ Helpers: HasActiveTenant, IsFromProvider,  │
@@ -267,7 +267,7 @@ Benefits:
 - `UserName` → `UserState.Name`
 - `TenantId` → `UserState.Profile.Organization.OrganizationId`
 - `Provider` → `UserState.Provider`
-- `AccessScope` → `UserState.AccessScope`
+- `AuthenticationScope` → `UserState.AuthenticationScope`
 - `IsAuthenticated` → `UserState.IsAuthenticated`
 - `Profile` → `UserState.Profile`
 - `HasEnrichedProfile` → `UserState.Profile.IsEnriched`
@@ -286,7 +286,7 @@ Benefits:
 - `UserName` → `UserState.Name`
 - `TenantId` → `UserState.Profile.Organization.OrganizationId`
 - `Provider` → `UserState.Provider`
-- `AccessScope` → `UserState.AccessScope`
+- `AuthenticationScope` → `UserState.AuthenticationScope`
 - `IsAuthenticated` → `UserState.IsAuthenticated`
 - `Profile` → `UserState.Profile`
 - `HasEnrichedProfile` → `UserState.Profile.IsEnriched`
@@ -304,33 +304,33 @@ Benefits:
 
 ## Access Scope
 
-`AccessScope` is the coarse authorization dimension indicating *which IdP scheme*
+`AuthenticationScope` is the coarse authorization dimension indicating *which IdP scheme*
 authenticated the caller. It's stamped onto `IUserState` by
-`IAccessScopeResolver` during user enrichment and surfaces on every context.
+`IAuthenticationScopeResolver` during user enrichment and surfaces on every context.
 
 | Value | Meaning |
 |---|---|
-| `None` | Anonymous caller, or no `IAccessScopeResolver` is registered |
+| `None` | Anonymous caller, or no `IAuthenticationScopeResolver` is registered |
 | `Global` | Authenticated via the configured `PrimaryScheme` — typically operator staff acting across tenants |
 | `Tenant` | Authenticated via a customer/tenant scheme (Entra External ID, BYOID, per-customer OIDC, API keys, signed requests) |
 
 ### Where It's Used
 
 - **Grant evaluation (Stage 1 Step 0a).** The `OperationGrantEvaluator` uses
-  `AccessScope` to enforce CRL rules differently per scope. `Global`
+  `AuthenticationScope` to enforce CRL rules differently per scope. `Global`
   callers must supply an explicit `OwnerId` for writes (no auto-enrich),
   and must supply `OwnerId` for cacheable reads (no unbounded cache bucket).
   `Tenant` callers may auto-enrich from single-element reach. See the
   [Grants README](Authorization/Operations/Grants/README.md) for full CRL semantics.
 - **Owner-scope gate (Stage 1 Step 0b).** The default `OwnerScopeEvaluator`
-  uses `AccessScope` to decide whether the caller is *required* to match
+  uses `AuthenticationScope` to decide whether the caller is *required* to match
   the resource's `OwnerId`, or is a cross-tenant operator who can bypass
   owner-match (e.g., `Global` callers performing admin-level operations).
 - **Scope evaluators (Stage 1 Step 1).** Custom `IScopeEvaluator`
-  implementations can short-circuit on `AccessScope` to enforce
+  implementations can short-circuit on `AuthenticationScope` to enforce
   tenant-only or global-only routes.
 - **Object authorizers (Stage 2).** A single
-  `AuthorizerBase<T>` may branch on `context.AccessScope` to
+  `AuthorizerBase<T>` may branch on `context.AuthenticationScope` to
   apply different rule sets per scope.
 - **Policy validators (Stage 3).** Kill-switches and time-window policies
   often apply only to `Tenant` callers, bypassed for `Global`.
@@ -338,8 +338,8 @@ authenticated the caller. It's stamped onto `IUserState` by
 ### Customization
 
 Consumers replace the default resolver by registering their own
-`IAccessScopeResolver` *before* `AddAuthorization` runs (TryAdd pattern).
-See `IAccessScopeResolver` for an example implementation.
+`IAuthenticationScopeResolver` *before* `AddAuthorization` runs (TryAdd pattern).
+See `IAuthenticationScopeResolver` for an example implementation.
 
 ## Design Principles
 

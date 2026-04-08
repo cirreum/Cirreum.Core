@@ -140,7 +140,7 @@ public sealed class OperationGrantEvaluator(
 		}
 
 		// OwnerId is null — enrich from grant.
-		if (context.AccessScope == AccessScope.Global) {
+		if (context.AuthenticationScope == AuthenticationScope.Global) {
 			return Deny(DenyCodes.OwnerIdRequired, "OwnerId is required for cross-tenant writes.");
 		}
 		if (grant.IsUnrestricted) {
@@ -163,25 +163,25 @@ public sealed class OperationGrantEvaluator(
 			if (!grant.Contains(lookup.OwnerId!)) {
 				return Deny(DenyCodes.OwnerNotInReach, "Requested owner is not in the caller's granted access.");
 			}
-			// OwnerId supplied and in grant — stamp CallerAccessScope for cacheable lookups.
+			// OwnerId supplied and in grant — stamp CallerAuthenticationScope for cacheable lookups.
 			if (context.AuthorizableObject is IGrantableCacheableLookupBase cacheableWithOwner) {
-				cacheableWithOwner.CallerAccessScope = context.AccessScope;
+				cacheableWithOwner.CallerAuthenticationScope = context.AuthenticationScope;
 			}
 			return Pass();
 		}
 
 		// Cacheable lookup: Global callers MUST supply OwnerId to prevent unbounded cache bucket.
 		if (context.AuthorizableObject is IGrantableCacheableLookupBase) {
-			if (context.AccessScope == AccessScope.Global) {
+			if (context.AuthenticationScope == AuthenticationScope.Global) {
 				return Deny(DenyCodes.CacheableReadOwnerIdRequired,
 					"OwnerId is required for cross-tenant cacheable lookups.");
 			}
 		}
 
 		// OwnerId null — defer to handler (Pattern C). Grant already stashed on accessor.
-		// Stamp CallerAccessScope for cacheable lookups.
+		// Stamp CallerAuthenticationScope for cacheable lookups.
 		if (context.AuthorizableObject is IGrantableCacheableLookupBase cacheable) {
-			cacheable.CallerAccessScope = context.AccessScope;
+			cacheable.CallerAuthenticationScope = context.AuthenticationScope;
 		}
 		return Pass();
 	}
@@ -233,7 +233,7 @@ public sealed class OperationGrantEvaluator(
 		var decision = isPass
 			? AuthorizationTelemetry.DecisionPass
 			: AuthorizationTelemetry.DecisionDeny;
-		var scope = ctx.AccessScope.ToString().ToLowerInvariant();
+		var scope = ctx.AuthenticationScope.ToString().ToLowerInvariant();
 		var resourceType = ctx.AuthorizableObject.GetType().Name;
 
 		var activity = Activity.Current;

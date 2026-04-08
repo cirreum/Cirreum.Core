@@ -16,14 +16,14 @@ namespace Cirreum.Security;
 /// </para>
 /// <para>
 /// <see cref="None"/> is used for anonymous callers and for platforms that have not
-/// registered an <see cref="IAccessScopeResolver"/> (in which case scope is unknown).
+/// registered an <see cref="IAuthenticationScopeResolver"/> (in which case scope is unknown).
 /// </para>
 /// </remarks>
-public enum AccessScope {
+public enum AuthenticationScope {
 
 	/// <summary>
 	/// No access scope has been resolved — the caller is anonymous, or no
-	/// <see cref="IAccessScopeResolver"/> is registered in the host.
+	/// <see cref="IAuthenticationScopeResolver"/> is registered in the host.
 	/// </summary>
 	None = 0,
 

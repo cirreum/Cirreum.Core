@@ -46,13 +46,54 @@ public record AuthorizationContext(
 	public DateTimeOffset Timestamp { get; } = DateTimeOffset.UtcNow;
 
 	// User convenience properties
+	//--------------------------------------------------------
+
+	/// <summary>
+	/// Gets the unique identifier of the current user.
+	/// </summary>
 	public string UserId => this.UserState.Id;
+
+	/// <summary>
+	/// Gets the user name associated with the current user state.
+	/// </summary>
 	public string UserName => this.UserState.Name;
+
+	/// <summary>
+	/// The caller's tenant (organization) identifier, or <see langword="null"/> when
+	/// no organization is associated with the user profile.
+	/// </summary>
+	/// <remarks>
+	/// Sourced from <c>UserState.Profile.Organization.OrganizationId</c>, which is
+	/// populated during profile enrichment from the OIDC <c>tid</c> claim (or the
+	/// provider-equivalent tenant/realm/workspace identifier resolved by
+	/// <c>ClaimsHelper.ResolveTid</c>). Returns <see langword="null"/> when the IdP
+	/// does not emit a tenant claim or the organization is empty.
+	/// </remarks>
 	public string? TenantId => this.UserState.Profile.Organization.OrganizationId;
+
+	/// <summary>
+	/// Gets the identity provider associated with the current user state.
+	/// </summary>
 	public IdentityProviderType Provider => this.UserState.Provider;
-	public AccessScope AccessScope => this.UserState.AccessScope;
+
+	/// <summary>
+	/// Gets the authentication scope (Global, Tenant, or None) for the current caller.
+	/// </summary>
+	public AuthenticationScope AuthenticationScope => this.UserState.AuthenticationScope;
+
+	/// <summary>
+	/// Gets a value indicating whether the current user is authenticated.
+	/// </summary>
 	public bool IsAuthenticated => this.UserState.IsAuthenticated;
+
+	/// <summary>
+	/// Gets the user profile associated with the current user state.
+	/// </summary>
 	public UserProfile Profile => this.UserState.Profile;
+
+	/// <summary>
+	/// Gets a value indicating whether the user has an enriched profile.
+	/// </summary>
 	public bool HasEnrichedProfile => this.UserState.Profile.IsEnriched;
 
 	/// <summary>
@@ -66,11 +107,30 @@ public record AuthorizationContext(
 	public DomainRuntimeType RuntimeType => DomainContext.RuntimeType;
 
 	// Helper methods
+	// --------------------------------------------------------
+
+	/// <summary>
+	/// Determines whether the current instance has an active tenant associated with it.
+	/// </summary>
+	/// <returns>true if a non-empty tenant identifier is present; otherwise, false.</returns>
 	public bool HasActiveTenant() => !string.IsNullOrWhiteSpace(this.TenantId);
+
+	/// <summary>
+	/// Determines whether the identity is associated with the specified identity provider.
+	/// </summary>
+	/// <param name="provider">The identity provider to compare with the current identity's provider.</param>
+	/// <returns>true if the identity is from the specified provider; otherwise, false.</returns>
 	public bool IsFromProvider(IdentityProviderType provider) => this.Provider == provider;
+
+	/// <summary>
+	/// Determines whether the user belongs to the specified department.
+	/// </summary>
+	/// <param name="department">The name of the department to check for membership. Comparison is case-insensitive. Cannot be null or whitespace.</param>
+	/// <returns>true if the user's department matches the specified department; otherwise, false.</returns>
 	public bool IsInDepartment(string department) =>
 		!string.IsNullOrWhiteSpace(this.Profile.Department) &&
 		string.Equals(this.Profile.Department, department, StringComparison.OrdinalIgnoreCase);
+
 }
 
 /// <summary>
@@ -92,8 +152,6 @@ public sealed record AuthorizationContext<TAuthorizableObject>(
 	/// The domain feature derived from <typeparamref name="TAuthorizableObject"/>'s namespace convention.
 	/// Cached per-type via <see cref="DomainFeatureResolver"/> — zero per-request cost.
 	/// </summary>
-	[SuppressMessage("Performance", "CA1822:Mark members as static",
-		Justification = "Instance convenience — delegates to DomainFeatureResolver for consumer ergonomics.")]
 	public string? DomainFeature => DomainFeatureResolver.Resolve<TAuthorizableObject>();
 
 	/// <summary>
@@ -102,7 +160,6 @@ public sealed record AuthorizationContext<TAuthorizableObject>(
 	/// <see cref="RequiredPermissionCache"/>; available to every authorization stage without
 	/// per-request reflection. AND semantics — every listed permission is required.
 	/// </summary>
-	[SuppressMessage("Performance", "CA1822:Mark members as static",
-		Justification = "Instance convenience — delegates to RequiredPermissionCache for consumer ergonomics.")]
 	public PermissionSet Permissions => RequiredPermissionCache.GetFor<TAuthorizableObject>();
+
 }
