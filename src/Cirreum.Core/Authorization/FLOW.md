@@ -100,3 +100,7 @@ sequenceDiagram
 - **Short-circuit per stage.** Each stage denies the whole evaluation on
   failure; later stages don't run. Within Stage 2 and Stage 3, failures
   from *all* evaluators in that stage are aggregated before denial.
+- **Object-level ACLs are separate.** The pipeline handles *request-time*
+  authorization. For *data-time* checks on specific objects (folders, projects),
+  handlers use `IResourceAccessEvaluator` after loading the data. See the
+  [Resources README](Resources/README.md) for details.

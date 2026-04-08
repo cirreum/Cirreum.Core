@@ -457,6 +457,7 @@ This library:
 - [Authorization Flow](src/Cirreum.Core/Authorization/FLOW.md) - High-level request → authorization flow
 - [Authorization Sequence](src/Cirreum.Core/Authorization/SEQUENCE.md) - Detailed three-stage pipeline
 - [Grants](src/Cirreum.Core/Authorization/Operations/Grants/README.md) - Grant-based access control with Mutate/Lookup/Search/Self enforcement
+- [Resources](src/Cirreum.Core/Authorization/Resources/README.md) - Object-level ACL evaluation with hierarchy walking
 - [Conductor](src/Cirreum.Core/Conductor/README.md) - In-process dispatcher + intercept pipeline
 
 ## Contribution Guidelines
