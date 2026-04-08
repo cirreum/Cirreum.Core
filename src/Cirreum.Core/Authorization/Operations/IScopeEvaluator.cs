@@ -9,7 +9,7 @@ using FluentValidation.Results;
 /// <remarks>
 /// <para>
 /// Scope evaluators are app-supplied, pure checks against
-/// <see cref="Security.AuthenticationScope"/> and authorizable object shape. They do NOT know
+/// <see cref="Security.AuthenticationBoundary"/> and authorizable object shape. They do NOT know
 /// about override roles or <see cref="IApplicationUser"/> — those concerns live
 /// only in <see cref="Operations.Grants.OperationGrantEvaluator"/>.
 /// </para>

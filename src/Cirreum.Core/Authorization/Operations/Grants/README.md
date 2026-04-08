@@ -140,7 +140,7 @@ generic domain parameters:
 | `IGrantMutateRequest` | `IAuthorizableRequest` | `OwnerId` (scalar) | Single-owner write (void) |
 | `IGrantMutateRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerId` (scalar) | Single-owner write with response |
 | `IGrantLookupRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerId` (scalar) | Single-owner read |
-| `IGrantCacheableLookupRequest<TResponse>` | `ICacheableQuery<TResponse>` | `OwnerId` + `CallerAuthenticationScope` | Cacheable single-owner read |
+| `IGrantCacheableLookupRequest<TResponse>` | `ICacheableQuery<TResponse>` | `OwnerId` + `CallerAuthenticationBoundary` | Cacheable single-owner read |
 | `IGrantSearchRequest<TResponse>` | `IAuthorizableRequest<TResponse>` | `OwnerIds` (plural) | Cross-owner query |
 
 ### Self-Scoped (user-owned)
@@ -640,5 +640,5 @@ cache keys and miss each other's entries — causing unnecessary cold-path resol
 
 - [Authorization Flow](../FLOW.md) — high-level request → authorization flow
 - [Authorization Sequence](../SEQUENCE.md) — detailed three-stage pipeline
-- [Request & Authorization Context](../../CONTEXT.md) — context architecture and AuthenticationScope
+- [Request & Authorization Context](../../CONTEXT.md) — context architecture and AuthenticationBoundary
 - [Conductor](../../Conductor/README.md) — in-process dispatcher + intercept pipeline

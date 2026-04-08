@@ -8,7 +8,7 @@ using Cirreum.Security;
 /// with the <see cref="IGrantableCacheableLookupBase"/> detection surface and
 /// <see cref="ICacheableQuery{TResponse}"/> caching contract. The framework composes
 /// the final cache key as
-/// <c>owner:{OwnerId}:scope:{CallerAuthenticationScope}:{ScopedCacheKey}</c>, which isolates
+/// <c>owner:{OwnerId}:boundary:{CallerAuthenticationBoundary}:{ScopedCacheKey}</c>, which isolates
 /// tenants from each other and cross-tenant operators from tenant-scoped callers.
 /// </summary>
 /// <remarks>
@@ -20,7 +20,7 @@ using Cirreum.Security;
 /// <c>OwnerId</c> and <see cref="ScopedCacheKey"/> must always get the same result.
 /// </para>
 /// <para>
-/// <b>Global-scope callers</b> (those with <see cref="AuthenticationScope.Global"/>)
+/// <b>Global-scope callers</b> (those with <see cref="AuthenticationBoundary.Global"/>)
 /// <b>must</b> supply a non-null <c>OwnerId</c>.
 /// Omitting it denies with <see cref="DenyCodes.CacheableReadOwnerIdRequired"/>. This
 /// prevents an unbounded "null-owner" cache bucket shared across all operator callers.
@@ -51,7 +51,7 @@ public interface IGrantCacheableLookupRequest<TResponse>
 
 	/// <inheritdoc />
 	string ICacheableQuery<TResponse>.CacheKey =>
-		$"owner:{this.OwnerId}:scope:{this.CallerAuthenticationScope}:{this.ScopedCacheKey}";
+		$"owner:{this.OwnerId}:boundary:{this.CallerAuthenticationBoundary}:{this.ScopedCacheKey}";
 
 	/// <inheritdoc />
 	string[]? ICacheableQuery<TResponse>.CacheTags {

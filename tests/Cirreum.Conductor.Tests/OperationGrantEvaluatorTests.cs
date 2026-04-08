@@ -21,7 +21,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.Denied);
 		var ctx = BuildContext(
 			authorizableObject: new NonOwnedResource(),
-			authenticationScope: AuthenticationScope.None,
+			authenticationBoundary: AuthenticationBoundary.None,
 			appUser: null);
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -37,7 +37,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand(),
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: false));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -50,7 +50,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand(),
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new PlainAppUser(isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -66,7 +66,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.Denied);
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand { OwnerId = CallerTenantId },
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -82,7 +82,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand { OwnerId = CallerTenantId },
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -95,7 +95,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand { OwnerId = OtherTenantId },
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -108,7 +108,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCommand { OwnerId = null },
-			authenticationScope: AuthenticationScope.Global,
+			authenticationBoundary: AuthenticationBoundary.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -122,7 +122,7 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -137,7 +137,7 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -151,7 +151,7 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedCommand { OwnerId = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -167,7 +167,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedRead { OwnerId = CallerTenantId },
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -180,7 +180,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedRead { OwnerId = OtherTenantId },
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -193,7 +193,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.ForOwners([CallerTenantId]));
 		var ctx = BuildContext(
 			authorizableObject: new GrantedRead { OwnerId = null },
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -206,7 +206,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
 		var ctx = BuildContext(
 			authorizableObject: new GrantedRead { OwnerId = null },
-			authenticationScope: AuthenticationScope.Global,
+			authenticationBoundary: AuthenticationBoundary.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -222,7 +222,7 @@ public class OperationGrantEvaluatorTests {
 		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
 		var ctx = BuildContext(
 			authorizableObject: new GrantedCacheableRead { OwnerId = null },
-			authenticationScope: AuthenticationScope.Global,
+			authenticationBoundary: AuthenticationBoundary.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -236,13 +236,13 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedCacheableRead { OwnerId = OtherTenantId };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Global,
+			authenticationBoundary: AuthenticationBoundary.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(AuthenticationScope.Global, authorizableObject.CallerAuthenticationScope);
+		Assert.AreEqual(AuthenticationBoundary.Global, authorizableObject.CallerAuthenticationBoundary);
 	}
 
 	[TestMethod]
@@ -251,13 +251,13 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(AuthenticationScope.Tenant, authorizableObject.CallerAuthenticationScope);
+		Assert.AreEqual(AuthenticationBoundary.Tenant, authorizableObject.CallerAuthenticationBoundary);
 	}
 
 	[TestMethod]
@@ -266,28 +266,28 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedCacheableRead { OwnerId = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(AuthenticationScope.Tenant, authorizableObject.CallerAuthenticationScope);
+		Assert.AreEqual(AuthenticationBoundary.Tenant, authorizableObject.CallerAuthenticationBoundary);
 	}
 
 	[TestMethod]
-	public async Task CallerAuthenticationScope_is_not_stamped_on_denied_evaluation() {
+	public async Task CallerAuthenticationBoundary_is_not_stamped_on_denied_evaluation() {
 		var evaluator = BuildEvaluator(OperationGrant.Unrestricted);
 		var authorizableObject =new GrantedCacheableRead { OwnerId = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Global,
+			authenticationBoundary: AuthenticationBoundary.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
 
 		Assert.IsFalse(result.IsValid);
-		Assert.IsNull(authorizableObject.CallerAuthenticationScope);
+		Assert.IsNull(authorizableObject.CallerAuthenticationBoundary);
 	}
 
 	[TestMethod]
@@ -297,7 +297,7 @@ public class OperationGrantEvaluatorTests {
 		var globalResource = new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var globalCtx = BuildContext(
 			authorizableObject: globalResource,
-			authenticationScope: AuthenticationScope.Global,
+			authenticationBoundary: AuthenticationBoundary.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 		var globalResult = await evaluator.EvaluateAsync(globalCtx);
 
@@ -305,7 +305,7 @@ public class OperationGrantEvaluatorTests {
 		var tenantResource = new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var tenantCtx = BuildContext(
 			authorizableObject: tenantResource,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 		var tenantResult = await tenantEvaluator.EvaluateAsync(tenantCtx);
 
@@ -323,7 +323,7 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -331,7 +331,7 @@ public class OperationGrantEvaluatorTests {
 
 		var cacheKey = ((ICacheableQuery<string>)authorizableObject).CacheKey;
 		StringAssert.Contains(cacheKey, $"owner:{CallerTenantId}");
-		StringAssert.Contains(cacheKey, "scope:Tenant");
+		StringAssert.Contains(cacheKey, "boundary:Tenant");
 		StringAssert.Contains(cacheKey, authorizableObject.ScopedCacheKey);
 	}
 
@@ -344,7 +344,7 @@ public class OperationGrantEvaluatorTests {
 		};
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -363,7 +363,7 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedCacheableRead { OwnerId = CallerTenantId };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -384,7 +384,7 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedList { OwnerIds = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -400,7 +400,7 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedList { OwnerIds = null };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Global,
+			authenticationBoundary: AuthenticationBoundary.Global,
 			appUser: new TestOwnedAppUser(ownerId: null, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -415,7 +415,7 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedList { OwnerIds = [CallerTenantId] };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -429,7 +429,7 @@ public class OperationGrantEvaluatorTests {
 		var authorizableObject =new GrantedList { OwnerIds = [CallerTenantId, OtherTenantId] };
 		var ctx = BuildContext(
 			authorizableObject: authorizableObject,
-			authenticationScope: AuthenticationScope.Tenant,
+			authenticationBoundary: AuthenticationBoundary.Tenant,
 			appUser: new TestOwnedAppUser(CallerTenantId, isEnabled: true));
 
 		var result = await evaluator.EvaluateAsync(ctx);
@@ -448,11 +448,11 @@ public class OperationGrantEvaluatorTests {
 
 	private static AuthorizationContext<TAuthorizableObject> BuildContext<TAuthorizableObject>(
 		TAuthorizableObject authorizableObject,
-		AuthenticationScope authenticationScope,
+		AuthenticationBoundary authenticationBoundary,
 		IApplicationUser? appUser)
 		where TAuthorizableObject : notnull, IAuthorizableObject {
 
-		var userState = new OperationGrantEvaluatorTestUserState(authenticationScope, appUser);
+		var userState = new OperationGrantEvaluatorTestUserState(authenticationBoundary, appUser);
 		return new AuthorizationContext<TAuthorizableObject>(
 			UserState: userState,
 			EffectiveRoles: ImmutableHashSet<Role>.Empty,
@@ -484,13 +484,13 @@ public class OperationGrantEvaluatorTests {
 
 	private sealed class GrantedCacheableRead : IGrantableCacheableLookupBase, ICacheableQuery<string>, IAuthorizableObject {
 		public string? OwnerId { get; set; }
-		public AuthenticationScope? CallerAuthenticationScope { get; set; }
+		public AuthenticationBoundary? CallerAuthenticationBoundary { get; set; }
 		public string ScopedCacheKey => "test-key";
 		public string[]? ExtraTags { get; set; }
 		public string[]? ScopedCacheTags => this.ExtraTags;
 
 		string ICacheableQuery<string>.CacheKey =>
-			$"owner:{this.OwnerId}:scope:{this.CallerAuthenticationScope}:{this.ScopedCacheKey}";
+			$"owner:{this.OwnerId}:boundary:{this.CallerAuthenticationBoundary}:{this.ScopedCacheKey}";
 
 		string[]? ICacheableQuery<string>.CacheTags {
 			get {
@@ -528,13 +528,13 @@ public class OperationGrantEvaluatorTests {
 	private sealed class OperationGrantEvaluatorTestUserState : UserStateBase {
 		public override bool IsAuthenticationComplete => true;
 
-		public OperationGrantEvaluatorTestUserState(AuthenticationScope scope, IApplicationUser? appUser) {
+		public OperationGrantEvaluatorTestUserState(AuthenticationBoundary scope, IApplicationUser? appUser) {
 			this._principal = AnonymousUser.Shared;
 			this._identity = (ClaimsIdentity)AnonymousUser.Shared.Identity!;
 			this._profile = UserProfile.Anonymous;
-			this._isAuthenticated = scope != AuthenticationScope.None;
+			this._isAuthenticated = scope != AuthenticationBoundary.None;
 			this._authenticationType = AuthenticationLibraryType.None;
-			this.SetAuthenticationScope(scope);
+			this.SetAuthenticationBoundary(scope);
 			if (appUser is not null) {
 				this.SetApplicationUser(appUser);
 			}

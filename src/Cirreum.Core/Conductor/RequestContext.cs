@@ -51,7 +51,7 @@ public sealed record RequestContext<TRequest>(
 	/// </summary>
 	public string? TenantId => this.UserState.Profile.Organization.OrganizationId;
 	public IdentityProviderType Provider => this.UserState.Provider;
-	public AuthenticationScope AuthenticationScope => this.UserState.AuthenticationScope;
+	public AuthenticationBoundary AuthenticationBoundary => this.UserState.AuthenticationBoundary;
 	public bool IsAuthenticated => this.UserState.IsAuthenticated;
 	public UserProfile Profile => this.UserState.Profile;
 	public bool HasEnrichedProfile => this.UserState.Profile.IsEnriched;

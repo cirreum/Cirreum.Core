@@ -1,7 +1,7 @@
 namespace Cirreum.Security;
 
 /// <summary>
-/// Resolves the <see cref="AuthenticationScope"/> for an authenticated user state.
+/// Resolves the <see cref="AuthenticationBoundary"/> for an authenticated user state.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -16,27 +16,27 @@ namespace Cirreum.Security;
 /// </remarks>
 /// <example>
 /// A minimal custom resolver that treats any caller whose scheme starts with
-/// <c>"internal-"</c> as <see cref="AuthenticationScope.Global"/>:
+/// <c>"internal-"</c> as <see cref="AuthenticationBoundary.Global"/>:
 /// <code>
-/// internal sealed class PrefixAuthenticationScopeResolver : IAuthenticationScopeResolver {
-///     public AuthenticationScope Resolve(IUserState userState, string? authenticationScheme) {
-///         if (!userState.IsAuthenticated) return AuthenticationScope.None;
+/// internal sealed class PrefixAuthenticationBoundaryResolver : IAuthenticationBoundaryResolver {
+///     public AuthenticationBoundary Resolve(IUserState userState, string? authenticationScheme) {
+///         if (!userState.IsAuthenticated) return AuthenticationBoundary.None;
 ///         return authenticationScheme?.StartsWith("internal-") == true
-///             ? AuthenticationScope.Global
-///             : AuthenticationScope.Tenant;
+///             ? AuthenticationBoundary.Global
+///             : AuthenticationBoundary.Tenant;
 ///     }
 /// }
 /// </code>
 /// </example>
-public interface IAuthenticationScopeResolver {
+public interface IAuthenticationBoundaryResolver {
 
 	/// <summary>
-	/// Computes the access scope for the given user state and authentication scheme.
+	/// Computes the authentication boundary for the given user state and authentication scheme.
 	/// </summary>
 	/// <param name="userState">The authenticated user state.</param>
 	/// <param name="authenticationScheme">
 	/// The authentication scheme name that authenticated the caller, or <see langword="null"/>
 	/// when scheme is not applicable (e.g., Blazor WASM, Azure Functions binding context).
 	/// </param>
-	AuthenticationScope Resolve(IUserState userState, string? authenticationScheme);
+	AuthenticationBoundary Resolve(IUserState userState, string? authenticationScheme);
 }

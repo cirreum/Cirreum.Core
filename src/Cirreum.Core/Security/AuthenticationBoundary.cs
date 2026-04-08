@@ -1,7 +1,7 @@
 namespace Cirreum.Security;
 
 /// <summary>
-/// The coarse authorization dimension describing which IdP scope authenticated the caller.
+/// The authentication boundary describing which IdP the caller authenticated through.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -16,14 +16,14 @@ namespace Cirreum.Security;
 /// </para>
 /// <para>
 /// <see cref="None"/> is used for anonymous callers and for platforms that have not
-/// registered an <see cref="IAuthenticationScopeResolver"/> (in which case scope is unknown).
+/// registered an <see cref="IAuthenticationBoundaryResolver"/> (in which case scope is unknown).
 /// </para>
 /// </remarks>
-public enum AuthenticationScope {
+public enum AuthenticationBoundary {
 
 	/// <summary>
-	/// No access scope has been resolved — the caller is anonymous, or no
-	/// <see cref="IAuthenticationScopeResolver"/> is registered in the host.
+	/// No authentication boundary has been resolved — the caller is anonymous, or no
+	/// <see cref="IAuthenticationBoundaryResolver"/> is registered in the host.
 	/// </summary>
 	None = 0,
 

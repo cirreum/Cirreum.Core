@@ -17,8 +17,8 @@ public abstract class UserStateBase : IUserState {
 	private Type? _applicationUserType; // Track the actual type
 	private bool _applicationUserLoaded;
 	private IApplicationUser? _applicationUser;
-	private bool _authenticationScopeResolved;
-	private AuthenticationScope _authenticationScope = AuthenticationScope.None;
+	private bool _authenticationBoundaryResolved;
+	private AuthenticationBoundary _authenticationBoundary = AuthenticationBoundary.None;
 
 	/// <inheritdoc/>
 	public bool IsAuthenticated => this._isAuthenticated;
@@ -89,22 +89,22 @@ public abstract class UserStateBase : IUserState {
 		return DateTimeOffset.UtcNow - this.LastActivityTime.Value > timeout;
 	}
 
-	// AuthenticationScope
+	// AuthenticationBoundary
 	// -------------------------------------------------------------
 
 	/// <inheritdoc/>
-	public AuthenticationScope AuthenticationScope => this._authenticationScope;
+	public AuthenticationBoundary AuthenticationBoundary => this._authenticationBoundary;
 
 	/// <inheritdoc/>
-	public bool IsAuthenticationScopeResolved => this._authenticationScopeResolved;
+	public bool IsAuthenticationBoundaryResolved => this._authenticationBoundaryResolved;
 
 	/// <summary>
 	/// Sets the access scope for the current instance.
 	/// </summary>
 	/// <param name="scope">The access scope to assign to the instance.</param>
-	protected virtual void SetAuthenticationScope(AuthenticationScope scope) {
-		this._authenticationScope = scope;
-		this._authenticationScopeResolved = true;
+	protected virtual void SetAuthenticationBoundary(AuthenticationBoundary scope) {
+		this._authenticationBoundary = scope;
+		this._authenticationBoundaryResolved = true;
 	}
 
 

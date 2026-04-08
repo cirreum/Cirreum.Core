@@ -79,7 +79,7 @@ public record AuthorizationContext(
 	/// <summary>
 	/// Gets the authentication scope (Global, Tenant, or None) for the current caller.
 	/// </summary>
-	public AuthenticationScope AuthenticationScope => this.UserState.AuthenticationScope;
+	public AuthenticationBoundary AuthenticationBoundary => this.UserState.AuthenticationBoundary;
 
 	/// <summary>
 	/// Gets a value indicating whether the current user is authenticated.

@@ -140,7 +140,7 @@ public sealed class OperationGrantEvaluator(
 		}
 
 		// OwnerId is null — enrich from grant.
-		if (context.AuthenticationScope == AuthenticationScope.Global) {
+		if (context.AuthenticationBoundary == AuthenticationBoundary.Global) {
 			return Deny(DenyCodes.OwnerIdRequired, "OwnerId is required for cross-tenant writes.");
 		}
 		if (grant.IsUnrestricted) {
@@ -163,25 +163,25 @@ public sealed class OperationGrantEvaluator(
 			if (!grant.Contains(lookup.OwnerId!)) {
 				return Deny(DenyCodes.OwnerNotInReach, "Requested owner is not in the caller's granted access.");
 			}
-			// OwnerId supplied and in grant — stamp CallerAuthenticationScope for cacheable lookups.
+			// OwnerId supplied and in grant — stamp CallerAuthenticationBoundary for cacheable lookups.
 			if (context.AuthorizableObject is IGrantableCacheableLookupBase cacheableWithOwner) {
-				cacheableWithOwner.CallerAuthenticationScope = context.AuthenticationScope;
+				cacheableWithOwner.CallerAuthenticationBoundary = context.AuthenticationBoundary;
 			}
 			return Pass();
 		}
 
 		// Cacheable lookup: Global callers MUST supply OwnerId to prevent unbounded cache bucket.
 		if (context.AuthorizableObject is IGrantableCacheableLookupBase) {
-			if (context.AuthenticationScope == AuthenticationScope.Global) {
+			if (context.AuthenticationBoundary == AuthenticationBoundary.Global) {
 				return Deny(DenyCodes.CacheableReadOwnerIdRequired,
 					"OwnerId is required for cross-tenant cacheable lookups.");
 			}
 		}
 
 		// OwnerId null — defer to handler (Pattern C). Grant already stashed on accessor.
-		// Stamp CallerAuthenticationScope for cacheable lookups.
+		// Stamp CallerAuthenticationBoundary for cacheable lookups.
 		if (context.AuthorizableObject is IGrantableCacheableLookupBase cacheable) {
-			cacheable.CallerAuthenticationScope = context.AuthenticationScope;
+			cacheable.CallerAuthenticationBoundary = context.AuthenticationBoundary;
 		}
 		return Pass();
 	}
@@ -233,14 +233,14 @@ public sealed class OperationGrantEvaluator(
 		var decision = isPass
 			? AuthorizationTelemetry.DecisionPass
 			: AuthorizationTelemetry.DecisionDeny;
-		var scope = ctx.AuthenticationScope.ToString().ToLowerInvariant();
+		var boundary = ctx.AuthenticationBoundary.ToString().ToLowerInvariant();
 		var resourceType = ctx.AuthorizableObject.GetType().Name;
 
 		var activity = Activity.Current;
 		if (activity is not null) {
 			activity.SetTag(AuthorizationTelemetry.StageTag, AuthorizationTelemetry.StageScope);
 			activity.SetTag(AuthorizationTelemetry.StepTag, step);
-			activity.SetTag(AuthorizationTelemetry.ScopeTag, scope);
+			activity.SetTag(AuthorizationTelemetry.ScopeTag, boundary);
 			activity.SetTag(AuthorizationTelemetry.DecisionTag, decision);
 			activity.SetTag(AuthorizationTelemetry.ReasonTag, outcome);
 			activity.SetTag(AuthorizationTelemetry.EvaluatorTag, nameof(OperationGrantEvaluator));
@@ -252,7 +252,7 @@ public sealed class OperationGrantEvaluator(
 			step: step,
 			decision: decision,
 			reason: outcome,
-			scope: scope,
+			scope: boundary,
 			evaluator: nameof(OperationGrantEvaluator),
 			resourceType: resourceType);
 	}
