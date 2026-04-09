@@ -7,15 +7,15 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 /// <summary>
-/// Concrete wrapper implementation for requests with typed responses.
+/// Concrete wrapper implementation for operations with typed responses.
 /// </summary>
-/// <typeparam name="TOperation">The type of request being handled.</typeparam>
-/// <typeparam name="TResponse">The type of response returned by the request.</typeparam>
-internal sealed class RequestHandlerWrapperImpl<TOperation, TResponse>
-	: RequestHandlerWrapper<TResponse>
+/// <typeparam name="TOperation">The type of operation being handled.</typeparam>
+/// <typeparam name="TResponse">The type of response returned by the operation.</typeparam>
+internal sealed class OperationHandlerWrapperImpl<TOperation, TResponse>
+	: OperationHandlerWrapper<TResponse>
 	where TOperation : class, IOperation<TResponse> {
 
-	private static readonly string requestTypeName = typeof(TOperation).Name;
+	private static readonly string operationTypeName = typeof(TOperation).Name;
 	private static readonly string responseTypeName = typeof(TResponse).Name;
 
 	public override Task<Result<TResponse>> HandleAsync(
@@ -27,7 +27,7 @@ internal sealed class RequestHandlerWrapperImpl<TOperation, TResponse>
 		var handler = serviceProvider.GetService<IOperationHandler<TOperation, TResponse>>();
 		if (handler is null) {
 			return Task.FromResult(Result<TResponse>.Fail(new InvalidOperationException(
-				$"No handler registered for request type '{requestTypeName}'")));
+				$"No handler registered for operation type '{operationTypeName}'")));
 		}
 
 		// ----- 2. RESOLVE INTERCEPTS -----
@@ -46,7 +46,7 @@ internal sealed class RequestHandlerWrapperImpl<TOperation, TResponse>
 		}
 
 		// ----- 4. PIPELINE PATH: intercepts present — full telemetry + context -----
-		return RequestHandlerWrapperImpl<TOperation, TResponse>.HandleWithPipelineAsync(request, serviceProvider, handler, intercepts, cancellationToken);
+		return OperationHandlerWrapperImpl<TOperation, TResponse>.HandleWithPipelineAsync(request, serviceProvider, handler, intercepts, cancellationToken);
 	}
 
 	/// <summary>
@@ -64,7 +64,7 @@ internal sealed class RequestHandlerWrapperImpl<TOperation, TResponse>
 
 		// ----- 0. START ACTIVITY & TIMING -----
 		using var activity = OperationTelemetry.StartActivity(
-			requestTypeName,
+			operationTypeName,
 			hasResponse: true,
 			responseTypeName);
 
@@ -77,14 +77,14 @@ internal sealed class RequestHandlerWrapperImpl<TOperation, TResponse>
 			var interceptArray = intercepts as IIntercept<TOperation, TResponse>[]
 				?? [.. intercepts];
 
-			var requestContext = await serviceProvider.CreateRequestContext(
+			var operationContext = await serviceProvider.CreateOperationContext(
 				activity,
 				startTimestamp,
 				Unsafe.As<TOperation>(request),
-				requestTypeName);
+				operationTypeName);
 
 			var cursor = new PipelineCursor<TOperation, TResponse>(interceptArray, handler);
-			var finalResult = await cursor.NextDelegate(requestContext, cancellationToken);
+			var finalResult = await cursor.NextDelegate(operationContext, cancellationToken);
 
 			// ----- POST-PROCESSING (TELEMETRY) -----
 			RecordTelemetry(activity, startTimestamp, finalResult.IsSuccess, finalResult.Error);
@@ -119,13 +119,13 @@ internal sealed class RequestHandlerWrapperImpl<TOperation, TResponse>
 
 		if (canceled) {
 			OperationTelemetry.SetActivityCanceled(activity, (OperationCanceledException)error!);
-			OperationTelemetry.RecordCanceled(requestTypeName, responseTypeName, elapsed, (OperationCanceledException)error!);
+			OperationTelemetry.RecordCanceled(operationTypeName, responseTypeName, elapsed, (OperationCanceledException)error!);
 		} else if (success) {
 			OperationTelemetry.SetActivitySuccess(activity);
-			OperationTelemetry.RecordSuccess(requestTypeName, responseTypeName, elapsed);
+			OperationTelemetry.RecordSuccess(operationTypeName, responseTypeName, elapsed);
 		} else {
 			OperationTelemetry.SetActivityError(activity, error!);
-			OperationTelemetry.RecordFailure(requestTypeName, responseTypeName, elapsed, error!);
+			OperationTelemetry.RecordFailure(operationTypeName, responseTypeName, elapsed, error!);
 		}
 	}
 

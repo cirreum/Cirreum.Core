@@ -485,7 +485,7 @@ L1 cache naturally aligns with the request lifetime.
 
 ## Related Documentation
 
-- [Authorization Flow](../FLOW.md) — high-level request → authorization flow
+- [Authorization Flow](../FLOW.md) — high-level operation → authorization flow
 - [Authorization Sequence](../SEQUENCE.md) — detailed three-stage pipeline
 - [Grants](../Operations/Grants/README.md) — grant-based access control (Stage 1)
-- [Context Architecture](../../CONTEXT.md) — request & authorization context
+- [Context Architecture](../../CONTEXT.md) — operation & authorization context

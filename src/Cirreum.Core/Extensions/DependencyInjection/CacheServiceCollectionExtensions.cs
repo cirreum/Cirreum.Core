@@ -62,6 +62,11 @@ public static class CacheServiceCollectionExtensions {
 		// AddCacheableQueryService above has applied the fallback.
 		DecorateWithInstrumentation(services);
 
+		// Register keyed ICacheService instances so known subsystems
+		// (query-caching, grant-resolution) get their own
+		// InstrumentedCacheService with a baked-in consumer tag.
+		RegisterKeyedCacheServices(services);
+
 		return services;
 	}
 
@@ -103,15 +108,63 @@ public static class CacheServiceCollectionExtensions {
 
 		services.Remove(descriptor);
 
-		services.Add(new ServiceDescriptor(
+		services.Add(ServiceDescriptor.Describe(
 			typeof(ICacheService),
 			sp => {
 				var inner = ResolveFromDescriptor(sp, descriptor);
 				return inner is NoCacheService
 					? inner
-					: new InstrumentedCacheService(inner);
+					: new InstrumentedCacheService(inner, "other");
 			},
 			descriptor.Lifetime));
+	}
+
+	/// <summary>
+	/// Registers keyed <see cref="ICacheService"/> instances for known subsystems.
+	/// Each keyed instance wraps the same concrete cache implementation but carries
+	/// a distinct consumer tag on its <see cref="InstrumentedCacheService"/> decorator.
+	/// </summary>
+	private static void RegisterKeyedCacheServices(IServiceCollection services) {
+		// Snapshot the current non-keyed descriptor so the keyed factories can
+		// resolve the same inner implementation.
+		var descriptor = services.FirstOrDefault(d =>
+			d.ServiceType == typeof(ICacheService) && d.ServiceKey is null);
+		if (descriptor is null) {
+			return;
+		}
+
+		RegisterKeyed(services, CacheConsumers.QueryCaching, descriptor);
+		RegisterKeyed(services, CacheConsumers.GrantResolution, descriptor);
+	}
+
+	private static void RegisterKeyed(
+		IServiceCollection services,
+		string consumerKey,
+		ServiceDescriptor nonKeyedDescriptor) {
+
+		services.Add(ServiceDescriptor.DescribeKeyed(
+			typeof(ICacheService),
+			consumerKey,
+			(sp, _) => {
+				var inner = ResolveInner(sp);
+				return inner is NoCacheService
+					? inner
+					: new InstrumentedCacheService(inner, consumerKey);
+			},
+			nonKeyedDescriptor.Lifetime));
+	}
+
+	/// <summary>
+	/// Resolves the raw (non-decorated) <see cref="ICacheService"/> from the
+	/// non-keyed registration. The non-keyed registration is already wrapped in
+	/// <see cref="InstrumentedCacheService"/>, so we unwrap one level to avoid
+	/// double-instrumenting.
+	/// </summary>
+	private static ICacheService ResolveInner(IServiceProvider sp) {
+		var service = sp.GetRequiredService<ICacheService>();
+		return service is InstrumentedCacheService instrumented
+			? instrumented.Inner
+			: service;
 	}
 
 	private static ICacheService ResolveFromDescriptor(

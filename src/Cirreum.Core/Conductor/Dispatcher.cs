@@ -28,8 +28,8 @@ sealed class Dispatcher(
 		ArgumentNullException.ThrowIfNull(request);
 
 		var wrapper = TypeCache.VoidHandlers.GetOrAdd(request.GetType(), static requestType => {
-			var wrapperType = typeof(RequestHandlerWrapperImpl<>).MakeGenericType(requestType);
-			return (RequestHandlerWrapper)(Activator.CreateInstance(wrapperType)
+			var wrapperType = typeof(OperationHandlerWrapperImpl<>).MakeGenericType(requestType);
+			return (OperationHandlerWrapper)(Activator.CreateInstance(wrapperType)
 				?? throw new InvalidOperationException($"Could not create wrapper for {requestType.Name}"));
 		});
 
@@ -46,10 +46,10 @@ sealed class Dispatcher(
 
 		ArgumentNullException.ThrowIfNull(request);
 
-		var wrapper = (RequestHandlerWrapper<TResponse>)TypeCache.ResponseHandlers.GetOrAdd(
+		var wrapper = (OperationHandlerWrapper<TResponse>)TypeCache.ResponseHandlers.GetOrAdd(
 			request.GetType(),
 			static requestType => {
-				var wrapperType = typeof(RequestHandlerWrapperImpl<,>)
+				var wrapperType = typeof(OperationHandlerWrapperImpl<,>)
 					.MakeGenericType(requestType, typeof(TResponse));
 				return Activator.CreateInstance(wrapperType)
 					?? throw new InvalidOperationException($"Could not create wrapper for {requestType.Name}");

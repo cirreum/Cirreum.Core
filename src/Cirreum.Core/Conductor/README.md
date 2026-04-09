@@ -1,18 +1,23 @@
 ﻿# 📘 **CONDUCTOR.md**
 
-## In-Process Operation / Notification Pipeline for Cirreum Applications
+## The Operation Pipeline for Cirreum Domain Applications
 
-Conductor is the core runtime engine that powers Cirreum’s handler-based execution model.  
+Conductor is the core runtime engine behind Cirreum’s domain application model
+(`DomainApplication` / `DomainApplicationBuilder`). It provides the operation
+pipeline that every domain service runs through — validation, multi-stage
+authorization, caching, telemetry — across any host (ASP.NET, Azure Functions,
+Blazor WASM) and any cloud (Azure, AWS).
+
 It provides:
 
 - A fast, allocation-minimal dispatcher
 - Automatic handler discovery from assemblies
 - A deterministic intercept pipeline (validation → authorization → performance → caching)
-- A flexible publisher for request-side notifications
+- A flexible publisher for operation-side notifications
 - A consistent DI-based lifetime model
 - A clean API surface for registering and composing behavior
 
-Conductor is designed to work in both low-level scenarios (raw control) and high-level application setups (via `AddDomainServices`).
+Conductor is designed to work in both low-level scenarios (raw control) and high-level domain application setups (via `AddDomainServices`).
 
 ---
 
@@ -36,29 +41,57 @@ Conductor is designed to work in both low-level scenarios (raw control) and high
 
 ## 🎯 What Conductor Is
 
-Conductor is a highly optimized, mediator-style execution engine designed around:
+Conductor is the **seam between ASP.NET infrastructure and Cirreum's domain
+processing**. Everything before Conductor is traditional ASP.NET — routing,
+model binding, middleware, endpoint authorization. The moment an endpoint
+calls `DispatchAsync`, the operation enters Cirreum's domain pipeline:
+validation, multi-stage authorization (including grants and resource ACLs),
+performance tracking, caching, and telemetry.
+
+This is not a mediator. Mediators like MediatR route messages to handlers.
+Conductor orchestrates a full operation lifecycle where the handler itself
+is an active participant — extending the authorization pipeline into
+data-time resource ACL checks.
+
+Designed around:
 
 - CQRS patterns  
 - Railway-oriented programming (`Result<T>`)  
 - Deterministic pre- and post-handler intercepts  
-- Runtime-agnostic behavior (Server, Functions, WASM)
+- Runtime-agnostic behavior (Server, Functions, WASM)  
+- Host-independent domain logic via `DomainApplication` / `DomainApplicationBuilder`
 
-A Conductor "request" runs through nested interceptors, with the handler
-at the center. The default domain pipeline wraps like this:
+An operation runs through nested interceptors. The default domain
+pipeline wraps like this:
 
 ```text
-┌─ Validation ─────────────────────────────────────────────────┐
-│  ┌─ Authorization ───────────────────────────────────────┐   │
-│  │  ┌─ (Custom Intercepts) ──────────────────────────┐   │   │
-│  │  │  ┌─ HandlerPerformance ─────────────────────┐  │   │   │
-│  │  │  │  ┌─ QueryCaching ──────────────────────┐ │  │   │   │
-│  │  │  │  │            [ Handler ]              │ │  │   │   │
-│  │  │  │  └─────────────────────────────────────┘ │  │   │   │
-│  │  │  └──────────────────────────────────────────┘  │   │   │
-│  │  └────────────────────────────────────────────────┘   │   │
-│  └───────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────┘
+┌─ Validation ─────────────────────────────────────────────────────────┐
+│  ┌─ Authorization ────────────────────────────────────────────────┐  │
+│  │  Stage 1 — Grants + Constraints (pre-handler)                  │  │
+│  │  Stage 2 — Object Authorizers (pre-handler)                    │  │
+│  │  Stage 3 — Policy Validators (pre-handler)                     │  │
+│  │  ┌─ (Custom Intercepts) ───────────────────────────────────┐   │  │
+│  │  │  ┌─ HandlerPerformance ──────────────────────────────┐  │   │  │
+│  │  │  │  ┌─ QueryCaching ─────────────────────────────┐   │  │   │  │
+│  │  │  │  │                                            │   │  │   │  │
+│  │  │  │  │  ┌─ Handler ───────────────────────────┐   │   │  │   │  │
+│  │  │  │  │  │  Stage 4 — Resource ACLs (in-handler)│   │   │  │   │  │
+│  │  │  │  │  │  (IResourceAccessEvaluator)          │   │   │  │   │  │
+│  │  │  │  │  └──────────────────────────────────────┘   │   │  │   │  │
+│  │  │  │  │                                            │   │  │   │  │
+│  │  │  │  └────────────────────────────────────────────┘   │  │   │  │
+│  │  │  └───────────────────────────────────────────────────┘  │   │  │
+│  │  └─────────────────────────────────────────────────────────┘   │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────┘
 ```
+
+Authorization is not a single layer — it's a pipeline within the pipeline.
+Stages 1–3 run as a pre-handler intercept, gating the operation before
+the handler executes. Stage 4 (Resource ACLs) runs *inside* the handler
+itself — the handler loads data, then calls `IResourceAccessEvaluator` to
+check object-level permissions. The handler is an active participant in
+authorization, not just the thing being protected.
 
 Each interceptor has a **pre-** phase (code before `await next()`) and a
 **post-** phase (code after). For example, `QueryCaching` checks the
@@ -76,13 +109,13 @@ the handler returns (see [Notification Publishing](#-notification-publishing)).
 
 | Concept | Description |
 |--------|-------------|
-| **Dispatcher** | The central executor for requests & queries. |
-| **Publisher** | Publishes notifications generated by request handlers. |
+| **Dispatcher** | The central executor for operations. |
+| **Publisher** | Publishes notifications generated by operation handlers. |
 | **Intercepts** | Middleware-like components that wrap handler execution. Must call `next` at most once per invocation. |
-| **Handlers** | Business logic units (Requests, Queries, Commands). |
-| **RequestContext&lt;T&gt;** | Per-request envelope. Owns the caller identity (`IUserState`), request payload, timing, and correlation identifiers as first-class fields. Flows through the intercept chain. |
-| **RequestHandlerWrapper** | Per-`TOperation` dispatcher wrapper: resolves the handler, materializes the intercept array, creates `RequestContext`, walks the pipeline, and records telemetry. |
-| **PipelineCursor** | Walks the intercept chain with one allocation + one reusable delegate per request, replacing a per-interceptor closure chain. |
+| **Handlers** | Business logic units that execute the operation. |
+| **OperationContext&lt;T&gt;** | Per-operation envelope. Owns the caller identity (`IUserState`), operation payload, timing, and correlation identifiers as first-class fields. Flows through the intercept chain. |
+| **OperationHandlerWrapper** | Per-`TOperation` dispatcher wrapper: resolves the handler, materializes the intercept array, creates `OperationContext`, walks the pipeline, and records telemetry. |
+| **PipelineCursor** | Walks the intercept chain with one allocation + one reusable delegate per operation, replacing a per-interceptor closure chain. |
 | **Settings** | Publisher strategy, caching options, etc. |
 | **ConductorBuilder** | Registers handlers & intercepts (raw mode). |
 | **ConductorOptionsBuilder** | Configures lifetime, settings, domain intercepts. |
@@ -266,39 +299,39 @@ This is enforced by tests:
 ## ⚡ Hot-Path Characteristics
 
 The dispatcher is engineered as a "center-of-the-sun" hot path. Every
-authorized request walks it, so allocations and branches matter.
+authorized operation walks it, so allocations and branches matter.
 
 ### Two Execution Paths
 
 ```text
 BYPASS (rare) — zero intercepts registered
-    └─> Directly invoke handler.HandleAsync(request, ct)
-        • No RequestContext, no pipeline walk
+    └─> Directly invoke handler.HandleAsync(operation, ct)
+        • No OperationContext, no pipeline walk
         • Reserved for frameworks that ship no default intercepts
 
 TYPICAL — at least one intercept registered (the default: 4 intercepts)
     └─> Materialize intercept array (cast, do not copy)
-        └─> GetUser() + RequestContext.Create(UserState, Request, ...)
+        └─> GetUser() + OperationContext.Create(UserState, Operation, ...)
             └─> PipelineCursor walks the chain
                 └─> Handler executes at the end of the chain
 ```
 
-### Allocation Budget (per request, typical path)
+### Allocation Budget (per operation, typical path)
 
 | Allocation | Purpose |
 |---|---|
-| `RequestContext<T>` | Per-request envelope (UserState, Request, IDs, timing) |
+| `OperationContext<T>` | Per-operation envelope (UserState, Operation, IDs, timing) |
 | `PipelineCursor<T[,TResponse]>` | Pipeline walker |
 | 1 × bound delegate | Cursor's `NextDelegate`, reused for every hop |
 | `Result<T>` | Terminal return value |
 
-**~5 allocations per request**, independent of interceptor count. Each
+**~5 allocations per operation**, independent of interceptor count. Each
 interceptor contributes zero additional closure allocations because the
 cursor's bound delegate is reused at every hop.
 
 ### Skipped Work
 
-- **`Unsafe.As<T>(request)`** instead of `(T)request` — dispatcher cache
+- **`Unsafe.As<T>(operation)`** instead of `(T)operation` — dispatcher cache
   is keyed by `typeof(TOperation)`, so the isinst check is guaranteed
   redundant.
 - **`GetService<IEnumerable<T>>()!`** instead of `GetServices<T>()` —
@@ -325,23 +358,23 @@ retry/loop/fan-out must snapshot state and build their own cursor.
 Conductor publishes metrics and distributed traces via OpenTelemetry. All
 instrumentation is zero-cost when no OTel listeners are attached.
 
-### Request Metrics (`RequestTelemetry`)
+### Operation Metrics (`OperationTelemetry`)
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `conductor.requests.total` | Counter | Total dispatched requests |
-| `conductor.requests.failed` | Counter | Failed requests (excludes cancellations) |
-| `conductor.requests.canceled` | Counter | Canceled requests |
+| `conductor.requests.total` | Counter | Total dispatched operations |
+| `conductor.requests.failed` | Counter | Failed operations (excludes cancellations) |
+| `conductor.requests.canceled` | Counter | Canceled operations |
 | `conductor.requests.duration` | Histogram (ms) | Pipeline processing duration |
 
-All metrics are tagged with `request.type`, `request.status` (success/failure/canceled),
+All metrics are tagged with `operation.type`, `operation.status` (success/failure/canceled),
 and `error.type` on failure.
 
 ### Activity Tracing
 
-The dispatcher creates a child `Activity` per request (source: `Cirreum.Conductor.Dispatcher`).
-The activity carries `request.type`, `response.type`, and status tags. Authorization
-and cache operations appear as nested telemetry under the same trace.
+The dispatcher creates a child `Activity` per operation (source: `Cirreum.Conductor.Dispatcher`).
+The activity carries `operation.type`, `response.type`, and status tags. Authorization,
+grant resolution, and cache operations appear as nested spans under the same trace.
 
 ### Cache Metrics (`CacheTelemetry`)
 
@@ -351,11 +384,20 @@ implementation and records:
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `cirreum.cache.operations` | Counter | Total cache operations (tagged hit/miss) |
-| `cirreum.cache.duration` | Histogram (ms) | Operation duration (tagged hit/miss) |
+| `cirreum.cache.operations` | Counter | Total cache operations |
+| `cirreum.cache.duration` | Histogram (ms) | Operation duration |
 
-This means all `ICacheService` consumers — query caching, grant reach resolution,
-and any future consumers — get cache metrics for free.
+| Tag | Values | Description |
+|-----|--------|-------------|
+| `cirreum.cache.status` | `hit`, `miss` | Whether the value was served from cache |
+| `cirreum.cache.caller` | *(cache key)* | The cache key identifying the operation |
+| `cirreum.cache.consumer` | `query-caching`, `grant-resolution`, `other` | Subsystem that triggered the cache operation |
+
+Each known subsystem gets its own keyed `ICacheService` instance with the consumer
+tag baked in at registration time (see `CacheConsumers`). Any code that injects a
+plain (non-keyed) `ICacheService` is tagged `"other"`. This means all consumers —
+query caching, grant resolution, and any future consumers — get cache metrics for
+free, and dashboards can slice by subsystem at zero runtime cost.
 
 ### Wiring
 
@@ -377,14 +419,14 @@ builder.RegisterFromAssemblies(assemblies);
 
 This wiring registers:
 
-- `IRequestHandler<TOperation, TResponse>` implementations  
+- `IOperationHandler<TOperation, TResponse>` implementations  
 - `INotificationHandler<TNotification>` implementations  
 
-All handlers are registered as **Transient** to avoid stale state and ensure request isolation.
+All handlers are registered as **Transient** to avoid stale state and ensure operation isolation.
 
 This is enforced by tests such as:
 
-- `RequestHandlers_AreAlwaysTransient`
+- `OperationHandlers_AreAlwaysTransient`
 
 ---
 
@@ -502,7 +544,7 @@ Conductor’s dispatcher and publisher follow a consistent error model:
 
 - Typically domain or validation failures.  
 - Captured and converted into `Result<T>.Failure`.  
-- Request code can pattern-match on the failure without throwing.
+- Calling code can pattern-match on the failure without throwing.
 
 ### Fatal Exceptions
 
@@ -558,7 +600,7 @@ These tests collectively ensure that Conductor’s DI and pipeline contracts can
 | `IDispatcher` | Matches Dispatcher | Facade over `Dispatcher`. |
 | `IPublisher` | Matches Dispatcher | Facade over `Publisher`. |
 | `IConductor` | Matches Dispatcher | Facade over `Dispatcher`. |
-| `IRequestHandler<,>` | Transient | Business logic handlers. |
+| `IOperationHandler<,>` | Transient | Business logic handlers. |
 | `INotificationHandler<>` | Transient | Notification handlers. |
 | `IIntercept<,>` | Matches Dispatcher | Pipeline components. |
 | `ConductorSettings` | Singleton | Immutable configuration snapshot. |

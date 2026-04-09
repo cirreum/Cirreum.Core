@@ -4,14 +4,14 @@ using Cirreum.Security;
 using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
 
-internal static class RequestContextFactory {
+internal static class OperationContextFactory {
 
-	public static Task<OperationContext<TOperation>> CreateRequestContext<TOperation>(
+	public static Task<OperationContext<TOperation>> CreateOperationContext<TOperation>(
 		this IServiceProvider serviceProvider,
 		Activity? activity,
 		long startTimestamp,
-		TOperation typedRequest,
-		string requestTypeName
+		TOperation typedOperation,
+		string operationTypeName
 	) where TOperation : notnull {
 
 		// GetService<T>()! — IUserStateAccessor is registered by Cirreum bootstrap; skip
@@ -24,43 +24,43 @@ internal static class RequestContextFactory {
 		// skip async state machine entirely (~120B + ~40-60ns saved).
 		if (userStateVt.IsCompletedSuccessfully) {
 			return Task.FromResult(BuildContext(
-				userStateVt.Result, activity, startTimestamp, typedRequest, requestTypeName));
+				userStateVt.Result, activity, startTimestamp, typedOperation, operationTypeName));
 		}
 
 		// Cold path: first call per request, actually async (user enrichment).
-		return CreateRequestContextAsync(
-			userStateVt, activity, startTimestamp, typedRequest, requestTypeName);
+		return CreateOperationContextAsync(
+			userStateVt, activity, startTimestamp, typedOperation, operationTypeName);
 	}
 
-	private static async Task<OperationContext<TOperation>> CreateRequestContextAsync<TOperation>(
+	private static async Task<OperationContext<TOperation>> CreateOperationContextAsync<TOperation>(
 		ValueTask<IUserState> userStateVt,
 		Activity? activity,
 		long startTimestamp,
-		TOperation typedRequest,
-		string requestTypeName
+		TOperation typedOperation,
+		string operationTypeName
 	) where TOperation : notnull {
 		var userState = await userStateVt;
-		return BuildContext(userState, activity, startTimestamp, typedRequest, requestTypeName);
+		return BuildContext(userState, activity, startTimestamp, typedOperation, operationTypeName);
 	}
 
 	private static OperationContext<TOperation> BuildContext<TOperation>(
 		IUserState userState,
 		Activity? activity,
 		long startTimestamp,
-		TOperation typedRequest,
-		string requestTypeName
+		TOperation typedOperation,
+		string operationTypeName
 	) where TOperation : notnull {
 
-		var requestId = activity?.SpanId.ToString()
+		var operationId = activity?.SpanId.ToString()
 			?? ActivitySpanId.CreateRandom().ToHexString();
 		var correlationId = activity?.TraceId.ToString()
 			?? ActivityTraceId.CreateRandom().ToHexString();
 
 		return OperationContext<TOperation>.Create(
 			userState,
-			typedRequest,
-			requestTypeName,
-			requestId,
+			typedOperation,
+			operationTypeName,
+			operationId,
 			correlationId,
 			startTimestamp);
 	}

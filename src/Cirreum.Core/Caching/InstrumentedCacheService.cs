@@ -19,7 +19,17 @@ namespace Cirreum.Caching;
 /// </para>
 /// </remarks>
 /// <param name="inner">The underlying cache service to decorate.</param>
-sealed class InstrumentedCacheService(ICacheService inner) : ICacheService {
+/// <param name="consumer">
+/// Subsystem identifier baked into every metric emitted by this instance
+/// (e.g. "query-caching", "grant-resolution", "other").
+/// </param>
+sealed class InstrumentedCacheService(ICacheService inner, string consumer) : ICacheService {
+
+	/// <summary>
+	/// The underlying cache service being decorated. Exposed so DI registration
+	/// can unwrap the decorator when building keyed instances (avoids double-instrumentation).
+	/// </summary>
+	internal ICacheService Inner => inner;
 
 	public async ValueTask<TResponse> GetOrCreateAsync<TResponse>(
 		string cacheKey,
@@ -44,7 +54,8 @@ sealed class InstrumentedCacheService(ICacheService inner) : ICacheService {
 		CacheTelemetry.RecordOperation(
 			cacheKey,
 			isHit: !factoryExecuted,
-			Timing.GetElapsedMilliseconds(startTimestamp));
+			Timing.GetElapsedMilliseconds(startTimestamp),
+			consumer);
 
 		return result;
 	}

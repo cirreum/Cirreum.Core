@@ -35,6 +35,9 @@ public static class CacheTelemetry {
 	/// <summary>Tag: cache key identifying the operation.</summary>
 	public const string CallerTag = "cirreum.cache.caller";
 
+	/// <summary>Tag: subsystem that triggered the cache operation (e.g. "query-caching", "grant-resolution").</summary>
+	public const string ConsumerTag = "cirreum.cache.consumer";
+
 	// Metric names ———————————————————————————————————————————
 
 	/// <summary>Metric: cache operation duration in milliseconds.</summary>
@@ -65,13 +68,15 @@ public static class CacheTelemetry {
 	/// <param name="caller">Cache key identifying the operation.</param>
 	/// <param name="isHit"><see langword="true"/> if the value was served from cache; <see langword="false"/> if the factory executed.</param>
 	/// <param name="durationMs">Operation duration in milliseconds.</param>
+	/// <param name="consumer">Subsystem that triggered the operation (e.g. "query-caching", "grant-resolution").</param>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static void RecordOperation(string caller, bool isHit, double durationMs) {
+	public static void RecordOperation(string caller, bool isHit, double durationMs, string consumer) {
 		var status = isHit ? StatusHit : StatusMiss;
 
 		var tags = new TagList {
 			{ StatusTag, status },
-			{ CallerTag, caller }
+			{ CallerTag, caller },
+			{ ConsumerTag, consumer }
 		};
 
 		_operationsCounter.Add(1, tags);

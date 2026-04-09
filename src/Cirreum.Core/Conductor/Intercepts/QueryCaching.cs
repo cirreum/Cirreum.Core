@@ -3,6 +3,7 @@ namespace Cirreum.Conductor.Intercepts;
 using Cirreum.Caching;
 using Cirreum.Conductor;
 using Cirreum.Conductor.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 sealed class QueryCaching<TOperation, TResponse>
@@ -16,7 +17,7 @@ sealed class QueryCaching<TOperation, TResponse>
 	private readonly ILogger<QueryCaching<TOperation, TResponse>> _logger;
 
 	public QueryCaching(
-		ICacheService cache,
+		[FromKeyedServices(CacheConsumers.QueryCaching)] ICacheService cache,
 		ConductorSettings conductorSettings,
 		CacheSettings cacheSettings,
 		CacheKeyContext cacheKeyContext,

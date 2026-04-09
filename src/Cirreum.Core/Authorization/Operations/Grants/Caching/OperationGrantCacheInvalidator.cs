@@ -1,13 +1,15 @@
 namespace Cirreum.Authorization.Operations.Grants.Caching;
 
 using Cirreum.Caching;
+using Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
 /// Default implementation of <see cref="IOperationGrantCacheInvalidator"/>. Delegates to the
 /// application's registered <see cref="ICacheService"/> for tag-based removal.
 /// Registered as a singleton.
 /// </summary>
-public sealed class OperationGrantCacheInvalidator(ICacheService cacheService)
+public sealed class OperationGrantCacheInvalidator(
+	[FromKeyedServices(CacheConsumers.GrantResolution)] ICacheService cacheService)
 	: IOperationGrantCacheInvalidator {
 
 	private readonly ICacheService _cacheService =

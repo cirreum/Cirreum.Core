@@ -11,7 +11,6 @@ sequenceDiagram
     participant RR as IAuthorizationRole<br/>Registry
     participant GE as OperationGrantEvaluator
     participant AR as OperationGrant<br/>Factory
-    participant OE as OwnerScope<br/>Evaluator
     participant SE as IAuthorizationConstraint[]
     participant RA as IAuthorizer[T]
     participant PV as IPolicyValidator[]
@@ -52,15 +51,6 @@ sequenceDiagram
         Note over AR: ShouldBypassAsync (live)<br/>→ L1 cache<br/>→ L2 cache<br/>→ ResolveGrantsAsync + HomeOwner
         AR-->>GE: OperationGrant
         GE->>GE: Grant enforcement:<br/>Mutate: OwnerId ∈ grant<br/>Lookup: stash grant / OwnerId ∈ grant<br/>Search: OwnerIds ⊆ grant / stamp<br/>Self: ExternalId == UserId / bypass
-        alt !IsValid
-            AE-->>AI: Result.Fail(Forbidden)
-        end
-    end
-
-    alt Object is IAuthorizableOwnerScopedResource<br/>and OwnerScopeEvaluator registered
-        Note over AE,OE: Step 0b — Owner Gate
-        AE->>OE: EvaluateAsync(authContext)
-        OE-->>AE: ValidationResult
         alt !IsValid
             AE-->>AI: Result.Fail(Forbidden)
         end
@@ -115,9 +105,8 @@ sequenceDiagram
 
 | Stage | Purpose | Strategy | Short-circuit |
 |---|---|---|---|
-| **1 Step 0a** — Grant gate | Resolve `OperationGrant` and enforce grant timing for `IOwnerMutateOperation`, `IOwnerLookupOperation`, `IOwnerSearchOperation`, `ISelfMutateOperation`, `ISelfLookupOperation` | First failure | Within Stage 1 |
-| **1 Step 0b** — Owner gate | Enforce `OwnerId` presence + match for `IAuthorizableOwnerScopedResource` | First failure | Within Stage 1 |
-| **1 Step 1** — Scope evaluators | Tenant / access-scope / ambient constraints | First failure, registration order | Within Stage 1 |
+| **1 Step 0** — Grant gate | Resolve `OperationGrant` and enforce grant rules for `IOwnerMutateOperation`, `IOwnerLookupOperation`, `IOwnerSearchOperation`, `ISelfMutateOperation`, `ISelfLookupOperation` | First failure | Within Stage 1 |
+| **1 Step 1** — Authorization constraints | Tenant / access-scope / ambient constraints via `IAuthorizationConstraint` | First failure, registration order | Within Stage 1 |
 | **2** — Object authorizer | Role and rule checks specific to this authorizable object type | Single `AuthorizerBase<T>` per `T`; multiple FluentValidation rules aggregate within it | Stage 2 → Stage 3 |
 | **3** — Policy validators | Cross-cutting runtime policies (hours, quotas, kill-switches) | Sequential by `Order`, aggregate within stage | End of pipeline |
 

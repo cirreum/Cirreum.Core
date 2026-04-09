@@ -164,6 +164,8 @@ public static class ConductorServiceCollectionExtensions {
 		// AddCirreumCaching hasn't been called yet (e.g., standalone AddConductor usage).
 		services.TryAddSingleton(new CacheSettings());
 		services.TryAddSingleton<ICacheService, NoCacheService>();
+		services.TryAddKeyedSingleton<ICacheService, NoCacheService>(CacheConsumers.QueryCaching);
+		services.TryAddKeyedSingleton<ICacheService, NoCacheService>(CacheConsumers.GrantResolution);
 
 		// Configure the Conductor builder (handlers, notifications, intercepts).
 		var builder = new ConductorBuilder();
@@ -177,8 +179,8 @@ public static class ConductorServiceCollectionExtensions {
 			optionsBuilder.ConfigureIntercepts(builder);
 		}
 
-		// Register request handlers and notification handlers from configured assemblies.
-		services.AddRequestHandlers([.. builder.Assemblies]);
+		// Register operation handlers and notification handlers from configured assemblies.
+		services.AddOperationHandlers([.. builder.Assemblies]);
 		services.AddNotificationHandlers([.. builder.Assemblies]);
 
 		// Register intercept descriptors in the order they were configured on the builder.
@@ -191,7 +193,7 @@ public static class ConductorServiceCollectionExtensions {
 	}
 
 
-	private static IServiceCollection AddRequestHandlers(
+	private static IServiceCollection AddOperationHandlers(
 		this IServiceCollection services,
 		Assembly[] assemblies) {
 

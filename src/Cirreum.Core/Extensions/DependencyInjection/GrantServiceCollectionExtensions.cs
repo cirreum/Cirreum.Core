@@ -140,5 +140,6 @@ public static class GrantServiceCollectionExtensions {
 		// hasn't been configured yet. NoCacheService degrades gracefully —
 		// grants resolve on every request without L2 caching.
 		services.TryAddSingleton<ICacheService, NoCacheService>();
+		services.TryAddKeyedSingleton<ICacheService, NoCacheService>(CacheConsumers.GrantResolution);
 	}
 }

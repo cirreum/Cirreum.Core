@@ -28,7 +28,7 @@ internal static class TypeCache {
 	/// <summary>
 	/// Cache for void request handlers (IOperation with no return value).
 	/// </summary>
-	internal static readonly ConcurrentDictionary<Type, RequestHandlerWrapper> VoidHandlers = new();
+	internal static readonly ConcurrentDictionary<Type, OperationHandlerWrapper> VoidHandlers = new();
 
 	/// <summary>
 	/// Cache for typed request handlers (IOperation&lt;TResponse&gt;).

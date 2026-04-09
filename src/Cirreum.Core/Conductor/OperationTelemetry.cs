@@ -6,7 +6,7 @@ using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 
 /// <summary>
-/// Provides telemetry capabilities for request processing including metrics and distributed tracing.
+/// Provides telemetry capabilities for operation processing including metrics and distributed tracing.
 /// </summary>
 internal static class OperationTelemetry {
 
@@ -16,19 +16,19 @@ internal static class OperationTelemetry {
 	private static readonly Meter _meter =
 		new(CirreumTelemetry.Meters.ConductorDispatcher, CirreumTelemetry.Version);
 
-	private static readonly Counter<long> _requestCounter = _meter.CreateCounter<long>(
+	private static readonly Counter<long> _operationCounter = _meter.CreateCounter<long>(
 		ConductorTelemetry.OperationsTotalMetric,
 		description: "Total number of operations dispatched");
 
-	private static readonly Counter<long> _requestFailedCounter = _meter.CreateCounter<long>(
+	private static readonly Counter<long> _operationFailedCounter = _meter.CreateCounter<long>(
 		ConductorTelemetry.OperationsFailedTotalMetric,
 		description: "Total number of failed operations");
 
-	private static readonly Counter<long> _requestCanceledCounter = _meter.CreateCounter<long>(
+	private static readonly Counter<long> _operationCanceledCounter = _meter.CreateCounter<long>(
 		ConductorTelemetry.OperationsCanceledTotalMetric,
 		description: "Total number of canceled operations");
 
-	private static readonly Histogram<double> _requestDuration = _meter.CreateHistogram<double>(
+	private static readonly Histogram<double> _operationDuration = _meter.CreateHistogram<double>(
 		ConductorTelemetry.OperationsDurationHistogram,
 		unit: "ms",
 		description: "Operation processing duration in milliseconds");
@@ -48,7 +48,7 @@ internal static class OperationTelemetry {
 	/// Starts an activity for distributed tracing. Returns null if tracing is not enabled.
 	/// </summary>
 	internal static Activity? StartActivity(
-		string requestName,
+		string operationName,
 		bool hasResponse = false,
 		string? responseType = null) {
 
@@ -56,7 +56,7 @@ internal static class OperationTelemetry {
 			"Dispatch Operation",
 			DomainContext.CurrentActivityKind);
 
-		activity?.SetTag(ConductorTelemetry.OperationTypeTag, requestName);
+		activity?.SetTag(ConductorTelemetry.OperationTypeTag, operationName);
 		activity?.SetTag(ConductorTelemetry.OperationHasResponseTag, hasResponse);
 
 		if (hasResponse && responseType is not null) {
@@ -101,15 +101,15 @@ internal static class OperationTelemetry {
 	#region Metrics Recording
 
 	/// <summary>
-	/// Records success metrics for a completed request.
+	/// Records success metrics for a completed operation.
 	/// </summary>
 	internal static void RecordSuccess(
-		string requestTypeName,
+		string operationTypeName,
 		string? responseType,
 		double durationMs) {
 
 		RecordMetrics(
-			requestTypeName,
+			operationTypeName,
 			responseType,
 			success: true,
 			canceled: false,
@@ -117,16 +117,16 @@ internal static class OperationTelemetry {
 	}
 
 	/// <summary>
-	/// Records failure metrics for a failed request.
+	/// Records failure metrics for a failed operation.
 	/// </summary>
 	internal static void RecordFailure(
-		string requestTypeName,
+		string operationTypeName,
 		string? responseType,
 		double durationMs,
 		Exception error) {
 
 		RecordMetrics(
-			requestTypeName,
+			operationTypeName,
 			responseType,
 			success: false,
 			canceled: false,
@@ -135,16 +135,16 @@ internal static class OperationTelemetry {
 	}
 
 	/// <summary>
-	/// Records cancellation metrics for a canceled request.
+	/// Records cancellation metrics for a canceled operation.
 	/// </summary>
 	internal static void RecordCanceled(
-		string requestTypeName,
+		string operationTypeName,
 		string? responseType,
 		double durationMs,
 		OperationCanceledException oce) {
 
 		RecordMetrics(
-			requestTypeName,
+			operationTypeName,
 			responseType,
 			success: false,
 			canceled: true,
@@ -153,7 +153,7 @@ internal static class OperationTelemetry {
 	}
 
 	private static void RecordMetrics(
-		string requestName,
+		string operationName,
 		string? responseType,
 		bool success,
 		bool canceled,
@@ -161,7 +161,7 @@ internal static class OperationTelemetry {
 		string? errorType = null) {
 
 		var tags = new TagList {
-			{ ConductorTelemetry.OperationTypeTag, requestName },
+			{ ConductorTelemetry.OperationTypeTag, operationName },
 			{ ConductorTelemetry.OperationSucceededTag, success },
 			{ ConductorTelemetry.OperationFailedTag, !success && !canceled },
 			{ ConductorTelemetry.OperationCanceledTag, canceled },
@@ -176,16 +176,16 @@ internal static class OperationTelemetry {
 			tags.Add(ConductorTelemetry.ErrorTypeTag, errorType);
 		}
 
-		_requestCounter.Add(1, tags);
-		_requestDuration.Record(durationMs, tags);
+		_operationCounter.Add(1, tags);
+		_operationDuration.Record(durationMs, tags);
 
-		// NOTE: by design, "canceled" is NOT counted as a failed request
+		// NOTE: by design, "canceled" is NOT counted as a failed operation
 		if (!success && !canceled) {
-			_requestFailedCounter.Add(1, tags);
+			_operationFailedCounter.Add(1, tags);
 		}
 
 		if (canceled) {
-			_requestCanceledCounter.Add(1, tags);
+			_operationCanceledCounter.Add(1, tags);
 		}
 	}
 

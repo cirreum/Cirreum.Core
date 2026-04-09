@@ -2,6 +2,7 @@ namespace Cirreum.Authorization.Operations.Grants;
 
 using Cirreum.Authorization.Operations.Grants.Caching;
 using Cirreum.Caching;
+using Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
 /// Core's <see cref="IOperationGrantFactory"/> implementation. Composes an
@@ -23,7 +24,7 @@ using Cirreum.Caching;
 /// </remarks>
 sealed class OperationGrantFactory(
 	IOperationGrantProvider grantResolver,
-	ICacheService cacheService,
+	[FromKeyedServices(CacheConsumers.GrantResolution)] ICacheService cacheService,
 	CacheSettings rootCacheSettings,
 	OperationGrantCacheSettings cacheSettings
 ) : IOperationGrantFactory {
@@ -38,7 +39,7 @@ sealed class OperationGrantFactory(
 		cacheSettings ?? throw new ArgumentNullException(nameof(cacheSettings));
 
 	// L1: scoped memoization — same cache key string as L2 for shared identity
-	private readonly Dictionary<string, OperationGrant> _scopeCache = [];
+	private readonly Dictionary<string, OperationGrant> _grantCache = [];
 
 	public async ValueTask<OperationGrant> CreateAsync<TAuthorizableObject>(
 		AuthorizationContext<TAuthorizableObject> context,
@@ -78,7 +79,7 @@ sealed class OperationGrantFactory(
 			context.Permissions);
 
 		// L1: scoped memoization
-		if (this._scopeCache.TryGetValue(cacheKey, out var cached)) {
+		if (this._grantCache.TryGetValue(cacheKey, out var cached)) {
 			AuthorizationTelemetry.RecordGrantResolution(
 				domainFeature, resourceType, AuthorizationTelemetry.GrantLevelL1Hit);
 			return cached;
@@ -93,7 +94,7 @@ sealed class OperationGrantFactory(
 			domainFeature, resourceType, AuthorizationTelemetry.GrantLevelL2,
 			durationMs: Timing.GetElapsedMilliseconds(l2Start));
 
-		this._scopeCache[cacheKey] = grant;
+		this._grantCache[cacheKey] = grant;
 		return grant;
 	}
 

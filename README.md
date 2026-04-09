@@ -33,13 +33,13 @@ Its mission is to centralize building blocks that must be **universally accessib
 
 A flat context system where each context owns its fields directly and delegates to `IUserState` for identity:
 
-- **RequestContext&lt;T&gt;** - Pipeline request envelope: `IUserState`, request payload, timing, correlation IDs
+- **OperationContext&lt;T&gt;** - Pipeline operation envelope: `IUserState`, operation payload, timing, correlation IDs
 - **AuthorizationContext&lt;T&gt;** - Authorization decisions: `IUserState`, effective roles, authorizable object, permissions
 
 ```csharp
-// Created once in RequestHandlerWrapperImpl<T> (typical path)
-var requestContext = RequestContext<TOperation>.Create(
-    userState, request, requestType, requestId, correlationId, startTimestamp);
+// Created once in OperationHandlerWrapperImpl<T> (typical path)
+var operationContext = OperationContext<TOperation>.Create(
+    userState, operation, operationType, operationId, correlationId, startTimestamp);
 
 // Built inside DefaultAuthorizationEvaluator
 var authContext = new AuthorizationContext<TAuthorizableObject>(
@@ -54,13 +54,13 @@ Flexible, policy-based authorization with support for RBAC, ABAC, and grant-base
 
 - **RBAC** — roles with inheritance via `IAuthorizationRoleRegistry` and `EffectiveRoles`
 - **ABAC** — attribute checks over user, resource, and ambient context inside `AuthorizerBase<T>` FluentValidation rules
-- **Owner-scope** — owner→resource and tenant→resource relationships enforced by `OwnerScopeEvaluatorBase` (Stage 1 Step 0) and custom `IScopeEvaluator` implementations (Stage 1 Step 1)
+- **Owner-scope** — owner→resource and tenant→resource relationships enforced by `OperationGrantEvaluator` (Stage 1 Step 0) and custom `IAuthorizationConstraint` implementations (Stage 1 Step 1)
 - **Grants** — opt-in grant-based access control answering *"which owners can this caller access?"* via `IOperationGrantProvider`, with L1/L2 grant caching and Mutate/Lookup/Search/Self enforcement semantics
 
-- `IAuthorizationEvaluator` - Pluggable, three-stage authorization evaluator (Scope → Object Authorizers → Policy)
+- `IAuthorizationEvaluator` - Pluggable, three-stage authorization evaluator (Grants + Constraints → Authorizers → Policy)
 - `IAuthorizableObject` - Objects that can be authorized
 - `AuthorizerBase<T>` - FluentValidation-backed object authorizer (one per authorizable object type)
-- `IScopeEvaluator` / `OwnerScopeEvaluatorBase` - Stage 1 scope gates (tenant, owner, access-scope)
+- `IAuthorizationConstraint` - Stage 1 consumer-provided global authorization constraints
 - `OperationGrantEvaluator` / `IOperationGrantProvider` - Stage 1 grant-aware scope gate with Mutate/Lookup/Search/Self enforcement
 - `IPolicyValidator` - Stage 3 cross-cutting policy validators (hours, quotas, kill-switches)
 - `AuthenticationBoundary` (None / Global / Tenant) - Authentication boundary resolved by `IAuthenticationBoundaryResolver`
@@ -118,12 +118,12 @@ state.SetB(b);
 **Registration**
 - `IStateBuilder` — fluent builder for DI registration of state types, remote state, and encryption
 
-### 🚀 Messaging & CQRS (Cirreum Conductor)
+### 🚀 Operation Pipeline & CQRS (Cirreum Conductor)
 
-A high-performance mediator implementation with comprehensive pipeline support for command/query separation:
+A high-performance operation pipeline engine with comprehensive support for command/query separation:
 
 **Core Features**
-- Type-safe request/response contracts with `Result<T>` pattern
+- Type-safe operation/response contracts with `Result<T>` pattern
 - Automatic handler discovery and registration
 - Configurable intercept pipeline (validation, authorization, caching, telemetry)
 - Pub/sub notification system with multiple publishing strategies
@@ -151,7 +151,7 @@ A high-performance mediator implementation with comprehensive pipeline support f
 Centralized telemetry with zero overhead when OpenTelemetry is not configured:
 
 **Telemetry Classes** (each owns an `ActivitySource` and/or `Meter`):
-- `RequestTelemetry` — Conductor dispatcher metrics (request counts, durations, failures/cancellations)
+- `OperationTelemetry` — Conductor dispatcher metrics (operation counts, durations, failures/cancellations)
 - `AuthorizationTelemetry` — three-stage pipeline metrics (per-stage decision counters, pipeline duration histogram, grant resolution cache tracking)
 - `CacheTelemetry` — cache hit/miss counters and operation duration histograms
 
@@ -168,8 +168,8 @@ builder.Services.AddOpenTelemetry()
 
 | Metric | Type | Tags |
 |--------|------|------|
-| `conductor.requests.total` | Counter | request.type, request.status |
-| `conductor.requests.duration` | Histogram (ms) | request.type, request.status |
+| `conductor.requests.total` | Counter | operation.type, operation.status |
+| `conductor.requests.duration` | Histogram (ms) | operation.type, operation.status |
 | `cirreum.authz.decisions` | Counter | stage, step, decision, reason |
 | `cirreum.authz.duration` | Histogram (ms) | resource_type, decision |
 | `cirreum.authz.grant.cache` | Counter | cache_level (bypass/l1-hit/l2/denied-early) |
@@ -191,7 +191,7 @@ Battle-tested building blocks:
 
 Base interfaces and extensibility points for:
 
-- Messaging and dispatch behaviors (implemented by **Cirreum.Conductor**)
+- Operation dispatch and pipeline behaviors (implemented by **Cirreum.Conductor**)
 - Authorization and evaluator pipelines
 - Environment and identity access
 - Plugin and integration boundaries
@@ -200,7 +200,7 @@ Base interfaces and extensibility points for:
 
 Foundational building blocks including:
 
-- Context structures (`RequestContext<T>`, `AuthorizationContext<T>`)
+- Context structures (`OperationContext<T>`, `AuthorizationContext<T>`)
 - Identifiers, markers, and metadata carriers
 - Base implementations for validators, handlers, and authorizable objects
 - High-precision timing infrastructure
@@ -209,25 +209,22 @@ Foundational building blocks including:
 
 Definitions that support Cirreum's architectural patterns:
 
-- CQRS-style request and response contracts
+- CQRS-style operation and response contracts
 - RBAC / ABAC / grant-based authorization with role inheritance and owner/tenant relationships
 - Interceptors, pipelines, and execution flows
-- Metadata propagation and scoped request details
+- Metadata propagation and scoped operation details
 
 | Interface | Auth | Cache | Owner-Gated | Use Case |
 |-----------|:----:|:-----:|:-----------:|----------|
-| `IRequest` / `IRequest<T>` | ✗ | ✗ | ✗ | Internal / anonymous |
+| `IOperation` / `IOperation<T>` | ✗ | ✗ | ✗ | Internal / anonymous |
 | `ICacheableQuery<T>` | ✗ | ✓ | ✗ | Public cached lookups |
-| `IAuthorizableCommand` / `IAuthorizableCommand<T>` | ✓ | ✗ | ✗ | Protected state mutations |
-| `IAuthorizableQuery<T>` | ✓ | ✗ | ✗ | Protected reads |
-| `IAuthorizableCacheableQuery<T>` | ✓ | ✓ | ✗ | Protected high-freq reads |
-| `IAuthorizableOwnerScopedCommand` / `<T>` | ✓ | ✗ | ✓ | Protected mutations of owned resources |
-| `IAuthorizableOwnerScopedQuery<T>` | ✓ | ✗ | ✓ | Protected reads of owned resources |
-| `IAuthorizableOwnerScopedCacheableQuery<T>` | ✓ | ✓ | ✓ | Protected, cached reads of owned resources |
+| `IAuthorizableOperation` / `IAuthorizableOperation<T>` | ✓ | ✗ | ✗ | Protected operations (reads and writes) |
 | `IOwnerMutateOperation` / `<TResponse>` | ✓ | ✗ | ✓ | Grant-aware writes |
 | `IOwnerLookupOperation<TResponse>` | ✓ | ✗ | ✓ | Grant-aware point-reads |
 | `IOwnerCacheableLookupOperation<TResponse>` | ✓ | ✓ | ✓ | Grant-aware cached reads |
 | `IOwnerSearchOperation<TResponse>` | ✓ | ✗ | ✓ | Grant-aware cross-owner queries |
+| `ISelfMutateOperation` / `<TResponse>` | ✓ | ✗ | ✓ | Self-scoped identity writes |
+| `ISelfLookupOperation<TResponse>` | ✓ | ✗ | ✓ | Self-scoped identity reads |
 
 ### 4. Utilities & Helpers
 
@@ -278,12 +275,12 @@ Built-in support for OpenTelemetry with centralized telemetry classes, zero-cost
 ### Context Architecture
 
 ```text
-RequestContext<T> (Pipeline Context)
+OperationContext<T> (Pipeline Context)
     ├─> WHO: UserState (IUserState) — delegates UserId, UserName, etc.
-    ├─> WHAT: Request, RequestType
+    ├─> WHAT: Operation, OperationType
     ├─> WHEN: Timestamp, StartTimestamp, ElapsedDuration
     ├─> WHERE: Environment, RuntimeType (from DomainContext)
-    └─> TRACING: RequestId, CorrelationId (from Activity)
+    └─> TRACING: OperationId, CorrelationId (from Activity)
 
 AuthorizationContext<T> (Authorization Decisions)
     ├─> WHO: UserState (IUserState) — delegates UserId, UserName, etc.
@@ -296,7 +293,7 @@ AuthorizationContext<T> (Authorization Decisions)
 ### Zero-Allocation Timing
 
 ```csharp
-// Captured once at request start
+// Captured once at operation start
 long startTimestamp = Stopwatch.GetTimestamp();
 
 // Computed on demand, zero allocation
@@ -309,7 +306,7 @@ TimeSpan elapsed = requestContext.ElapsedDuration;
 // Ad-hoc authorization (evaluator gets UserState from IUserStateAccessor)
 var result = await evaluator.Evaluate(authorizableObject);
 
-// Pipeline authorization (passes UserState from RequestContext)
+// Pipeline authorization (passes UserState from OperationContext)
 var result = await evaluator.Evaluate(authorizableObject, userState);
 ```
 
@@ -335,8 +332,8 @@ public sealed class DocumentAuthorizer
 ```
 
 Cross-cutting runtime rules (hours, quotas, kill-switches) live in
-`IPolicyValidator` implementations evaluated in Stage 3. Owner/tenant and
-access-scope gates live in `IScopeEvaluator` / `OwnerScopeEvaluatorBase`
+`IPolicyValidator` implementations evaluated in Stage 3. Global
+authorization constraints live in `IAuthorizationConstraint`
 implementations evaluated in Stage 1.
 
 ### Grants
@@ -381,32 +378,30 @@ dotnet add package Cirreum.Core
 ### Basic Context Usage
 
 ```csharp
-// 1. Create request context (done once via RequestContextFactory)
-var requestContext = RequestContext<MyRequest>.Create(
+// 1. Create operation context (done once via OperationContextFactory)
+var operationContext = OperationContext<MyOperation>.Create(
     userState: currentUserState,
-    request: myRequest,
-    requestType: nameof(MyRequest),
+    request: myOperation,
+    requestType: nameof(MyOperation),
     requestId: activity?.SpanId.ToString()
         ?? ActivitySpanId.CreateRandom().ToHexString(),
     correlationId: activity?.TraceId.ToString()
         ?? ActivityTraceId.CreateRandom().ToHexString(),
-    startTimestamp: Stopwatch.GetTimestamp()
-);
+    startTimestamp: Stopwatch.GetTimestamp());
 
-// 3. Access context throughout pipeline
+// 2. Access context throughout pipeline
 logger.LogInformation(
-    "Processing {RequestType} for user {UserId} - {Elapsed}ms",
-    requestContext.RequestType,
-    requestContext.UserId,
-    requestContext.ElapsedDuration.TotalMilliseconds
-);
+    "Processing {OperationType} for user {UserId} - {Elapsed}ms",
+    operationContext.OperationType,
+    operationContext.UserId,
+    operationContext.ElapsedDuration.TotalMilliseconds);
 ```
 
 ### Authorization
 
 ```csharp
-// Define authorizable object (often the request itself via IAuthorizableRequestBase)
-public sealed record GetDocumentQuery : IAuthorizableQuery<DocumentDto>
+// Define authorizable object (operations are their own authorizable object via IAuthorizableOperationBase)
+public sealed record GetDocumentQuery : IAuthorizableOperation<DocumentDto>
 {
     public required string DocumentId { get; init; }
     public required string OwnerId { get; init; }
@@ -439,7 +434,7 @@ if (result.IsFailed)
 
 Every other Cirreum library depends on **Cirreum.Core**:
 
-- **Cirreum.Conductor** - Implements messaging abstractions with CQRS patterns
+- **Cirreum.Conductor** - Implements the operation pipeline with CQRS patterns
 - **Cirreum.Authorization** - Provides default authorization evaluators
 - **Cirreum.Runtime** - Supplies runtime-specific implementations
 - **Cirreum.Components** - Builds on primitives for UI components
@@ -448,17 +443,17 @@ Every other Cirreum library depends on **Cirreum.Core**:
 This library:
 
 - Defines the shared vocabulary of the framework
-- Establishes conventions for request handling, authorization, and behaviors
+- Establishes conventions for operation handling, authorization, and behaviors
 - Acts as the foundational contract layer between domain-agnostic logic and implementation-specific libraries
 
 ## Documentation
 
-- [Context Architecture](src/Cirreum.Core/CONTEXT.md) - Request & authorization context architecture
-- [Authorization Flow](src/Cirreum.Core/Authorization/FLOW.md) - High-level request → authorization flow
+- [Context Architecture](src/Cirreum.Core/CONTEXT.md) - Operation & authorization context architecture
+- [Authorization Flow](src/Cirreum.Core/Authorization/FLOW.md) - High-level operation → authorization flow
 - [Authorization Sequence](src/Cirreum.Core/Authorization/SEQUENCE.md) - Detailed three-stage pipeline
 - [Grants](src/Cirreum.Core/Authorization/Operations/Grants/README.md) - Grant-based access control with Mutate/Lookup/Search/Self enforcement
 - [Resources](src/Cirreum.Core/Authorization/Resources/README.md) - Object-level ACL evaluation with hierarchy walking
-- [Conductor](src/Cirreum.Core/Conductor/README.md) - In-process dispatcher + intercept pipeline
+- [Conductor](src/Cirreum.Core/Conductor/README.md) - In-process operation pipeline + dispatcher
 
 ## Contribution Guidelines
 

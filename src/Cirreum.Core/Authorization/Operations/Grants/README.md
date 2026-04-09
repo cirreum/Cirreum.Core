@@ -61,8 +61,7 @@ a no-op pass with zero overhead.
                          │                 Authorization Pipeline                │
                          ├──────────────────────────────────────────────────────┤
                          │ Stage 1 — Scope (first-failure short-circuit)        │
-                         │   Step 0: OperationGrantEvaluator (if resource is Granted)    │  ← Grants
-                         │   Step 0: OwnerScopeEvaluator (if Owner-Scoped)      │
+                         │   Step 0: OperationGrantEvaluator (if Granted)        │  ← Grants
                          │   Step 1: IAuthorizationConstraint[] (app-provided, optional)  │
                          │                                                      │
                          │ Stage 2 — Object Authorizers (aggregate, short-circuit)│
@@ -123,7 +122,7 @@ MyApp.Domain.Admin.Queries.ListUsers      →  domain = "admin"
 
 `DomainFeatureResolver` finds the first segment after `"Domain"` in the type's namespace
 and lowercases it. The resolved domain is available on `AuthorizationContext.DomainFeature`
-and `RequestContext.DomainFeature`.
+and `OperationContext.DomainFeature`.
 
 ---
 
@@ -638,7 +637,7 @@ cache keys and miss each other's entries — causing unnecessary cold-path resol
 
 ## Related Documentation
 
-- [Authorization Flow](../FLOW.md) — high-level request → authorization flow
+- [Authorization Flow](../FLOW.md) — high-level operation → authorization flow
 - [Authorization Sequence](../SEQUENCE.md) — detailed three-stage pipeline
-- [Request & Authorization Context](../../CONTEXT.md) — context architecture and AuthenticationBoundary
-- [Conductor](../../Conductor/README.md) — in-process dispatcher + intercept pipeline
+- [Operation & Authorization Context](../../CONTEXT.md) — context architecture and AuthenticationBoundary
+- [Conductor](../../Conductor/README.md) — in-process operation pipeline + dispatcher

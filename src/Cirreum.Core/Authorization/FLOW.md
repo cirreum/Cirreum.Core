@@ -1,7 +1,7 @@
 
 # Authorization Flow
 
-High-level view of how an authorized request moves through Cirreum, from
+High-level view of how an authorized operation moves through Cirreum, from
 HTTP entry to the three-stage authorization pipeline and back.
 
 Authority comes from the **app-user layer** (`IOwnedApplicationUser`), not
@@ -80,7 +80,7 @@ sequenceDiagram
   to hydrate the app-user from the store. All authorization decisions use
   that app-user — never IdP claims directly.
 - **Intercept placement.** Authorization runs after Validation but before
-  the handler. The handler can assume a valid, authorized request.
+  the handler. The handler can assume a valid, authorized operation.
 - **Grants (Stage 1 Step 0).** When an authorizable object implements a grant interface
   (`IOwnerMutateOperation`, `IOwnerLookupOperation`, `IOwnerSearchOperation`,
   `ISelfMutateOperation`, `ISelfLookupOperation`), the `OperationGrantEvaluator`

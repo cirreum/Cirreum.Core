@@ -10,7 +10,7 @@ using System;
 /// <remarks>
 /// Use this record to capture and propagate request metadata throughout the application, enabling
 /// auditing, diagnostics, and tracing. Created once per pipeline invocation by
-/// <see cref="Internal.RequestContextFactory"/>.
+/// <see cref="Internal.OperationContextFactory"/>.
 /// </remarks>
 /// <typeparam name="TOperation">The type of the request payload associated with this context.</typeparam>
 /// <param name="UserState">The current user's state, including identity and authentication information.</param>
@@ -71,16 +71,16 @@ public sealed record OperationContext<TOperation>(
 	/// </summary>
 	public static OperationContext<TOperation> Create(
 		IUserState userState,
-		TOperation request,
-		string requestType,
-		string requestId,
+		TOperation operation,
+		string operationType,
+		string operationId,
 		string correlationId,
 		long startTimestamp) =>
 		new(
 			userState,
-			request,
-			requestType,
-			requestId,
+			operation,
+			operationType,
+			operationId,
 			correlationId,
 			startTimestamp);
 }

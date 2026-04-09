@@ -1,4 +1,4 @@
-# Request & Authorization Context
+# Operation & Authorization Context
 
 ## Context Architecture
 
@@ -24,13 +24,13 @@ authorization pipeline and reused by downstream consumers (e.g.,
             │                                                                 │
             ▼                                                                 ▼
 ┌───────────────────────────────────────────────────┐   ┌───────────────────────────────────────────────────┐
-│               RequestContext<TOperation>             │   │       AuthorizationContext (non-generic base)      │
+│              OperationContext<TOperation>            │   │       AuthorizationContext (non-generic base)      │
 │                                                   │   │                                                   │
 │ Record parameters:                                │   │ Record parameters:                                │
 │ • UserState (IUserState)                          │   │ • UserState (IUserState)                          │
-│ • Request (TOperation)                              │   │ • EffectiveRoles (IImmutableSet<Role>)            │
-│ • RequestType (string)                            │   │                                                   │
-│ • RequestId (string — Activity.SpanId)            │   │ User convenience (delegate to UserState):         │
+│ • Operation (TOperation)                            │   │ • EffectiveRoles (IImmutableSet<Role>)            │
+│ • OperationType (string)                          │   │                                                   │
+│ • OperationId (string — Activity.SpanId)          │   │ User convenience (delegate to UserState):         │
 │ • CorrelationId (string — Activity.TraceId)       │   │ • UserId, UserName, TenantId, Provider            │
 │ • StartTimestamp (long — high-precision)           │   │ • AuthenticationBoundary, IsAuthenticated                    │
 │                                                   │   │ • Profile, HasEnrichedProfile, ApplicationUser    │
@@ -100,19 +100,19 @@ authorization pipeline and reused by downstream consumers (e.g.,
               └──────────────────────────────────────────────────────────────────────┘
 ```
 
-## Request Pipeline Flow
+## Operation Pipeline Flow
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────────────────────┐
-│                              RequestHandlerWrapperImpl<T>                                   │
+│                              OperationHandlerWrapperImpl<T>                                   │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
 │ 1. Start Activity (if telemetry listening) + capture StartTimestamp                         │
 │ 2. Resolve handler + intercepts from DI                                                     │
 │ 3. If no intercepts: invoke handler directly (BYPASS — rare)                                │
 │ 4. Otherwise (TYPICAL):                                                                     │
 │      a. GetUser() from IUserStateAccessor (cached)                                          │
-│      b. RequestContext<T>.Create(UserState, Request, RequestType,                           │
-│         RequestId, CorrelationId, StartTimestamp)                                            │
+│      b. OperationContext<T>.Create(UserState, Operation, OperationType,                     │
+│         OperationId, CorrelationId, StartTimestamp)                                          │
 │      c. Walk pipeline via PipelineCursor (single delegate alloc)                            │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
                                          │
@@ -120,8 +120,8 @@ authorization pipeline and reused by downstream consumers (e.g.,
 ┌─────────────────────────────────────────────────────────────────────────────────────────────┐
 │                             Authorization Intercept                                         │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Receives: RequestContext<TOperation>                                                          │
-│ Calls: evaluator.Evaluate(context.Request, context.UserState)                               │
+│ Receives: OperationContext<TOperation>                                                      │
+│ Calls: evaluator.Evaluate(context.Operation, context.UserState)                             │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
                                          │
                                          ▼
@@ -151,13 +151,13 @@ authorization pipeline and reused by downstream consumers (e.g.,
             │                                                                 │
             ▼                                                                 ▼
 ┌──────────────────────────────────┐   ┌──────────────────────────────────────────┐
-│        RequestContext<T>         │   │     AuthorizationContext (base)            │
+│       OperationContext<T>        │   │     AuthorizationContext (base)            │
 │                                  │   │     ── stored on accessor ──              │
 │ Record params:                   │   │                                            │
 │ • UserState                      │   │ Record params:                             │
-│ • Request                        │   │ • UserState                                │
-│ • RequestType                    │   │ • EffectiveRoles                           │
-│ • RequestId                      │   │                                            │
+│ • Operation                      │   │ • UserState                                │
+│ • OperationType                  │   │ • EffectiveRoles                           │
+│ • OperationId                    │   │                                            │
 │ • CorrelationId                  │   │ Delegates to UserState:                    │
 │ • StartTimestamp                 │   │ • UserId, UserName, TenantId               │
 │                                  │   │ • Provider, IsAuthenticated                │
@@ -184,7 +184,7 @@ authorization pipeline and reused by downstream consumers (e.g.,
 ### Single Creation
 
 ```text
-RequestContext created ONCE via RequestContextFactory
+OperationContext created ONCE via OperationContextFactory
     └─> Flows through pipeline to every intercept
 
 AuthorizationContext created ONCE inside DefaultAuthorizationEvaluator
@@ -196,11 +196,11 @@ AuthorizationContext created ONCE inside DefaultAuthorizationEvaluator
 ### Zero Rebuilding
 
 ```text
-1. RequestHandlerWrapperImpl<T> calls RequestContextFactory which
-   calls GetUser() (sync fast-path when cached) and builds RequestContext
+1. OperationHandlerWrapperImpl<T> calls OperationContextFactory which
+   calls GetUser() (sync fast-path when cached) and builds OperationContext
    with Activity-based IDs
-2. Pipeline cursor hands RequestContext to each intercept
-3. Authorization intercept passes context.Request + context.UserState
+2. Pipeline cursor hands OperationContext to each intercept
+3. Authorization intercept passes context.Operation + context.UserState
    to IAuthorizationEvaluator
 4. Evaluator resolves effective roles + builds AuthorizationContext<T>
 5. Evaluator stamps base context on IAuthorizationContextAccessor (scoped)
@@ -212,12 +212,12 @@ AuthorizationContext created ONCE inside DefaultAuthorizationEvaluator
 ### Clear Ownership
 
 ```text
-RequestContext owns pipeline tracking:
+OperationContext owns pipeline tracking:
     ├─> WHO: UserState (delegates to IUserState for identity/profile)
-    ├─> WHAT: Request payload + RequestType
+    ├─> WHAT: Operation payload + OperationType
     ├─> WHEN: Timestamp (display) + StartTimestamp (precision)
     ├─> WHERE: Environment + RuntimeType (from DomainContext)
-    └─> TRACING: RequestId + CorrelationId (from Activity)
+    └─> TRACING: OperationId + CorrelationId (from Activity)
 
 AuthorizationContext owns authorization decisions:
     ├─> WHO: UserState (same IUserState, delegates for identity/profile)
@@ -232,11 +232,11 @@ AuthorizationContext owns authorization decisions:
 ```text
 StartTimestamp (long)
     ├─> Captured at request start (high-precision)
-    ├─> Stored on RequestContext
+    ├─> Stored on OperationContext
     └─> Used to compute elapsed time on demand
 
 ElapsedDuration (computed on demand)
-    └─> RequestContext.ElapsedDuration (TimeSpan)
+    └─> OperationContext.ElapsedDuration (TimeSpan)
 
 Benefits:
     • No stopwatch object needed
@@ -247,22 +247,22 @@ Benefits:
 
 ## Property Mapping Reference
 
-### RequestContext Core Properties
+### OperationContext Core Properties
 - `UserState` (IUserState) — complete user identity and profile
-- `Request` (TOperation) — the request payload
-- `RequestType` (string) — type name for logging/diagnostics
-- `RequestId` (string) — unique identifier (from Activity.SpanId)
+- `Operation` (TOperation) — the operation payload
+- `OperationType` (string) — type name for logging/diagnostics
+- `OperationId` (string) — unique identifier (from Activity.SpanId)
 - `CorrelationId` (string) — trace identifier (from Activity.TraceId)
 - `StartTimestamp` (long) — high-precision timestamp for duration calculation
 
-### RequestContext Derived Properties
+### OperationContext Derived Properties
 - `Environment` → `DomainContext.Environment`
 - `RuntimeType` → `DomainContext.RuntimeType`
 - `DomainFeature` → `DomainFeatureResolver.Resolve<TOperation>()`
 - `Timestamp` → `DateTimeOffset.UtcNow` (captured at construction)
 - `ElapsedDuration` → `Timing.GetElapsedTime(StartTimestamp)`
 
-### RequestContext User Convenience Properties
+### OperationContext User Convenience Properties
 - `UserId` → `UserState.Id`
 - `UserName` → `UserState.Name`
 - `TenantId` → `UserState.Profile.Organization.OrganizationId`
@@ -322,10 +322,10 @@ authenticated the caller. It's stamped onto `IUserState` by
   and must supply `OwnerId` for cacheable reads (no unbounded cache bucket).
   `Tenant` callers may auto-enrich from single-element reach. See the
   [Grants README](Authorization/Operations/Grants/README.md) for full CRL semantics.
-- **Owner-scope gate (Stage 1 Step 0b).** The default `OwnerScopeEvaluator`
-  uses `AuthenticationBoundary` to decide whether the caller is *required* to match
-  the resource's `OwnerId`, or is a cross-tenant operator who can bypass
-  owner-match (e.g., `Global` callers performing admin-level operations).
+- **Grant evaluation (Stage 1 Step 0).** The `OperationGrantEvaluator`
+  uses `AuthenticationBoundary` to enforce grant rules differently per scope.
+  `Global` callers must supply an explicit `OwnerId` for writes and cacheable
+  reads; `Tenant` callers may auto-enrich from single-element reach.
 - **Authorization constraints (Stage 1 Step 1).** Custom `IAuthorizationConstraint`
   implementations can short-circuit on `AuthenticationBoundary` to enforce
   tenant-only or global-only routes.
@@ -343,9 +343,9 @@ See `IAuthenticationBoundaryResolver` for an example implementation.
 
 ## Design Principles
 
-1. **No intermediary objects**: `RequestContext` and `AuthorizationContext` each own their fields directly. `IUserState` is shared by reference — no copying, no vocabulary translation.
+1. **No intermediary objects**: `OperationContext` and `AuthorizationContext` each own their fields directly. `IUserState` is shared by reference — no copying, no vocabulary translation.
 2. **Single Source of Truth for identity**: `IUserState` is the canonical identity carrier. Both contexts delegate user convenience properties to it.
 3. **Static environment**: `Environment` and `RuntimeType` come from `DomainContext` — set once at startup, read from any context without passing.
 4. **Immutability**: All contexts are records, ensuring thread-safety and predictable behavior.
-5. **High-Precision Timing**: `StartTimestamp` on `RequestContext` enables accurate duration calculation at any point without mutable state.
+5. **High-Precision Timing**: `StartTimestamp` on `OperationContext` enables accurate duration calculation at any point without mutable state.
 6. **Zero Allocation Timing**: Computed `ElapsedDuration` calculates elapsed time on demand without allocating stopwatch objects.
