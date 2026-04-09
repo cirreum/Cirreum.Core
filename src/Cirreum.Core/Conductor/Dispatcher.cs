@@ -4,13 +4,13 @@ using Cirreum.Conductor.Internal;
 using System;
 
 /// <summary>
-/// Default implementation of <see cref="IDispatcher"/> and <see cref="IConductor"/> 
-/// that routes requests to their handlers through a pipeline of intercepts,
+/// Default implementation of <see cref="IDispatcher"/> and <see cref="IConductor"/>
+/// that routes operations to their handlers through a pipeline of intercepts,
 /// and publishes notifications to all registered handlers.
 /// </summary>
 /// <remarks>
 /// This dispatcher uses a wrapper-based caching strategy to avoid reflection overhead in the hot path.
-/// Request type wrappers are created once and cached for the lifetime of the application.
+/// Operation type wrappers are created once and cached for the lifetime of the application.
 /// </remarks>
 sealed class Dispatcher(
 	IServiceProvider serviceProvider,
@@ -21,42 +21,42 @@ sealed class Dispatcher(
 
 	/// <inheritdoc />
 	public Task<Result> DispatchAsync<TOperation>(
-		TOperation request,
+		TOperation operation,
 		CancellationToken cancellationToken = default)
 		where TOperation : IOperation {
 
-		ArgumentNullException.ThrowIfNull(request);
+		ArgumentNullException.ThrowIfNull(operation);
 
-		var wrapper = TypeCache.VoidHandlers.GetOrAdd(request.GetType(), static requestType => {
-			var wrapperType = typeof(OperationHandlerWrapperImpl<>).MakeGenericType(requestType);
+		var wrapper = TypeCache.VoidHandlers.GetOrAdd(operation.GetType(), static operationType => {
+			var wrapperType = typeof(OperationHandlerWrapperImpl<>).MakeGenericType(operationType);
 			return (OperationHandlerWrapper)(Activator.CreateInstance(wrapperType)
-				?? throw new InvalidOperationException($"Could not create wrapper for {requestType.Name}"));
+				?? throw new InvalidOperationException($"Could not create wrapper for {operationType.Name}"));
 		});
 
 		return wrapper.HandleAsync(
-			request,
+			operation,
 			serviceProvider,
 			cancellationToken);
 	}
 
 	/// <inheritdoc />
 	public Task<Result<TResponse>> DispatchAsync<TResponse>(
-		IOperation<TResponse> request,
+		IOperation<TResponse> operation,
 		CancellationToken cancellationToken = default) {
 
-		ArgumentNullException.ThrowIfNull(request);
+		ArgumentNullException.ThrowIfNull(operation);
 
 		var wrapper = (OperationHandlerWrapper<TResponse>)TypeCache.ResponseHandlers.GetOrAdd(
-			request.GetType(),
-			static requestType => {
+			operation.GetType(),
+			static operationType => {
 				var wrapperType = typeof(OperationHandlerWrapperImpl<,>)
-					.MakeGenericType(requestType, typeof(TResponse));
+					.MakeGenericType(operationType, typeof(TResponse));
 				return Activator.CreateInstance(wrapperType)
-					?? throw new InvalidOperationException($"Could not create wrapper for {requestType.Name}");
+					?? throw new InvalidOperationException($"Could not create wrapper for {operationType.Name}");
 			});
 
 		return wrapper.HandleAsync(
-			request,
+			operation,
 			serviceProvider,
 			cancellationToken);
 	}

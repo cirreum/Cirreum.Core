@@ -22,7 +22,7 @@ sealed class HandlerPerformance<TOperation, TResponse>(
 		} finally {
 			var elapsedMs = (long)Math.Round(Timing.GetElapsedMilliseconds(startTime));
 			if (elapsedMs > LongRunningThresholdMs) {
-				logger.LogLongRunningRequest(context.OperationType, elapsedMs);
+				logger.LogLongRunningOperation(context.OperationType, elapsedMs);
 			}
 		}
 

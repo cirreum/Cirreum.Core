@@ -8,16 +8,16 @@ internal static partial class Logging {
 	/// Logs a failed Result with correlation tracking.
 	/// </summary>
 	/// <remarks>
-	/// The error reference ID (requestId) can be provided to support teams for troubleshooting.
+	/// The error reference ID (operationId) can be provided to support teams for troubleshooting.
 	/// </remarks>
 	[LoggerMessage(
 		EventId = LoggingEventId.ResultFailureId,
 		Level = LogLevel.Warning,
-		Message = "Request '{RequestType}' failed with RequestId '{RequestId}' and CorrelationId: {CorrelationId}]. Exception: {ExceptionType} - {ExceptionMessage}")]
+		Message = "Operation '{OperationType}' failed with OperationId '{OperationId}' and CorrelationId: {CorrelationId}]. Exception: {ExceptionType} - {ExceptionMessage}")]
 	public static partial void LogResultFailure(
 		this ILogger logger,
-		string requestType,
-		string requestId,
+		string operationType,
+		string operationId,
 		string correlationId,
 		string exceptionType,
 		string exceptionMessage);
@@ -25,19 +25,19 @@ internal static partial class Logging {
 	[LoggerMessage(
 		EventId = LoggingEventId.SkippingAuthorizingId,
 		Level = LogLevel.Debug,
-		Message = "Skipped Authorizing Request '{RequestName}' as it does not require authorization.")]
-	public static partial void LogSkippedAuthorizingRequest(
+		Message = "Skipped Authorizing Operation '{OperationName}' as it does not require authorization.")]
+	public static partial void LogSkippedAuthorizingOperation(
 		this ILogger logger,
-		string requestName);
+		string operationName);
 
 	[LoggerMessage(
 		SkipEnabledCheck = true,
 		EventId = LoggingEventId.LongRunningId,
 		Level = LogLevel.Warning,
-		Message = "Long running request {RequestName} took {ElapsedMilliseconds}ms")]
-	public static partial void LogLongRunningRequest(
+		Message = "Long running operation {OperationName} took {ElapsedMilliseconds}ms")]
+	public static partial void LogLongRunningOperation(
 		this ILogger logger,
-		string requestName,
+		string operationName,
 		long elapsedMilliseconds);
 
 	[LoggerMessage(

@@ -9,14 +9,14 @@ using System.Collections.Concurrent;
 /// <para>
 /// These caches are intentionally unbounded because:
 /// <list type="bullet">
-/// <item>Request/notification types are static and don't change at runtime</item>
+/// <item>Operation/notification types are static and don't change at runtime</item>
 /// <item>Even with 1000+ types, memory usage is negligible (~48KB)</item>
 /// <item>Wrapper instances are lightweight (just type metadata)</item>
 /// <item>Cache size is naturally bounded by the number of types in your application</item>
 /// </list>
 /// </para>
 /// <para>
-/// Caches are scoped to Conductor to avoid namespace pollution - request types used
+/// Caches are scoped to Conductor to avoid namespace pollution — operation types used
 /// as cache keys here won't collide with other subsystems using the same types.
 /// </para>
 /// <para>
@@ -26,12 +26,12 @@ using System.Collections.Concurrent;
 internal static class TypeCache {
 
 	/// <summary>
-	/// Cache for void request handlers (IOperation with no return value).
+	/// Cache for void operation handlers (IOperation with no return value).
 	/// </summary>
 	internal static readonly ConcurrentDictionary<Type, OperationHandlerWrapper> VoidHandlers = new();
 
 	/// <summary>
-	/// Cache for typed request handlers (IOperation&lt;TResponse&gt;).
+	/// Cache for typed operation handlers (IOperation&lt;TResponse&gt;).
 	/// Stores as object because different TResponse types share the same cache.
 	/// </summary>
 	internal static readonly ConcurrentDictionary<Type, object> ResponseHandlers = new();
