@@ -22,7 +22,8 @@ using System.Runtime.CompilerServices;
 internal sealed class ResourceAccessEvaluator(
 	IAuthorizationContextAccessor contextAccessor,
 	IServiceProvider services,
-	ILogger<ResourceAccessEvaluator> logger) : IResourceAccessEvaluator {
+	ILogger<ResourceAccessEvaluator> logger
+) : IResourceAccessEvaluator {
 
 	// L1 per-request cache keyed by "{TypeName}:{ResourceId}"
 	private readonly Dictionary<string, EffectiveAccess> _cache = [];
@@ -181,57 +182,16 @@ internal sealed class ResourceAccessEvaluator(
 
 		// Walk up the hierarchy if inheritance is enabled
 		if (resource.InheritPermissions) {
-			var visited = new HashSet<string>(StringComparer.Ordinal);
-			if (resource.ResourceId is not null) {
-				visited.Add(resource.ResourceId);
-			}
+			var ancestorIds = resource.AncestorResourceIds;
 
-			var parentId = provider.GetParentId(resource);
-			var reachedRoot = parentId is null;
-
-			while (parentId is not null) {
-				cancellationToken.ThrowIfCancellationRequested();
-
-				// Cycle detection
-				if (!visited.Add(parentId)) {
-					logger.LogResourceAccessCycleDetected(typeof(T).Name, parentId);
-					break;
-				}
-
-				// Sibling optimization: check if parent was already resolved
-				var parentCacheKey = BuildCacheKey<T>(parentId);
-				if (parentCacheKey is not null && this._cache.TryGetValue(parentCacheKey, out var parentCached)) {
-					entries.AddRange(parentCached.Entries);
-					// Parent's effective already includes its ancestors + root defaults
-					reachedRoot = true;
-					break;
-				}
-
-				var parent = await provider.GetByIdAsync(parentId, cancellationToken).ConfigureAwait(false);
-
-				if (parent is null) {
-					// Orphan — parent doesn't exist; stop walking
-					logger.LogResourceAccessOrphanDetected(typeof(T).Name, parentId);
-					break;
-				}
-
-				entries.AddRange(parent.AccessList);
-
-				if (!parent.InheritPermissions) {
-					// Inheritance broken at parent
-					reachedRoot = true;
-					break;
-				}
-
-				parentId = provider.GetParentId(parent);
-				if (parentId is null) {
-					reachedRoot = true;
-				}
-			}
-
-			// Merge root defaults if we reached the root
-			if (reachedRoot) {
-				entries.AddRange(provider.RootDefaults);
+			if (ancestorIds is { Count: > 0 }) {
+				// ——— Batch path: materialized ancestor chain available ———
+				await this.ResolveBatchAncestorsAsync(resource, ancestorIds, entries, provider, cancellationToken)
+					.ConfigureAwait(false);
+			} else {
+				// ——— Legacy path: sequential walk ———
+				await this.ResolveWalkAncestorsAsync(resource, entries, provider, cancellationToken)
+					.ConfigureAwait(false);
 			}
 		} else if (provider.GetParentId(resource) is null) {
 			// Resource is at root and doesn't inherit — still apply root defaults
@@ -246,6 +206,184 @@ internal sealed class ResourceAccessEvaluator(
 		}
 
 		return effective;
+	}
+
+	/// <summary>
+	/// Batch path — loads all ancestors in a single call using the materialized
+	/// <see cref="IProtectedResource.AncestorResourceIds"/> chain.
+	/// </summary>
+	private async ValueTask ResolveBatchAncestorsAsync<T>(
+		T resource,
+		IReadOnlyList<string> ancestorIds,
+		List<AccessEntry> entries,
+		IAccessEntryProvider<T> provider,
+		CancellationToken cancellationToken)
+		where T : IProtectedResource {
+
+		var typeName = typeof(T).Name;
+
+		// Pre-scan for L1 cache hit — find the nearest cached ancestor.
+		// Only batch-load ancestors before that point.
+		var batchUntil = ancestorIds.Count;
+		EffectiveAccess? cachedTail = null;
+		for (var i = 0; i < ancestorIds.Count; i++) {
+			var key = BuildCacheKey<T>(ancestorIds[i]);
+			if (key is not null && this._cache.TryGetValue(key, out var hit)) {
+				batchUntil = i;
+				cachedTail = hit;
+				break;
+			}
+		}
+
+		// Batch-load the ancestors we actually need
+		Dictionary<string, T> ancestorMap;
+		if (batchUntil > 0) {
+			var idsToLoad = batchUntil < ancestorIds.Count
+				? [.. ancestorIds.Take(batchUntil)]
+				: ancestorIds;
+
+			var loaded = await provider.GetManyByIdAsync(idsToLoad, cancellationToken)
+				.ConfigureAwait(false);
+
+			logger.LogResourceAccessBatchLoaded(loaded.Count, typeName, resource.ResourceId);
+
+			ancestorMap = new(loaded.Count, StringComparer.Ordinal);
+			foreach (var ancestor in loaded) {
+				if (ancestor.ResourceId is not null) {
+					ancestorMap[ancestor.ResourceId] = ancestor;
+				}
+			}
+		} else {
+			// Immediate parent was cached — skip batch load entirely
+			ancestorMap = [];
+		}
+
+		// Walk the ancestor chain in order (nearest-first), collecting entries
+		// and tracking each ancestor's start index for reverse-caching
+		var visited = new HashSet<string>(StringComparer.Ordinal);
+		if (resource.ResourceId is not null) {
+			visited.Add(resource.ResourceId);
+		}
+
+		var ancestorStartIndices = new List<(string Id, int StartIndex)>();
+		var reachedRoot = false;
+
+		for (var i = 0; i < ancestorIds.Count; i++) {
+			cancellationToken.ThrowIfCancellationRequested();
+			var ancestorId = ancestorIds[i];
+
+			// Cycle detection
+			if (!visited.Add(ancestorId)) {
+				logger.LogResourceAccessCycleDetected(typeName, ancestorId);
+				break;
+			}
+
+			// Cache hit at this position — append cached entries and stop
+			if (i == batchUntil && cachedTail is not null) {
+				entries.AddRange(cachedTail.Entries);
+				reachedRoot = true; // cached entries include root defaults
+				break;
+			}
+
+			// Look up the ancestor from the batch-loaded map
+			if (!ancestorMap.TryGetValue(ancestorId, out var ancestor)) {
+				logger.LogResourceAccessOrphanDetected(typeName, ancestorId);
+				break;
+			}
+
+			ancestorStartIndices.Add((ancestorId, entries.Count));
+			entries.AddRange(ancestor.AccessList);
+
+			if (!ancestor.InheritPermissions) {
+				reachedRoot = true;
+				break;
+			}
+
+			// Last ancestor in the chain — we've reached the root
+			if (i == ancestorIds.Count - 1) {
+				reachedRoot = true;
+			}
+		}
+
+		// Merge root defaults if we reached the root
+		if (reachedRoot && cachedTail is null) {
+			entries.AddRange(provider.RootDefaults);
+		}
+
+		// Reverse-cache each ancestor's effective access for sibling optimization.
+		// For ancestor at position i, its effective = entries from its start index onward.
+		for (var i = 0; i < ancestorStartIndices.Count; i++) {
+			var (id, startIndex) = ancestorStartIndices[i];
+			var key = BuildCacheKey<T>(id);
+			if (key is not null) {
+				this._cache[key] = new EffectiveAccess(entries.GetRange(startIndex, entries.Count - startIndex));
+			}
+		}
+	}
+
+	/// <summary>
+	/// Legacy path — sequential walk using <see cref="IAccessEntryProvider{T}.GetByIdAsync"/>.
+	/// </summary>
+	private async ValueTask ResolveWalkAncestorsAsync<T>(
+		T resource,
+		List<AccessEntry> entries,
+		IAccessEntryProvider<T> provider,
+		CancellationToken cancellationToken)
+		where T : IProtectedResource {
+
+		var typeName = typeof(T).Name;
+		var visited = new HashSet<string>(StringComparer.Ordinal);
+		if (resource.ResourceId is not null) {
+			visited.Add(resource.ResourceId);
+		}
+
+		var parentId = provider.GetParentId(resource);
+		var reachedRoot = parentId is null;
+
+		while (parentId is not null) {
+			cancellationToken.ThrowIfCancellationRequested();
+
+			// Cycle detection
+			if (!visited.Add(parentId)) {
+				logger.LogResourceAccessCycleDetected(typeName, parentId);
+				break;
+			}
+
+			// Sibling optimization: check if parent was already resolved
+			var parentCacheKey = BuildCacheKey<T>(parentId);
+			if (parentCacheKey is not null && this._cache.TryGetValue(parentCacheKey, out var parentCached)) {
+				entries.AddRange(parentCached.Entries);
+				// Parent's effective already includes its ancestors + root defaults
+				reachedRoot = true;
+				break;
+			}
+
+			var parent = await provider.GetByIdAsync(parentId, cancellationToken).ConfigureAwait(false);
+
+			if (parent is null) {
+				// Orphan — parent doesn't exist; stop walking
+				logger.LogResourceAccessOrphanDetected(typeName, parentId);
+				break;
+			}
+
+			entries.AddRange(parent.AccessList);
+
+			if (!parent.InheritPermissions) {
+				// Inheritance broken at parent
+				reachedRoot = true;
+				break;
+			}
+
+			parentId = provider.GetParentId(parent);
+			if (parentId is null) {
+				reachedRoot = true;
+			}
+		}
+
+		// Merge root defaults if we reached the root
+		if (reachedRoot) {
+			entries.AddRange(provider.RootDefaults);
+		}
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

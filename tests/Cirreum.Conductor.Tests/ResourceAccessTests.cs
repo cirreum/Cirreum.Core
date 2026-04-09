@@ -1,11 +1,10 @@
 namespace Cirreum.Conductor.Tests;
 
-using System.Collections.Immutable;
 using Cirreum.Authorization;
 using Cirreum.Authorization.Resources;
-using Cirreum.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Collections.Immutable;
 
 [TestClass]
 public class ResourceAccessTests {
@@ -131,7 +130,7 @@ public class ResourceAccessTests {
 			new() { Role = UserRole, Permissions = [ReadPerm] }
 		]);
 
-		var result = await sut.CheckAsync(folder, ReadPerm);
+		var result = await sut.CheckAsync(folder, ReadPerm, this.TestContext.CancellationToken);
 
 		Assert.IsTrue(result.IsSuccess);
 	}
@@ -143,7 +142,7 @@ public class ResourceAccessTests {
 			new() { Role = UserRole, Permissions = [ReadPerm] }
 		]);
 
-		var result = await sut.CheckAsync(folder, WritePerm);
+		var result = await sut.CheckAsync(folder, WritePerm, this.TestContext.CancellationToken);
 
 		Assert.IsFalse(result.IsSuccess);
 	}
@@ -155,7 +154,7 @@ public class ResourceAccessTests {
 			new() { Role = UserRole, Permissions = [ReadPerm] }
 		]);
 
-		var result = await sut.CheckAsync(folder, ReadPerm);
+		var result = await sut.CheckAsync(folder, ReadPerm, this.TestContext.CancellationToken);
 
 		Assert.IsFalse(result.IsSuccess);
 	}
@@ -169,7 +168,7 @@ public class ResourceAccessTests {
 		]);
 		var sut = BuildEvaluator(resources: [folder]);
 
-		var result = await sut.CheckAsync<TestFolder>("folder-1", ReadPerm);
+		var result = await sut.CheckAsync<TestFolder>("folder-1", ReadPerm, this.TestContext.CancellationToken);
 
 		Assert.IsTrue(result.IsSuccess);
 	}
@@ -178,7 +177,7 @@ public class ResourceAccessTests {
 	public async Task CheckAsync_id_returns_failure_when_resource_not_found() {
 		var sut = BuildEvaluator(resources: []);
 
-		var result = await sut.CheckAsync<TestFolder>("nonexistent", ReadPerm);
+		var result = await sut.CheckAsync<TestFolder>("nonexistent", ReadPerm, this.TestContext.CancellationToken);
 
 		Assert.IsFalse(result.IsSuccess);
 	}
@@ -190,7 +189,7 @@ public class ResourceAccessTests {
 		};
 		var sut = BuildEvaluator(rootDefaults: rootDefaults);
 
-		var result = await sut.CheckAsync<TestFolder>(resourceId: null, ReadPerm);
+		var result = await sut.CheckAsync<TestFolder>(resourceId: null, ReadPerm, this.TestContext.CancellationToken);
 
 		Assert.IsTrue(result.IsSuccess);
 	}
@@ -203,7 +202,7 @@ public class ResourceAccessTests {
 		// Caller has UserRole, root defaults require AdminRole
 		var sut = BuildEvaluator(rootDefaults: rootDefaults);
 
-		var result = await sut.CheckAsync<TestFolder>(resourceId: null, ReadPerm);
+		var result = await sut.CheckAsync<TestFolder>(resourceId: null, ReadPerm, this.TestContext.CancellationToken);
 
 		Assert.IsFalse(result.IsSuccess);
 	}
@@ -223,9 +222,9 @@ public class ResourceAccessTests {
 		]);
 		var sut = BuildEvaluator(resources: [allowed, denied, alsoAllowed]);
 
-		var result = await sut.FilterAsync([allowed, denied, alsoAllowed], ReadPerm);
+		var result = await sut.FilterAsync([allowed, denied, alsoAllowed], ReadPerm, this.TestContext.CancellationToken);
 
-		Assert.AreEqual(2, result.Count);
+		Assert.HasCount(2, result);
 		Assert.AreEqual("f-1", result[0].ResourceId);
 		Assert.AreEqual("f-3", result[1].ResourceId);
 	}
@@ -239,9 +238,9 @@ public class ResourceAccessTests {
 			resources: [folder],
 			effectiveRoles: ImmutableHashSet<Role>.Empty);
 
-		var result = await sut.FilterAsync([folder], ReadPerm);
+		var result = await sut.FilterAsync([folder], ReadPerm, this.TestContext.CancellationToken);
 
-		Assert.AreEqual(0, result.Count);
+		Assert.IsEmpty(result);
 	}
 
 	// ———————— Hierarchy walking ————————
@@ -257,7 +256,7 @@ public class ResourceAccessTests {
 
 		var sut = BuildEvaluator(resources: [parent, child]);
 
-		var result = await sut.CheckAsync(child, ReadPerm);
+		var result = await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken);
 
 		Assert.IsTrue(result.IsSuccess);
 	}
@@ -276,9 +275,9 @@ public class ResourceAccessTests {
 		var sut = BuildEvaluator(resources: [parent, child]);
 
 		// Child has WritePerm directly
-		Assert.IsTrue((await sut.CheckAsync(child, WritePerm)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(child, WritePerm, this.TestContext.CancellationToken)).IsSuccess);
 		// Child should NOT inherit parent's ReadPerm
-		Assert.IsFalse((await sut.CheckAsync(child, ReadPerm)).IsSuccess);
+		Assert.IsFalse((await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken)).IsSuccess);
 	}
 
 	[TestMethod]
@@ -297,8 +296,8 @@ public class ResourceAccessTests {
 		var sut = BuildEvaluator(resources: [root, child], rootDefaults: rootDefaults);
 
 		// Child should inherit root's ReadPerm + rootDefaults' DeletePerm
-		Assert.IsTrue((await sut.CheckAsync(child, ReadPerm)).IsSuccess);
-		Assert.IsTrue((await sut.CheckAsync(child, DeletePerm)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(child, DeletePerm, this.TestContext.CancellationToken)).IsSuccess);
 	}
 
 	[TestMethod]
@@ -315,7 +314,7 @@ public class ResourceAccessTests {
 		var sut = BuildEvaluator(resources: [folderA, folderB]);
 
 		// Should not hang — cycle detection stops the walk
-		var result = await sut.CheckAsync(folderA, ReadPerm);
+		var result = await sut.CheckAsync(folderA, ReadPerm, this.TestContext.CancellationToken);
 		Assert.IsTrue(result.IsSuccess); // Own ACL still works
 	}
 
@@ -329,7 +328,7 @@ public class ResourceAccessTests {
 		var sut = BuildEvaluator(resources: [child]);
 
 		// Own ACL still works despite orphan
-		var result = await sut.CheckAsync(child, ReadPerm);
+		var result = await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken);
 		Assert.IsTrue(result.IsSuccess);
 	}
 
@@ -345,11 +344,11 @@ public class ResourceAccessTests {
 		var sut = BuildEvaluator(provider: provider);
 
 		// First check walks the hierarchy
-		Assert.IsTrue((await sut.CheckAsync(child, ReadPerm)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken)).IsSuccess);
 
 		// Reset the load counter — second check on same resource should hit L1 cache
 		provider.ResetLoadCount();
-		Assert.IsTrue((await sut.CheckAsync(child, WritePerm)).IsSuccess == false);
+		Assert.IsFalse((await sut.CheckAsync(child, WritePerm, this.TestContext.CancellationToken)).IsSuccess);
 
 		// Child's effective access was cached — no provider loads needed
 		Assert.AreEqual(0, provider.LoadCount, "Second check should have been served from L1 cache");
@@ -371,11 +370,11 @@ public class ResourceAccessTests {
 		var sut = BuildEvaluator(provider: provider);
 
 		// Check parent first — caches parent's effective access
-		Assert.IsTrue((await sut.CheckAsync(parent, ReadPerm)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(parent, ReadPerm, this.TestContext.CancellationToken)).IsSuccess);
 
 		// Reset the load counter — sibling should find parent in L1 cache
 		provider.ResetLoadCount();
-		Assert.IsTrue((await sut.CheckAsync(sibling1, ReadPerm)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(sibling1, ReadPerm, this.TestContext.CancellationToken)).IsSuccess);
 
 		// Parent should NOT have been loaded again (L1 hit on parent's cached effective access)
 		Assert.AreEqual(0, provider.LoadCount, "Parent should have been served from L1 cache");
@@ -398,9 +397,230 @@ public class ResourceAccessTests {
 		var sut = BuildEvaluator(resources: [grandparent, parent, child]);
 
 		// Child should have all three permissions
-		Assert.IsTrue((await sut.CheckAsync(child, ReadPerm)).IsSuccess);
-		Assert.IsTrue((await sut.CheckAsync(child, WritePerm)).IsSuccess);
-		Assert.IsTrue((await sut.CheckAsync(child, DeletePerm)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(child, WritePerm, this.TestContext.CancellationToken)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(child, DeletePerm, this.TestContext.CancellationToken)).IsSuccess);
+	}
+
+	// ———————— Batch path (AncestorResourceIds) ————————
+
+	[TestMethod]
+	public async Task Batch_path_resolves_permissions_from_materialized_ancestors() {
+		var grandparent = new TestFolder("gp", [
+			new() { Role = UserRole, Permissions = [DeletePerm] }
+		], ParentId: null, InheritPermissions: true);
+
+		var parent = new TestFolder("p", [
+			new() { Role = UserRole, Permissions = [WritePerm] }
+		], ParentId: "gp", InheritPermissions: true);
+
+		// Child has materialized ancestor chain
+		var child = new TestFolder("c", [
+			new() { Role = UserRole, Permissions = [ReadPerm] }
+		], ParentId: "p", InheritPermissions: true,
+			Ancestors: ["p", "gp"]);
+
+		var sut = BuildEvaluator(resources: [grandparent, parent, child]);
+
+		Assert.IsTrue((await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(child, WritePerm, this.TestContext.CancellationToken)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(child, DeletePerm, this.TestContext.CancellationToken)).IsSuccess);
+	}
+
+	[TestMethod]
+	public async Task Batch_path_uses_GetManyByIdAsync_instead_of_sequential_loads() {
+		var parent = new TestFolder("parent", [
+			new() { Role = UserRole, Permissions = [ReadPerm] }
+		], ParentId: null, InheritPermissions: true);
+
+		var child = new TestFolder("child", [],
+			ParentId: "parent", InheritPermissions: true,
+			Ancestors: ["parent"]);
+
+		var provider = new TestFolderProvider([parent, child]);
+		var sut = BuildEvaluator(provider: provider);
+
+		await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken);
+
+		// Should have used batch load, not individual loads
+		Assert.AreEqual(1, provider.BatchLoadCount, "Should use batch load for ancestors");
+		Assert.AreEqual(0, provider.LoadCount, "Should NOT use sequential loads when ancestors are materialized");
+	}
+
+	[TestMethod]
+	public async Task Batch_path_falls_back_to_walk_when_ancestors_empty() {
+		var parent = new TestFolder("parent", [
+			new() { Role = UserRole, Permissions = [ReadPerm] }
+		], ParentId: null, InheritPermissions: true);
+
+		// No materialized ancestors — should use legacy walk
+		var child = new TestFolder("child", [],
+			ParentId: "parent", InheritPermissions: true);
+
+		var provider = new TestFolderProvider([parent, child]);
+		var sut = BuildEvaluator(provider: provider);
+
+		await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken);
+
+		Assert.AreEqual(0, provider.BatchLoadCount, "Should NOT use batch load without ancestors");
+		Assert.AreEqual(1, provider.LoadCount, "Should use sequential load for walk");
+	}
+
+	[TestMethod]
+	public async Task Batch_path_merges_root_defaults() {
+		var rootDefaults = new List<AccessEntry> {
+			new() { Role = UserRole, Permissions = [DeletePerm] }
+		};
+
+		var root = new TestFolder("root", [
+			new() { Role = UserRole, Permissions = [ReadPerm] }
+		], ParentId: null, InheritPermissions: true);
+
+		var child = new TestFolder("child", [],
+			ParentId: "root", InheritPermissions: true,
+			Ancestors: ["root"]);
+
+		var sut = BuildEvaluator(resources: [root, child], rootDefaults: rootDefaults);
+
+		Assert.IsTrue((await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(child, DeletePerm, this.TestContext.CancellationToken)).IsSuccess);
+	}
+
+	[TestMethod]
+	public async Task Batch_path_respects_InheritPermissions_false_on_ancestor() {
+		var grandparent = new TestFolder("gp", [
+			new() { Role = UserRole, Permissions = [DeletePerm] }
+		], ParentId: null, InheritPermissions: true);
+
+		// Parent breaks inheritance
+		var parent = new TestFolder("p", [
+			new() { Role = UserRole, Permissions = [WritePerm] }
+		], ParentId: "gp", InheritPermissions: false);
+
+		var child = new TestFolder("c", [
+			new() { Role = UserRole, Permissions = [ReadPerm] }
+		], ParentId: "p", InheritPermissions: true,
+			Ancestors: ["p", "gp"]);
+
+		var sut = BuildEvaluator(resources: [grandparent, parent, child]);
+
+		Assert.IsTrue((await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken)).IsSuccess);
+		Assert.IsTrue((await sut.CheckAsync(child, WritePerm, this.TestContext.CancellationToken)).IsSuccess);
+		// Grandparent's DeletePerm should NOT be inherited (parent broke inheritance)
+		Assert.IsFalse((await sut.CheckAsync(child, DeletePerm, this.TestContext.CancellationToken)).IsSuccess);
+	}
+
+	[TestMethod]
+	public async Task Batch_path_handles_orphan_in_ancestor_chain() {
+		// Ancestor chain references a non-existent resource
+		var child = new TestFolder("child", [
+			new() { Role = UserRole, Permissions = [ReadPerm] }
+		], ParentId: "missing", InheritPermissions: true,
+			Ancestors: ["missing"]);
+
+		var sut = BuildEvaluator(resources: [child]);
+
+		// Own ACL still works
+		Assert.IsTrue((await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken)).IsSuccess);
+	}
+
+	[TestMethod]
+	public async Task Batch_path_handles_cycle_in_ancestor_chain() {
+		// Ancestor chain contains the entity itself (cycle)
+		var folder = new TestFolder("A", [
+			new() { Role = UserRole, Permissions = [ReadPerm] }
+		], ParentId: "B", InheritPermissions: true,
+			Ancestors: ["B", "A"]);
+
+		var folderB = new TestFolder("B", [
+			new() { Role = UserRole, Permissions = [WritePerm] }
+		], ParentId: "A", InheritPermissions: true);
+
+		var sut = BuildEvaluator(resources: [folder, folderB]);
+
+		// Should not hang — cycle detection stops the walk
+		var result = await sut.CheckAsync(folder, ReadPerm, this.TestContext.CancellationToken);
+		Assert.IsTrue(result.IsSuccess);
+	}
+
+	[TestMethod]
+	public async Task Batch_path_caches_ancestors_for_sibling_optimization() {
+		var root = new TestFolder("root", [
+			new() { Role = UserRole, Permissions = [ReadPerm] }
+		], ParentId: null, InheritPermissions: true);
+
+		var sibling1 = new TestFolder("s1", [],
+			ParentId: "root", InheritPermissions: true,
+			Ancestors: ["root"]);
+
+		var sibling2 = new TestFolder("s2", [],
+			ParentId: "root", InheritPermissions: true,
+			Ancestors: ["root"]);
+
+		var provider = new TestFolderProvider([root, sibling1, sibling2]);
+		var sut = BuildEvaluator(provider: provider);
+
+		// First sibling triggers batch load
+		await sut.CheckAsync(sibling1, ReadPerm, this.TestContext.CancellationToken);
+		Assert.AreEqual(1, provider.BatchLoadCount);
+
+		// Second sibling should find root cached — no batch load needed
+		provider.ResetAllCounts();
+		await sut.CheckAsync(sibling2, ReadPerm, this.TestContext.CancellationToken);
+		Assert.AreEqual(0, provider.BatchLoadCount, "Second sibling should hit L1 cache for root");
+		Assert.AreEqual(0, provider.LoadCount, "No sequential loads either");
+	}
+
+	[TestMethod]
+	public async Task Batch_path_deep_hierarchy_single_batch_load() {
+		// 5-level deep hierarchy
+		var level0 = new TestFolder("L0", [
+			new() { Role = UserRole, Permissions = [DeletePerm] }
+		], ParentId: null, InheritPermissions: true);
+
+		var level1 = new TestFolder("L1", [],
+			ParentId: "L0", InheritPermissions: true);
+
+		var level2 = new TestFolder("L2", [],
+			ParentId: "L1", InheritPermissions: true);
+
+		var level3 = new TestFolder("L3", [],
+			ParentId: "L2", InheritPermissions: true);
+
+		var leaf = new TestFolder("leaf", [
+			new() { Role = UserRole, Permissions = [ReadPerm] }
+		], ParentId: "L3", InheritPermissions: true,
+			Ancestors: ["L3", "L2", "L1", "L0"]);
+
+		var provider = new TestFolderProvider([level0, level1, level2, level3, leaf]);
+		var sut = BuildEvaluator(provider: provider);
+
+		var result = await sut.CheckAsync(leaf, DeletePerm, this.TestContext.CancellationToken);
+
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual(1, provider.BatchLoadCount, "Should batch-load all 4 ancestors in one call");
+		Assert.AreEqual(0, provider.LoadCount, "Should NOT use sequential loads");
+	}
+
+	[TestMethod]
+	public async Task Batch_path_FilterAsync_benefits_from_shared_ancestors() {
+		var root = new TestFolder("root", [
+			new() { Role = UserRole, Permissions = [ReadPerm] }
+		], ParentId: null, InheritPermissions: true);
+
+		var files = Enumerable.Range(1, 10).Select(i =>
+			new TestFolder($"file-{i}", [],
+				ParentId: "root", InheritPermissions: true,
+				Ancestors: ["root"])).ToList();
+
+		var provider = new TestFolderProvider([root, .. files]);
+		var sut = BuildEvaluator(provider: provider);
+
+		var result = await sut.FilterAsync(files, ReadPerm, this.TestContext.CancellationToken);
+
+		Assert.HasCount(10, result);
+		// First file triggers batch load, remaining 9 hit L1 cache
+		Assert.AreEqual(1, provider.BatchLoadCount, "Only the first file should trigger a batch load");
 	}
 
 	// ———————— Test Infrastructure ————————
@@ -409,34 +629,50 @@ public class ResourceAccessTests {
 		string? ResourceId,
 		IReadOnlyList<AccessEntry> AccessList,
 		string? ParentId = null,
-		bool InheritPermissions = false) : IProtectedResource;
+		bool InheritPermissions = false,
+		IReadOnlyList<string>? Ancestors = null) : IProtectedResource {
 
-	private sealed class TestFolderProvider : IAccessEntryProvider<TestFolder> {
+		public string? ParentResourceId => this.ParentId;
+		public IReadOnlyList<string> AncestorResourceIds => this.Ancestors ?? [];
+	}
 
-		private readonly Dictionary<string, TestFolder> _resources;
-		public IReadOnlyList<AccessEntry> RootDefaults { get; }
-		public int LoadCount { get; private set; }
+	private sealed class TestFolderProvider(
+		IEnumerable<ResourceAccessTests.TestFolder> resources,
+		IReadOnlyList<AccessEntry>? rootDefaults = null) : IAccessEntryProvider<TestFolder> {
 
-		public TestFolderProvider(
-			IEnumerable<TestFolder> resources,
-			IReadOnlyList<AccessEntry>? rootDefaults = null) {
-			_resources = resources.Where(r => r.ResourceId is not null)
+		private readonly Dictionary<string, TestFolder> _resources = resources.Where(r => r.ResourceId is not null)
 				.ToDictionary(r => r.ResourceId!);
-			RootDefaults = rootDefaults ?? [];
-		}
+		public IReadOnlyList<AccessEntry> RootDefaults { get; } = rootDefaults ?? [];
+		public int LoadCount { get; private set; }
+		public int BatchLoadCount { get; private set; }
 
 		public ValueTask<TestFolder?> GetByIdAsync(string resourceId, CancellationToken cancellationToken) {
-			LoadCount++;
-			_resources.TryGetValue(resourceId, out var resource);
+			this.LoadCount++;
+			this._resources.TryGetValue(resourceId, out var resource);
 			return new ValueTask<TestFolder?>(resource);
+		}
+
+		public ValueTask<IReadOnlyList<TestFolder>> GetManyByIdAsync(
+			IReadOnlyList<string> resourceIds,
+			CancellationToken cancellationToken) {
+			this.BatchLoadCount++;
+			var results = new List<TestFolder>(resourceIds.Count);
+			foreach (var id in resourceIds) {
+				if (this._resources.TryGetValue(id, out var resource)) {
+					results.Add(resource);
+				}
+			}
+			return new ValueTask<IReadOnlyList<TestFolder>>(results);
 		}
 
 		public string? GetParentId(TestFolder resource) => resource.ParentId;
 
-		public void ResetLoadCount() => LoadCount = 0;
+		public void ResetLoadCount() => this.LoadCount = 0;
+		public void ResetBatchLoadCount() => this.BatchLoadCount = 0;
+		public void ResetAllCounts() { this.LoadCount = 0; this.BatchLoadCount = 0; }
 	}
 
-	private ResourceAccessEvaluator BuildEvaluator(
+	private static ResourceAccessEvaluator BuildEvaluator(
 		IEnumerable<TestFolder>? resources = null,
 		IReadOnlyList<AccessEntry>? rootDefaults = null,
 		IImmutableSet<Role>? effectiveRoles = null,
@@ -463,4 +699,6 @@ public class ResourceAccessTests {
 			sp,
 			sp.GetRequiredService<ILogger<ResourceAccessEvaluator>>());
 	}
+
+	public TestContext TestContext { get; set; }
 }

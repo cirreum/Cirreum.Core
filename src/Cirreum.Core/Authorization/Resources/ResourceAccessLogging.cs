@@ -49,4 +49,14 @@ internal static partial class ResourceAccessLogging {
 		this ILogger logger,
 		string resourceType,
 		string parentId);
+
+	[LoggerMessage(
+		EventId = EventBase + 5,
+		Level = LogLevel.Debug,
+		Message = "Batch-loaded {Count} ancestors for {ResourceType} '{ResourceId}'")]
+	public static partial void LogResourceAccessBatchLoaded(
+		this ILogger logger,
+		int count,
+		string resourceType,
+		string? resourceId);
 }
