@@ -32,17 +32,17 @@ public interface IDispatcher {
 	/// This overload is intended for requests that return a typed response,
 	/// such as queries that retrieve data or commands that return confirmation values.
 	/// </remarks>
-	/// <typeparam name="TResponse">The type of the response returned by the request.</typeparam>
-	/// <param name="request">The request to dispatch. Must implement <see cref="IOperation{TResponse}"/>.</param>
+	/// <typeparam name="TResultValue">The type of the response returned by the request.</typeparam>
+	/// <param name="request">The request to dispatch. Must implement <see cref="IOperation{TResultValue}"/>.</param>
 	/// <param name="cancellationToken">
 	/// A token to monitor for cancellation requests. The default value is <see cref="CancellationToken.None"/>.
 	/// </param>
 	/// <returns>
 	/// A <see cref="Task{TResult}"/> representing the asynchronous operation.
-	/// The returned <see cref="Result{T}"/> contains the response of type <typeparamref name="TResponse"/>.
+	/// The returned <see cref="Result{T}"/> contains the response of type <typeparamref name="TResultValue"/>.
 	/// </returns>
-	Task<Result<TResponse>> DispatchAsync<TResponse>(
-		IOperation<TResponse> request,
+	Task<Result<TResultValue>> DispatchAsync<TResultValue>(
+		IOperation<TResultValue> request,
 		CancellationToken cancellationToken = default);
 
 }

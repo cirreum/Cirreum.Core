@@ -10,16 +10,16 @@ using System.Collections.Concurrent;
 public class InMemoryCacheService : ICacheService {
 	private readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
 
-	public async ValueTask<TResponse> GetOrCreateAsync<TResponse>(
+	public async ValueTask<TResultValue> GetOrCreateAsync<TResultValue>(
 		string cacheKey,
-		Func<CancellationToken, ValueTask<TResponse>> factory,
+		Func<CancellationToken, ValueTask<TResultValue>> factory,
 		CacheExpirationSettings settings,
 		string[]? tags = null,
 		CancellationToken cancellationToken = default) {
 
 		// Check if exists and not expired
 		if (this._cache.TryGetValue(cacheKey, out var existing) && !existing.IsExpired) {
-			return (TResponse)existing.Value;
+			return (TResultValue)existing.Value;
 		}
 
 		// Create new entry
@@ -56,7 +56,7 @@ public class InMemoryCacheService : ICacheService {
 		}
 	}
 
-	private static DateTime? CalculateExpiration<TResponse>(TResponse value, CacheExpirationSettings settings) {
+	private static DateTime? CalculateExpiration<TResultValue>(TResultValue value, CacheExpirationSettings settings) {
 		// Check if it's a failed result
 		if (value is IResult { IsSuccess: false } && settings.FailureExpiration.HasValue) {
 			return DateTime.UtcNow.Add(settings.FailureExpiration.Value);

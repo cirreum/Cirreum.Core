@@ -270,15 +270,15 @@ public class OperationGrantCacheTests {
 		private readonly Dictionary<string, object> _store = [];
 		private readonly Dictionary<string, HashSet<string>> _tagIndex = [];
 
-		public async ValueTask<TResponse> GetOrCreateAsync<TResponse>(
+		public async ValueTask<TResultValue> GetOrCreateAsync<TResultValue>(
 			string cacheKey,
-			Func<CancellationToken, ValueTask<TResponse>> factory,
+			Func<CancellationToken, ValueTask<TResultValue>> factory,
 			CacheExpirationSettings settings,
 			string[]? tags = null,
 			CancellationToken cancellationToken = default) {
 
 			if (this._store.TryGetValue(cacheKey, out var cached)) {
-				return (TResponse)cached;
+				return (TResultValue)cached;
 			}
 
 			var result = await factory(cancellationToken).ConfigureAwait(false);

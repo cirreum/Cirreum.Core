@@ -165,7 +165,7 @@ public sealed class DispatcherTests {
 	}
 
 	[TestMethod]
-	public async Task Dispatch_TResponseRequest_InvokesHandler_AndReturnsPayload() {
+	public async Task Dispatch_TResultValueRequest_InvokesHandler_AndReturnsPayload() {
 		// Arrange
 		var dispatcher = Shared.ArrangeSimpleDispatcher(builder => {
 			builder.AddTransient<IOperationHandler<Echo, string>, EchoHandler>();

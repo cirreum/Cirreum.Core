@@ -6,22 +6,22 @@ using Cirreum.Conductor.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-sealed class QueryCaching<TOperation, TResponse>
-  : IIntercept<TOperation, TResponse>
-	where TOperation : ICacheableQuery<TResponse> {
+sealed class QueryCaching<TOperation, TResultValue>
+  : IIntercept<TOperation, TResultValue>
+	where TOperation : ICacheableQuery<TResultValue> {
 
 	private readonly ICacheService _cache;
 	private readonly ConductorSettings _conductorSettings;
 	private readonly CacheSettings _cacheSettings;
 	private readonly CacheKeyContext _cacheKeyContext;
-	private readonly ILogger<QueryCaching<TOperation, TResponse>> _logger;
+	private readonly ILogger<QueryCaching<TOperation, TResultValue>> _logger;
 
 	public QueryCaching(
 		[FromKeyedServices(CacheConsumers.QueryCaching)] ICacheService cache,
 		ConductorSettings conductorSettings,
 		CacheSettings cacheSettings,
 		CacheKeyContext cacheKeyContext,
-		ILogger<QueryCaching<TOperation, TResponse>> logger) {
+		ILogger<QueryCaching<TOperation, TResultValue>> logger) {
 		this._cache = cache;
 		this._conductorSettings = conductorSettings;
 		this._cacheSettings = cacheSettings;
@@ -43,9 +43,9 @@ sealed class QueryCaching<TOperation, TResponse>
 		}
 	}
 
-	public async Task<Result<TResponse>> HandleAsync(
+	public async Task<Result<TResultValue>> HandleAsync(
 		OperationContext<TOperation> context,
-		OperationHandlerDelegate<TOperation, TResponse> next,
+		OperationHandlerDelegate<TOperation, TResultValue> next,
 		CancellationToken cancellationToken) {
 
 		var cacheKey = this.ComposeCacheKey(context.Operation.CacheKey);

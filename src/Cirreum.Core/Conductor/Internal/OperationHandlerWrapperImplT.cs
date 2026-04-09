@@ -10,43 +10,43 @@ using System.Runtime.CompilerServices;
 /// Concrete wrapper implementation for operations with typed responses.
 /// </summary>
 /// <typeparam name="TOperation">The type of operation being handled.</typeparam>
-/// <typeparam name="TResponse">The type of response returned by the operation.</typeparam>
-internal sealed class OperationHandlerWrapperImpl<TOperation, TResponse>
-	: OperationHandlerWrapper<TResponse>
-	where TOperation : class, IOperation<TResponse> {
+/// <typeparam name="TResultValue">The type of response returned by the operation.</typeparam>
+internal sealed class OperationHandlerWrapperImpl<TOperation, TResultValue>
+	: OperationHandlerWrapper<TResultValue>
+	where TOperation : class, IOperation<TResultValue> {
 
 	private static readonly string operationTypeName = typeof(TOperation).Name;
-	private static readonly string responseTypeName = typeof(TResponse).Name;
+	private static readonly string responseTypeName = typeof(TResultValue).Name;
 
-	public override Task<Result<TResponse>> HandleAsync(
-		IOperation<TResponse> request,
+	public override Task<Result<TResultValue>> HandleAsync(
+		IOperation<TResultValue> request,
 		IServiceProvider serviceProvider,
 		CancellationToken cancellationToken) {
 
 		// ----- 1. RESOLVE HANDLER -----
-		var handler = serviceProvider.GetService<IOperationHandler<TOperation, TResponse>>();
+		var handler = serviceProvider.GetService<IOperationHandler<TOperation, TResultValue>>();
 		if (handler is null) {
-			return Task.FromResult(Result<TResponse>.Fail(new InvalidOperationException(
+			return Task.FromResult(Result<TResultValue>.Fail(new InvalidOperationException(
 				$"No handler registered for operation type '{operationTypeName}'")));
 		}
 
 		// ----- 2. RESOLVE INTERCEPTS -----
-		var intercepts = serviceProvider.GetServices<IIntercept<TOperation, TResponse>>();
+		var intercepts = serviceProvider.GetServices<IIntercept<TOperation, TResultValue>>();
 
 		// ----- 3. FAST PATH: zero intercepts — no telemetry, no context, no cursor, no async -----
 		// Returns the handler's Task directly when possible: zero async state machine, zero
 		// closure allocation, zero telemetry overhead. Handler exceptions are still caught
 		// and converted to Result.Fail to preserve the dispatcher's "no-throw" contract.
-		if (intercepts is ICollection<IIntercept<TOperation, TResponse>> { Count: 0 }) {
+		if (intercepts is ICollection<IIntercept<TOperation, TResultValue>> { Count: 0 }) {
 			try {
 				return handler.HandleAsync(Unsafe.As<TOperation>(request), cancellationToken);
 			} catch (Exception ex) when (!ex.IsFatal()) {
-				return Task.FromResult(Result<TResponse>.Fail(ex));
+				return Task.FromResult(Result<TResultValue>.Fail(ex));
 			}
 		}
 
 		// ----- 4. PIPELINE PATH: intercepts present — full telemetry + context -----
-		return OperationHandlerWrapperImpl<TOperation, TResponse>.HandleWithPipelineAsync(request, serviceProvider, handler, intercepts, cancellationToken);
+		return OperationHandlerWrapperImpl<TOperation, TResultValue>.HandleWithPipelineAsync(request, serviceProvider, handler, intercepts, cancellationToken);
 	}
 
 	/// <summary>
@@ -55,11 +55,11 @@ internal sealed class OperationHandlerWrapperImpl<TOperation, TResponse>
 	/// async state machine, telemetry, context creation, and exception handling — none
 	/// of which is paid on the fast (zero-intercept) path above.
 	/// </summary>
-	private static async Task<Result<TResponse>> HandleWithPipelineAsync(
-		IOperation<TResponse> request,
+	private static async Task<Result<TResultValue>> HandleWithPipelineAsync(
+		IOperation<TResultValue> request,
 		IServiceProvider serviceProvider,
-		IOperationHandler<TOperation, TResponse> handler,
-		IEnumerable<IIntercept<TOperation, TResponse>> intercepts,
+		IOperationHandler<TOperation, TResultValue> handler,
+		IEnumerable<IIntercept<TOperation, TResultValue>> intercepts,
 		CancellationToken cancellationToken) {
 
 		// ----- 0. START ACTIVITY & TIMING -----
@@ -74,7 +74,7 @@ internal sealed class OperationHandlerWrapperImpl<TOperation, TResponse>
 
 			// Materialize array (cast if DI already returned one) and walk
 			// the pipeline via a single-alloc cursor.
-			var interceptArray = intercepts as IIntercept<TOperation, TResponse>[]
+			var interceptArray = intercepts as IIntercept<TOperation, TResultValue>[]
 				?? [.. intercepts];
 
 			var operationContext = await serviceProvider.CreateOperationContext(
@@ -83,7 +83,7 @@ internal sealed class OperationHandlerWrapperImpl<TOperation, TResponse>
 				Unsafe.As<TOperation>(request),
 				operationTypeName);
 
-			var cursor = new PipelineCursor<TOperation, TResponse>(interceptArray, handler);
+			var cursor = new PipelineCursor<TOperation, TResultValue>(interceptArray, handler);
 			var finalResult = await cursor.NextDelegate(operationContext, cancellationToken);
 
 			// ----- POST-PROCESSING (TELEMETRY) -----
@@ -98,7 +98,7 @@ internal sealed class OperationHandlerWrapperImpl<TOperation, TResponse>
 			throw;
 
 		} catch (Exception ex) {
-			var finalResult = Result<TResponse>.Fail(ex);
+			var finalResult = Result<TResultValue>.Fail(ex);
 			RecordTelemetry(activity, startTimestamp, finalResult.IsSuccess, finalResult.Error);
 			return finalResult;
 		}

@@ -13,11 +13,11 @@ public interface ICacheableQuery;
 /// <summary>
 /// Represents a query that can be cached.
 /// </summary>
-/// <typeparam name="TResponse">
+/// <typeparam name="TResultValue">
 /// The response type. Must be immutable for safe caching with instance reuse.
 /// Use sealed records with init-only properties and mark with [ImmutableObject(true)].
 /// </typeparam>
-public interface ICacheableQuery<out TResponse> : ICacheableQuery, IOperation<TResponse> {
+public interface ICacheableQuery<out TResultValue> : ICacheableQuery, IOperation<TResultValue> {
 
 	/// <summary>
 	/// The unique cache key for this query instance.

@@ -321,7 +321,7 @@ TYPICAL — at least one intercept registered (the default: 4 intercepts)
 | Allocation | Purpose |
 |---|---|
 | `OperationContext<T>` | Per-operation envelope (UserState, Operation, IDs, timing) |
-| `PipelineCursor<T[,TResponse]>` | Pipeline walker |
+| `PipelineCursor<T[,TResultValue]>` | Pipeline walker |
 | 1 × bound delegate | Cursor's `NextDelegate`, reused for every hop |
 | `Result<T>` | Terminal return value |
 
@@ -419,7 +419,7 @@ builder.RegisterFromAssemblies(assemblies);
 
 This wiring registers:
 
-- `IOperationHandler<TOperation, TResponse>` implementations  
+- `IOperationHandler<TOperation, TResultValue>` implementations  
 - `INotificationHandler<TNotification>` implementations  
 
 All handlers are registered as **Transient** to avoid stale state and ensure operation isolation.

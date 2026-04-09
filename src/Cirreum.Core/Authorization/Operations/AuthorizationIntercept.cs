@@ -4,7 +4,7 @@ using Cirreum.Conductor;
 
 /// <summary>
 /// Intercept behavior that enforces authorization rules for any <see cref="IAuthorizableOperationBase"/>
-/// implementations. See <see cref="IAuthorizableOperation"/>, <see cref="IAuthorizableOperation{TResponse}"/>,
+/// implementations. See <see cref="IAuthorizableOperation"/>, <see cref="IAuthorizableOperation{TResultValue}"/>,
 /// and the grant interfaces for the interfaces that should be implemented directly.
 /// </summary>
 /// <remarks>
@@ -18,14 +18,14 @@ using Cirreum.Conductor;
 /// anywhere in the application.
 /// </para>
 /// </remarks>
-sealed class Authorization<TOperation, TResponse>(
+sealed class Authorization<TOperation, TResultValue>(
 	IAuthorizationEvaluator authorizer
-) : IIntercept<TOperation, TResponse>
+) : IIntercept<TOperation, TResultValue>
 	where TOperation : IAuthorizableOperationBase {
 
-	public async Task<Result<TResponse>> HandleAsync(
+	public async Task<Result<TResultValue>> HandleAsync(
 		OperationContext<TOperation> context,
-		OperationHandlerDelegate<TOperation, TResponse> next,
+		OperationHandlerDelegate<TOperation, TResultValue> next,
 		CancellationToken cancellationToken) {
 
 		var authResult = await authorizer
@@ -36,7 +36,7 @@ sealed class Authorization<TOperation, TResponse>(
 			.ConfigureAwait(false);
 
 		if (authResult.IsFailure) {
-			return Result<TResponse>.Fail(authResult.Error);
+			return Result<TResultValue>.Fail(authResult.Error);
 		}
 
 		return await next(context, cancellationToken);

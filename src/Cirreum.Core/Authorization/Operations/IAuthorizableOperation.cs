@@ -10,25 +10,25 @@ using Cirreum.Conductor;
 /// and <see cref="IOperation"/> for conductor routing.
 /// For grant-aware (grant-based) operations, use the grant interfaces:
 /// <see cref="IOwnerMutateOperation"/>,
-/// <see cref="IOwnerLookupOperation{TResponse}"/>,
-/// <see cref="IOwnerSearchOperation{TResponse}"/>,
+/// <see cref="IOwnerLookupOperation{TResultValue}"/>,
+/// <see cref="IOwnerSearchOperation{TResultValue}"/>,
 /// <see cref="ISelfMutateOperation"/>, or
-/// <see cref="ISelfLookupOperation{TResponse}"/>.
+/// <see cref="ISelfLookupOperation{TResultValue}"/>.
 /// </remarks>
 public interface IAuthorizableOperation : IAuthorizableOperationBase, IOperation;
 
 /// <summary>
 /// Marker for an authorized request with a response.
 /// </summary>
-/// <typeparam name="TResponse">The type of response returned by the request.</typeparam>
+/// <typeparam name="TResultValue">The type of response returned by the request.</typeparam>
 /// <remarks>
 /// Implements <see cref="IAuthorizableOperationBase"/> for authorization pipeline participation
-/// and <see cref="IOperation{TResponse}"/> for conductor routing.
+/// and <see cref="IOperation{TResultValue}"/> for conductor routing.
 /// For grant-aware (grant-based) operations, use the grant interfaces:
-/// <see cref="IOwnerMutateOperation{TResponse}"/>,
-/// <see cref="IOwnerLookupOperation{TResponse}"/>,
-/// <see cref="IOwnerSearchOperation{TResponse}"/>,
-/// <see cref="ISelfMutateOperation{TResponse}"/>, or
-/// <see cref="ISelfLookupOperation{TResponse}"/>.
+/// <see cref="IOwnerMutateOperation{TResultValue}"/>,
+/// <see cref="IOwnerLookupOperation{TResultValue}"/>,
+/// <see cref="IOwnerSearchOperation{TResultValue}"/>,
+/// <see cref="ISelfMutateOperation{TResultValue}"/>, or
+/// <see cref="ISelfLookupOperation{TResultValue}"/>.
 /// </remarks>
-public interface IAuthorizableOperation<out TResponse> : IAuthorizableOperationBase, IOperation<TResponse>;
+public interface IAuthorizableOperation<out TResultValue> : IAuthorizableOperationBase, IOperation<TResultValue>;

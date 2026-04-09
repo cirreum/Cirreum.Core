@@ -11,12 +11,12 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 [TestClass]
 public sealed class LifetimeTests {
 
-	public class LifetimeIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
+	public class LifetimeIntercept<TRequest, TResultValue> : IIntercept<TRequest, TResultValue>
 		where TRequest : notnull {
 
-		public async Task<Result<TResponse>> HandleAsync(
+		public async Task<Result<TResultValue>> HandleAsync(
 			OperationContext<TRequest> context,
-			OperationHandlerDelegate<TRequest, TResponse> next,
+			OperationHandlerDelegate<TRequest, TResultValue> next,
 			CancellationToken cancellationToken) {
 			var result = await next(context, cancellationToken);
 			return result;

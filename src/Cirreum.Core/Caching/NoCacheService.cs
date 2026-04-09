@@ -6,9 +6,9 @@
 /// is <see cref="CacheProvider.None"/>.
 /// </summary>
 public class NoCacheService : ICacheService {
-	public async ValueTask<TResponse> GetOrCreateAsync<TResponse>(
+	public async ValueTask<TResultValue> GetOrCreateAsync<TResultValue>(
 		string cacheKey,
-		Func<CancellationToken, ValueTask<TResponse>> factory,
+		Func<CancellationToken, ValueTask<TResultValue>> factory,
 		CacheExpirationSettings settings,
 		string[]? tags = null,
 		CancellationToken cancellationToken = default) {

@@ -40,17 +40,17 @@ sealed class Dispatcher(
 	}
 
 	/// <inheritdoc />
-	public Task<Result<TResponse>> DispatchAsync<TResponse>(
-		IOperation<TResponse> operation,
+	public Task<Result<TResultValue>> DispatchAsync<TResultValue>(
+		IOperation<TResultValue> operation,
 		CancellationToken cancellationToken = default) {
 
 		ArgumentNullException.ThrowIfNull(operation);
 
-		var wrapper = (OperationHandlerWrapper<TResponse>)TypeCache.ResponseHandlers.GetOrAdd(
+		var wrapper = (OperationHandlerWrapper<TResultValue>)TypeCache.ResponseHandlers.GetOrAdd(
 			operation.GetType(),
 			static operationType => {
 				var wrapperType = typeof(OperationHandlerWrapperImpl<,>)
-					.MakeGenericType(operationType, typeof(TResponse));
+					.MakeGenericType(operationType, typeof(TResultValue));
 				return Activator.CreateInstance(wrapperType)
 					?? throw new InvalidOperationException($"Could not create wrapper for {operationType.Name}");
 			});

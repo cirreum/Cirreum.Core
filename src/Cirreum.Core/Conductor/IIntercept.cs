@@ -19,10 +19,10 @@
 /// </para>
 /// </remarks>
 /// <typeparam name="TOperation">The type of the request to be intercepted. Must be a non-nullable type.</typeparam>
-/// <typeparam name="TResponse">The type of the response returned after processing the request.</typeparam>
-public interface IIntercept<TOperation, TResponse> where TOperation : notnull {
-	Task<Result<TResponse>> HandleAsync(
+/// <typeparam name="TResultValue">The type of the response returned after processing the request.</typeparam>
+public interface IIntercept<TOperation, TResultValue> where TOperation : notnull {
+	Task<Result<TResultValue>> HandleAsync(
 		OperationContext<TOperation> context,
-		OperationHandlerDelegate<TOperation, TResponse> next,
+		OperationHandlerDelegate<TOperation, TResultValue> next,
 		CancellationToken cancellationToken);
 }

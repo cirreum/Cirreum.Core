@@ -1,21 +1,17 @@
 ﻿namespace Cirreum.Conductor;
 
 /// <summary>
-/// Defines a handler for an operation that does not return a value.
+/// Handles an operation that produces a <see cref="Result"/> with no value.
 /// </summary>
-/// <typeparam name="TOperation">
-/// The type of operation being handled. Must implement <see cref="IOperation"/>.
-/// </typeparam>
+/// <typeparam name="TOperation">The operation type.</typeparam>
 public interface IOperationHandler<in TOperation>
 	where TOperation : IOperation {
 
 	/// <summary>
-	/// Handles the operation asynchronously.
+	/// Executes the operation.
 	/// </summary>
-	/// <param name="operation">The operation instance to handle.</param>
-	/// <param name="cancellationToken">
-	/// A token used to propagate notifications that the operation should be canceled.
-	/// </param>
+	/// <param name="operation">The operation to execute.</param>
+	/// <param name="cancellationToken">Cancellation token.</param>
 	/// <returns>
 	/// A <see cref="Task{TResult}"/> containing a <see cref="Result"/> indicating
 	/// success or failure of the operation.
@@ -26,29 +22,20 @@ public interface IOperationHandler<in TOperation>
 }
 
 /// <summary>
-/// Defines a handler for an operation that returns a <see cref="Result{TResponse}"/>.
+/// Handles an operation that produces a <see cref="Result{TResultValue}"/>.
 /// </summary>
-/// <typeparam name="TOperation">
-/// The type of operation being handled. Must implement <see cref="IOperation{TResponse}"/>.
-/// </typeparam>
-/// <typeparam name="TResponse">
-/// The type of response returned when the operation is handled.
-/// </typeparam>
-public interface IOperationHandler<in TOperation, TResponse>
-	where TOperation : IOperation<TResponse> {
+/// <typeparam name="TOperation">The operation type.</typeparam>
+/// <typeparam name="TResultValue">The value produced on success.</typeparam>
+public interface IOperationHandler<in TOperation, TResultValue>
+	where TOperation : IOperation<TResultValue> {
 
 	/// <summary>
-	/// Handles the operation asynchronously and produces a response.
+	/// Executes the operation.
 	/// </summary>
-	/// <param name="operation">The operation instance to handle.</param>
-	/// <param name="cancellationToken">
-	/// A token used to propagate notifications that the operation should be canceled.
-	/// </param>
-	/// <returns>
-	/// A <see cref="Task{TResult}"/> containing a <see cref="Result{TResponse}"/>
-	/// that represents the outcome of the operation and the response value.
-	/// </returns>
-	Task<Result<TResponse>> HandleAsync(
+	/// <param name="operation">The operation to execute.</param>
+	/// <param name="cancellationToken">Cancellation token.</param>
+	/// <returns>The outcome of the operation.</returns>
+	Task<Result<TResultValue>> HandleAsync(
 		TOperation operation,
 		CancellationToken cancellationToken = default);
 }

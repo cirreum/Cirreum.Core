@@ -4,16 +4,16 @@ using Microsoft.Extensions.Logging;
 using System.Threading;
 using System.Threading.Tasks;
 
-sealed class HandlerPerformance<TOperation, TResponse>(
-	ILogger<HandlerPerformance<TOperation, TResponse>> logger
-) : IIntercept<TOperation, TResponse>
+sealed class HandlerPerformance<TOperation, TResultValue>(
+	ILogger<HandlerPerformance<TOperation, TResultValue>> logger
+) : IIntercept<TOperation, TResultValue>
 	where TOperation : notnull {
 
 	private const int LongRunningThresholdMs = 500;
 
-	public async Task<Result<TResponse>> HandleAsync(
+	public async Task<Result<TResultValue>> HandleAsync(
 		OperationContext<TOperation> context,
-		OperationHandlerDelegate<TOperation, TResponse> next,
+		OperationHandlerDelegate<TOperation, TResultValue> next,
 		CancellationToken cancellationToken) {
 
 		var startTime = Timing.Start();

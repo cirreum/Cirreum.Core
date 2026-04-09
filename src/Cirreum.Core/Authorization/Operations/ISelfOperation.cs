@@ -13,14 +13,14 @@ public interface ISelfMutateOperation
 /// Self-scoped mutation with a response. Developers implement this for
 /// operations on the caller's own resources that return a value.
 /// </summary>
-/// <typeparam name="TResponse">The type of response returned by the mutation.</typeparam>
-public interface ISelfMutateOperation<out TResponse>
-	: IAuthorizableOperation<TResponse>, IGrantableSelfBase;
+/// <typeparam name="TResultValue">The type of response returned by the mutation.</typeparam>
+public interface ISelfMutateOperation<out TResultValue>
+	: IAuthorizableOperation<TResultValue>, IGrantableSelfBase;
 
 /// <summary>
 /// Self-scoped lookup with a response. Developers implement this for
 /// read operations on the caller's own resources.
 /// </summary>
-/// <typeparam name="TResponse">The type of response returned by the lookup.</typeparam>
-public interface ISelfLookupOperation<out TResponse>
-	: IAuthorizableOperation<TResponse>, IGrantableSelfBase;
+/// <typeparam name="TResultValue">The type of response returned by the lookup.</typeparam>
+public interface ISelfLookupOperation<out TResultValue>
+	: IAuthorizableOperation<TResultValue>, IGrantableSelfBase;

@@ -137,18 +137,18 @@ generic domain parameters:
 | Interface | Base | Property | Scope |
 |-----------|------|----------|-------|
 | `IOwnerMutateOperation` | `IAuthorizableOperation` | `OwnerId` (scalar) | Single-owner write (void) |
-| `IOwnerMutateOperation<TResponse>` | `IAuthorizableOperation<TResponse>` | `OwnerId` (scalar) | Single-owner write with response |
-| `IOwnerLookupOperation<TResponse>` | `IAuthorizableOperation<TResponse>` | `OwnerId` (scalar) | Single-owner read |
-| `IOwnerCacheableLookupOperation<TResponse>` | `ICacheableQuery<TResponse>` | `OwnerId` | Cacheable single-owner read |
-| `IOwnerSearchOperation<TResponse>` | `IAuthorizableOperation<TResponse>` | `OwnerIds` (plural) | Cross-owner query |
+| `IOwnerMutateOperation<TResultValue>` | `IAuthorizableOperation<TResultValue>` | `OwnerId` (scalar) | Single-owner write with response |
+| `IOwnerLookupOperation<TResultValue>` | `IAuthorizableOperation<TResultValue>` | `OwnerId` (scalar) | Single-owner read |
+| `IOwnerCacheableLookupOperation<TResultValue>` | `ICacheableQuery<TResultValue>` | `OwnerId` | Cacheable single-owner read |
+| `IOwnerSearchOperation<TResultValue>` | `IAuthorizableOperation<TResultValue>` | `OwnerIds` (plural) | Cross-owner query |
 
 ### Self-Scoped (user-owned)
 
 | Interface | Base | Property | Scope |
 |-----------|------|----------|-------|
 | `ISelfMutateOperation` | `IAuthorizableOperation` | `Id` / `ExternalId` | User-owned write (void) |
-| `ISelfMutateOperation<TResponse>` | `IAuthorizableOperation<TResponse>` | `Id` / `ExternalId` | User-owned write with response |
-| `ISelfLookupOperation<TResponse>` | `IAuthorizableOperation<TResponse>` | `Id` / `ExternalId` | User-owned read |
+| `ISelfMutateOperation<TResultValue>` | `IAuthorizableOperation<TResultValue>` | `Id` / `ExternalId` | User-owned write with response |
+| `ISelfLookupOperation<TResultValue>` | `IAuthorizableOperation<TResultValue>` | `Id` / `ExternalId` | User-owned read |
 
 ### Example
 

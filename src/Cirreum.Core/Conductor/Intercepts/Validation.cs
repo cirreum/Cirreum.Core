@@ -5,8 +5,8 @@ using FluentValidation.Results;
 using System.Collections.Generic;
 using System.Threading;
 
-sealed class Validation<TOperation, TResponse>
-	: IIntercept<TOperation, TResponse>
+sealed class Validation<TOperation, TResultValue>
+	: IIntercept<TOperation, TResultValue>
 	where TOperation : notnull {
 
 	private readonly IReadOnlyList<IValidator<TOperation>> _validators;
@@ -21,9 +21,9 @@ sealed class Validation<TOperation, TResponse>
 		this._hasValidators = this._validators.Count > 0;
 	}
 
-	public async Task<Result<TResponse>> HandleAsync(
+	public async Task<Result<TResultValue>> HandleAsync(
 		OperationContext<TOperation> context,
-		OperationHandlerDelegate<TOperation, TResponse> next,
+		OperationHandlerDelegate<TOperation, TResultValue> next,
 		CancellationToken cancellationToken) {
 
 		// FAST PATH: no validators → just forward, no async state machine
@@ -50,7 +50,7 @@ sealed class Validation<TOperation, TResponse>
 		}
 
 		if (failures.Count > 0) {
-			return Result<TResponse>.Fail(new ValidationException(failures));
+			return Result<TResultValue>.Fail(new ValidationException(failures));
 		}
 
 		return await next(context, cancellationToken).ConfigureAwait(false);

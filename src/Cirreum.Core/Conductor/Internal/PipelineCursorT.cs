@@ -15,25 +15,25 @@ using Cirreum.Conductor;
 /// that need retry/loop/fan-out semantics must snapshot state and build their own cursor.
 /// </remarks>
 /// <typeparam name="TOperation">The concrete request type.</typeparam>
-/// <typeparam name="TResponse">The typed response.</typeparam>
-internal sealed class PipelineCursor<TOperation, TResponse>
-	where TOperation : class, IOperation<TResponse> {
+/// <typeparam name="TResultValue">The typed response.</typeparam>
+internal sealed class PipelineCursor<TOperation, TResultValue>
+	where TOperation : class, IOperation<TResultValue> {
 
-	private readonly IIntercept<TOperation, TResponse>[] _intercepts;
-	private readonly IOperationHandler<TOperation, TResponse> _handler;
+	private readonly IIntercept<TOperation, TResultValue>[] _intercepts;
+	private readonly IOperationHandler<TOperation, TResultValue> _handler;
 	private int _index;
-	public readonly OperationHandlerDelegate<TOperation, TResponse> NextDelegate;
+	public readonly OperationHandlerDelegate<TOperation, TResultValue> NextDelegate;
 
 	public PipelineCursor(
-		IIntercept<TOperation, TResponse>[] intercepts,
-		IOperationHandler<TOperation, TResponse> handler) {
+		IIntercept<TOperation, TResultValue>[] intercepts,
+		IOperationHandler<TOperation, TResultValue> handler) {
 
 		this._intercepts = intercepts;
 		this._handler = handler;
 		this.NextDelegate = this.Next;
 	}
 
-	private Task<Result<TResponse>> Next(
+	private Task<Result<TResultValue>> Next(
 		OperationContext<TOperation> context,
 		CancellationToken cancellationToken) {
 

@@ -22,11 +22,11 @@ public class InterceptTests {
 	// Test data
 	public static readonly List<string> ExecutionLog = [];
 
-	public sealed class FatalIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
+	public sealed class FatalIntercept<TRequest, TResultValue> : IIntercept<TRequest, TResultValue>
 		where TRequest : notnull {
-		public Task<Result<TResponse>> HandleAsync(
+		public Task<Result<TResultValue>> HandleAsync(
 			OperationContext<TRequest> context,
-			OperationHandlerDelegate<TRequest, TResponse> next,
+			OperationHandlerDelegate<TRequest, TResultValue> next,
 			CancellationToken cancellationToken) {
 			throw new OutOfMemoryException("From intercept");
 		}
@@ -139,12 +139,12 @@ public class InterceptTests {
 
 
 	// Open generic intercept - logs all requests
-	public class LoggingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
+	public class LoggingIntercept<TRequest, TResultValue> : IIntercept<TRequest, TResultValue>
 		where TRequest : notnull {
 
-		public async Task<Result<TResponse>> HandleAsync(
+		public async Task<Result<TResultValue>> HandleAsync(
 			OperationContext<TRequest> context,
-			OperationHandlerDelegate<TRequest, TResponse> next,
+			OperationHandlerDelegate<TRequest, TResultValue> next,
 			CancellationToken cancellationToken) {
 			ExecutionLog.Add($"LoggingIntercept: Before {typeof(TRequest).Name}");
 			var result = await next(context, cancellationToken);
@@ -154,12 +154,12 @@ public class InterceptTests {
 	}
 
 	// Another open generic intercept - adds timing
-	public class TimingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
+	public class TimingIntercept<TRequest, TResultValue> : IIntercept<TRequest, TResultValue>
 		where TRequest : notnull {
 
-		public async Task<Result<TResponse>> HandleAsync(
+		public async Task<Result<TResultValue>> HandleAsync(
 			OperationContext<TRequest> context,
-			OperationHandlerDelegate<TRequest, TResponse> next,
+			OperationHandlerDelegate<TRequest, TResultValue> next,
 			CancellationToken cancellationToken) {
 			ExecutionLog.Add($"TimingIntercept: Start {typeof(TRequest).Name}");
 			var result = await next(context, cancellationToken);
@@ -182,15 +182,15 @@ public class InterceptTests {
 	}
 
 	// Intercept that modifies the result
-	public class ResultModifyingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
+	public class ResultModifyingIntercept<TRequest, TResultValue> : IIntercept<TRequest, TResultValue>
 		where TRequest : notnull {
-		public async Task<Result<TResponse>> HandleAsync(OperationContext<TRequest> context, OperationHandlerDelegate<TRequest, TResponse> next, CancellationToken cancellationToken) {
+		public async Task<Result<TResultValue>> HandleAsync(OperationContext<TRequest> context, OperationHandlerDelegate<TRequest, TResultValue> next, CancellationToken cancellationToken) {
 			var result = await next(context, cancellationToken);
 
 			if (result.IsSuccess && result.Value is string str) {
 				// Modify the result
 				var modified = str + " [Modified by intercept]";
-				return Result<TResponse>.Success((TResponse)(object)modified);
+				return Result<TResultValue>.Success((TResultValue)(object)modified);
 			}
 
 			return result;
@@ -198,18 +198,18 @@ public class InterceptTests {
 	}
 
 	// Intercept that handles errors
-	public class ErrorHandlingIntercept<TRequest, TResponse> : IIntercept<TRequest, TResponse>
+	public class ErrorHandlingIntercept<TRequest, TResultValue> : IIntercept<TRequest, TResultValue>
 		where TRequest : notnull {
 
-		public async Task<Result<TResponse>> HandleAsync(
+		public async Task<Result<TResultValue>> HandleAsync(
 			OperationContext<TRequest> context,
-			OperationHandlerDelegate<TRequest, TResponse> next,
+			OperationHandlerDelegate<TRequest, TResultValue> next,
 			CancellationToken cancellationToken) {
 			try {
 				return await next(context, cancellationToken);
 			} catch (Exception ex) {
 				ExecutionLog.Add($"ErrorHandlingIntercept: Caught {ex.GetType().Name}");
-				return Result<TResponse>.Fail(ex);
+				return Result<TResultValue>.Fail(ex);
 			}
 		}
 

@@ -14,7 +14,7 @@ namespace Cirreum.Caching;
 /// <para>
 /// When <see cref="Provider"/> is <see cref="CacheProvider.None"/>, the DI container
 /// registers <see cref="NoCacheService"/>, which executes every factory directly.
-/// Participants that call <see cref="ICacheService.GetOrCreateAsync{TResponse}"/>
+/// Participants that call <see cref="ICacheService.GetOrCreateAsync{TResultValue}"/>
 /// degrade transparently — no branching required.
 /// </para>
 /// </remarks>

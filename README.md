@@ -130,12 +130,12 @@ A high-performance operation pipeline engine with comprehensive support for comm
 - OpenTelemetry integration with zero overhead when disabled
 
 **Operation Abstractions**
-- `IOperation` / `IOperation<TResponse>` - Base operation contracts
-- `IAuthorizableOperation` / `IAuthorizableOperation<TResponse>` - Authorized operations
-- `IOwnerMutateOperation` / `IOwnerLookupOperation<TResponse>` / `IOwnerSearchOperation<TResponse>` - Owner-scoped grant-aware operations
-- `IOwnerCacheableLookupOperation<TResponse>` - Owner-scoped cacheable lookups
-- `ISelfMutateOperation` / `ISelfLookupOperation<TResponse>` - Self-scoped identity operations
-- `ICacheableQuery<TResponse>` - Query result caching with sliding/absolute expiration + cache tags
+- `IOperation` / `IOperation<TResultValue>` - Base operation contracts
+- `IAuthorizableOperation` / `IAuthorizableOperation<TResultValue>` - Authorized operations
+- `IOwnerMutateOperation` / `IOwnerLookupOperation<TResultValue>` / `IOwnerSearchOperation<TResultValue>` - Owner-scoped grant-aware operations
+- `IOwnerCacheableLookupOperation<TResultValue>` - Owner-scoped cacheable lookups
+- `ISelfMutateOperation` / `ISelfLookupOperation<TResultValue>` - Self-scoped identity operations
+- `ICacheableQuery<TResultValue>` - Query result caching with sliding/absolute expiration + cache tags
 
 **Built-in Intercepts** (outermost → innermost, wrapping the handler)
 - **Validation** - FluentValidation integration
@@ -219,12 +219,12 @@ Definitions that support Cirreum's architectural patterns:
 | `IOperation` / `IOperation<T>` | ✗ | ✗ | ✗ | Internal / anonymous |
 | `ICacheableQuery<T>` | ✗ | ✓ | ✗ | Public cached lookups |
 | `IAuthorizableOperation` / `IAuthorizableOperation<T>` | ✓ | ✗ | ✗ | Protected operations (reads and writes) |
-| `IOwnerMutateOperation` / `<TResponse>` | ✓ | ✗ | ✓ | Grant-aware writes |
-| `IOwnerLookupOperation<TResponse>` | ✓ | ✗ | ✓ | Grant-aware point-reads |
-| `IOwnerCacheableLookupOperation<TResponse>` | ✓ | ✓ | ✓ | Grant-aware cached reads |
-| `IOwnerSearchOperation<TResponse>` | ✓ | ✗ | ✓ | Grant-aware cross-owner queries |
-| `ISelfMutateOperation` / `<TResponse>` | ✓ | ✗ | ✓ | Self-scoped identity writes |
-| `ISelfLookupOperation<TResponse>` | ✓ | ✗ | ✓ | Self-scoped identity reads |
+| `IOwnerMutateOperation` / `<TResultValue>` | ✓ | ✗ | ✓ | Grant-aware writes |
+| `IOwnerLookupOperation<TResultValue>` | ✓ | ✗ | ✓ | Grant-aware point-reads |
+| `IOwnerCacheableLookupOperation<TResultValue>` | ✓ | ✓ | ✓ | Grant-aware cached reads |
+| `IOwnerSearchOperation<TResultValue>` | ✓ | ✗ | ✓ | Grant-aware cross-owner queries |
+| `ISelfMutateOperation` / `<TResultValue>` | ✓ | ✗ | ✓ | Self-scoped identity writes |
+| `ISelfLookupOperation<TResultValue>` | ✓ | ✗ | ✓ | Self-scoped identity reads |
 
 ### 4. Utilities & Helpers
 

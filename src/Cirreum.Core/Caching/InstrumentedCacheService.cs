@@ -31,9 +31,9 @@ sealed class InstrumentedCacheService(ICacheService inner, string consumer) : IC
 	/// </summary>
 	internal ICacheService Inner => inner;
 
-	public async ValueTask<TResponse> GetOrCreateAsync<TResponse>(
+	public async ValueTask<TResultValue> GetOrCreateAsync<TResultValue>(
 		string cacheKey,
-		Func<CancellationToken, ValueTask<TResponse>> factory,
+		Func<CancellationToken, ValueTask<TResultValue>> factory,
 		CacheExpirationSettings settings,
 		string[]? tags = null,
 		CancellationToken cancellationToken = default) {

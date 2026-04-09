@@ -92,15 +92,15 @@ public sealed class ConductorBuilder {
 	/// Registers an intercept implementation type with the specified service lifetime for use in the conductor pipeline.
 	/// </summary>
 	/// <remarks>Each intercept implementation type must implement at least one closed generic interface of <see
-	/// cref="IIntercept{TOperation, TResponse}"/>. Multiple intercepts can be registered by calling this method multiple
+	/// cref="IIntercept{TOperation, TResultValue}"/>. Multiple intercepts can be registered by calling this method multiple
 	/// times.</remarks>
-	/// <param name="implementationType">The type that implements one or more closed generic versions of <see cref="IIntercept{TOperation, TResponse}"/>. This
+	/// <param name="implementationType">The type that implements one or more closed generic versions of <see cref="IIntercept{TOperation, TResultValue}"/>. This
 	/// type will be registered as an intercept in the pipeline.</param>
 	/// <param name="serviceLifetime">The lifetime with which the intercept implementation is registered. Defaults to <see
 	/// cref="ServiceLifetime.Transient"/> if not specified.</param>
 	/// <returns>The current <see cref="ConductorBuilder"/> instance, enabling fluent configuration.</returns>
 	/// <exception cref="InvalidOperationException">Thrown if <paramref name="implementationType"/> does not implement any closed generic version of <see
-	/// cref="IIntercept{TOperation, TResponse}"/>.</exception>
+	/// cref="IIntercept{TOperation, TResultValue}"/>.</exception>
 	public ConductorBuilder AddIntercept(Type implementationType, ServiceLifetime serviceLifetime = ServiceLifetime.Transient) {
 
 		var implementedGenericInterfaces = implementationType

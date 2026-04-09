@@ -8,10 +8,10 @@ public interface IOperation : IBaseOperation;
 /// <summary>
 /// Marker interface to represent an operation with a response
 /// </summary>
-/// <typeparam name="TResponse">Response type</typeparam>
-public interface IOperation<out TResponse> : IBaseOperation;
+/// <typeparam name="TResultValue">Response type</typeparam>
+public interface IOperation<out TResultValue> : IBaseOperation;
 
 /// <summary>
-/// Allows for generic type constraints of objects implementing IOperation or IOperation{TResponse}
+/// Allows for generic type constraints of objects implementing IOperation or IOperation{TResultValue}
 /// </summary>
 public interface IBaseOperation : IDomainObject;

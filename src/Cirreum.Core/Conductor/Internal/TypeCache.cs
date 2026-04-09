@@ -31,8 +31,8 @@ internal static class TypeCache {
 	internal static readonly ConcurrentDictionary<Type, OperationHandlerWrapper> VoidHandlers = new();
 
 	/// <summary>
-	/// Cache for typed operation handlers (IOperation&lt;TResponse&gt;).
-	/// Stores as object because different TResponse types share the same cache.
+	/// Cache for typed operation handlers (IOperation&lt;TResultValue&gt;).
+	/// Stores as object because different TResultValue types share the same cache.
 	/// </summary>
 	internal static readonly ConcurrentDictionary<Type, object> ResponseHandlers = new();
 

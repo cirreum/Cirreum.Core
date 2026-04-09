@@ -16,16 +16,16 @@ public interface ICacheService {
 	/// Returns a cached value for <paramref name="cacheKey"/> if it exists;
 	/// otherwise invokes <paramref name="factory"/>, caches the result, and returns it.
 	/// </summary>
-	/// <typeparam name="TResponse">The type of the cached value.</typeparam>
+	/// <typeparam name="TResultValue">The type of the cached value.</typeparam>
 	/// <param name="cacheKey">Unique key identifying the cache entry.</param>
 	/// <param name="factory">Delegate that produces the value on a cache miss.</param>
 	/// <param name="settings">Expiration policy for the new entry.</param>
 	/// <param name="tags">Optional tags for bulk invalidation via <see cref="RemoveByTagAsync"/>.</param>
 	/// <param name="cancellationToken">Cancellation token.</param>
 	/// <returns>The cached or freshly computed value.</returns>
-	ValueTask<TResponse> GetOrCreateAsync<TResponse>(
+	ValueTask<TResultValue> GetOrCreateAsync<TResultValue>(
 		string cacheKey,
-		Func<CancellationToken, ValueTask<TResponse>> factory,
+		Func<CancellationToken, ValueTask<TResultValue>> factory,
 		CacheExpirationSettings settings,
 		string[]? tags = null,
 		CancellationToken cancellationToken = default);

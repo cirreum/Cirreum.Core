@@ -11,13 +11,13 @@ using Cirreum.Conductor;
 /// <para>
 /// Normally you would not implement this interface directly. Implement one of the
 /// operational marker interfaces instead:
-/// <see cref="IAuthorizableOperation"/> or <see cref="IAuthorizableOperation{TResponse}"/>.
+/// <see cref="IAuthorizableOperation"/> or <see cref="IAuthorizableOperation{TResultValue}"/>.
 /// For grant-aware (grant-based) operations, use the grant interfaces:
 /// <see cref="IOwnerMutateOperation"/>,
-/// <see cref="IOwnerLookupOperation{TResponse}"/>,
-/// <see cref="IOwnerSearchOperation{TResponse}"/>,
+/// <see cref="IOwnerLookupOperation{TResultValue}"/>,
+/// <see cref="IOwnerSearchOperation{TResultValue}"/>,
 /// <see cref="ISelfMutateOperation"/>, or
-/// <see cref="ISelfLookupOperation{TResponse}"/>.
+/// <see cref="ISelfLookupOperation{TResultValue}"/>.
 /// </para>
 /// <para>
 /// By inheriting <see cref="IAuthorizableObject"/>, every instance may be
