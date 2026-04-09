@@ -123,7 +123,7 @@ state.SetB(b);
 A high-performance operation pipeline engine with comprehensive support for command/query separation:
 
 **Core Features**
-- Type-safe operation/response contracts with `Result<T>` pattern
+- Type-safe operation/result contracts with `Result<TResultValue>` pattern
 - Automatic handler discovery and registration
 - Configurable intercept pipeline (validation, authorization, caching, telemetry)
 - Pub/sub notification system with multiple publishing strategies
@@ -168,8 +168,8 @@ builder.Services.AddOpenTelemetry()
 
 | Metric | Type | Tags |
 |--------|------|------|
-| `conductor.requests.total` | Counter | operation.type, operation.status |
-| `conductor.requests.duration` | Histogram (ms) | operation.type, operation.status |
+| `conductor.operations.total` | Counter | operation.type, operation.status |
+| `conductor.operations.duration` | Histogram (ms) | operation.type, operation.status |
 | `cirreum.authz.decisions` | Counter | stage, step, decision, reason |
 | `cirreum.authz.duration` | Histogram (ms) | resource_type, decision |
 | `cirreum.authz.grant.cache` | Counter | cache_level (bypass/l1-hit/l2/denied-early) |
@@ -209,7 +209,7 @@ Foundational building blocks including:
 
 Definitions that support Cirreum's architectural patterns:
 
-- CQRS-style operation and response contracts
+- CQRS-style operation and result contracts
 - RBAC / ABAC / grant-based authorization with role inheritance and owner/tenant relationships
 - Interceptors, pipelines, and execution flows
 - Metadata propagation and scoped operation details
@@ -297,7 +297,7 @@ AuthorizationContext<T> (Authorization Decisions)
 long startTimestamp = Stopwatch.GetTimestamp();
 
 // Computed on demand, zero allocation
-TimeSpan elapsed = requestContext.ElapsedDuration;
+TimeSpan elapsed = operationContext.ElapsedDuration;
 ```
 
 ### Authorization Flow
@@ -343,7 +343,7 @@ Grants answers *"which owners can this caller access?"* without the handler
 knowing about grant tables:
 
 ```csharp
-// 1. Define grant-aware requests (domain derived from namespace convention)
+// 1. Define grant-aware operations (domain derived from namespace convention)
 [RequiresPermission("delete")]
 public sealed record DeleteIssue(string Id) : IOwnerMutateOperation {
     public string? OwnerId { get; set; }
@@ -381,9 +381,9 @@ dotnet add package Cirreum.Core
 // 1. Create operation context (done once via OperationContextFactory)
 var operationContext = OperationContext<MyOperation>.Create(
     userState: currentUserState,
-    request: myOperation,
-    requestType: nameof(MyOperation),
-    requestId: activity?.SpanId.ToString()
+    operation: myOperation,
+    operationType: nameof(MyOperation),
+    operationId: activity?.SpanId.ToString()
         ?? ActivitySpanId.CreateRandom().ToHexString(),
     correlationId: activity?.TraceId.ToString()
         ?? ActivityTraceId.CreateRandom().ToHexString(),
