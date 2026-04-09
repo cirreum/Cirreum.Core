@@ -80,10 +80,16 @@ that tenant."
 │   2. Resolve effective access:                                                  │
 │      ├─ L1 cache check (per-request dictionary)                                │
 │      ├─ Merge resource's own AccessList                                         │
-│      ├─ Walk up hierarchy (if InheritPermissions)                               │
+│      ├─ Resolve ancestors (if InheritPermissions):                              │
+│      │   ├─ Batch path (AncestorResourceIds populated):                        │
+│      │   │   └─ Single GetManyByIdAsync call → O(1) reads                      │
+│      │   └─ Legacy path (AncestorResourceIds empty):                           │
+│      │       └─ Sequential GetByIdAsync walk → O(depth) reads                  │
+│      │   Common to both:                                                        │
 │      │   ├─ Cycle detection (visited set)                                       │
-│      │   ├─ Sibling optimization (L1 cache hit on parent)                       │
-│      │   └─ Orphan detection (parent not found)                                 │
+│      │   ├─ Sibling optimization (L1 cache hit on ancestor)                     │
+│      │   ├─ Orphan detection (ancestor not found)                               │
+│      │   └─ Reverse-caching (each ancestor cached for sibling reuse)           │
 │      └─ Merge RootDefaults at hierarchy root                                    │
 │   3. Check: does any entry grant permission for caller's role?                  │
 │   4. Emit telemetry + structured logs                                           │
@@ -94,9 +100,10 @@ that tenant."
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                    IAccessEntryProvider<T> (app-implemented)                     │
 │                                                                                 │
-│   GetByIdAsync(resourceId)  → load resource from store                          │
-│   GetParentId(resource)     → navigate hierarchy                                │
-│   RootDefaults              → organization-wide fallback ACL                    │
+│   GetByIdAsync(resourceId)  → load resource from store (required)               │
+│   GetManyByIdAsync(ids)     → batch-load for materialized ancestors (default)   │
+│   GetParentId(resource)     → navigate hierarchy (default: ParentResourceId)    │
+│   RootDefaults              → org-wide fallback ACL (default: T.RootDefaults)   │
 │                                                                                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -110,13 +117,13 @@ that tenant."
 | Type | Kind | Description |
 |------|------|-------------|
 | `AccessEntry` | sealed record | A single ACE: binds a `Role` to `Permission[]` on a resource |
-| `IProtectedResource` | interface | Marker for objects with an embedded ACL (`ResourceId`, `AccessList`, `InheritPermissions`) |
+| `IProtectedResource` | interface | Marker for objects with an embedded ACL (`ResourceId`, `AccessList`, `InheritPermissions`, `AncestorResourceIds`) |
 
 ### Contracts
 
 | Type | Kind | Implemented By |
 |------|------|---------------|
-| `IAccessEntryProvider<T>` | interface | App (persistence layer) — loads resources and navigates hierarchy |
+| `IAccessEntryProvider<T>` | interface | App (persistence layer) — loads resources and navigates hierarchy. Only `GetByIdAsync` is required; `GetParentId`, `RootDefaults`, and `GetManyByIdAsync` have default implementations |
 | `IResourceAccessEvaluator` | interface | Framework — handlers inject this to check/filter |
 
 ### Internals
@@ -155,22 +162,48 @@ Root (no parent)
 
 ### Algorithm
 
+The evaluator uses two resolution paths depending on whether the resource has
+a materialized ancestor chain:
+
 ```text
 ResolveEffectiveAccess(resource, provider):
   1. L1 cache check → return if hit
   2. entries = [...resource.AccessList]
   3. if resource.InheritPermissions:
-     a. visited = { resource.ResourceId }
-     b. walk up via provider.GetParentId → provider.GetByIdAsync:
-        - parentId in visited → log cycle, stop
-        - L1 has parent → merge cached entries, stop (sibling optimization)
-        - parent null → log orphan, stop
-        - merge parent.AccessList
-        - !parent.InheritPermissions → stop
-        - continue to parent's parent
-     c. reached root → merge provider.RootDefaults
-  4. if at root (no parent) → merge provider.RootDefaults
+     if resource.AncestorResourceIds is non-empty:
+       → Batch path (see below)
+     else:
+       → Legacy walk path (see below)
+  4. if at root (no parent) and !InheritPermissions → merge provider.RootDefaults
   5. cache in L1, return
+```
+
+**Batch path** (materialized `AncestorResourceIds`):
+```text
+  a. Pre-scan AncestorResourceIds for L1 cache hit at position k
+  b. Batch-load ancestors [0..k-1] via provider.GetManyByIdAsync (1 call)
+  c. Build dictionary keyed by ResourceId for O(1) lookup
+  d. Walk AncestorResourceIds in order (nearest-first):
+     - ID in visited → log cycle, stop
+     - ID == cached position k → merge cached entries, stop
+     - ID not in dictionary → log orphan, stop
+     - merge ancestor.AccessList
+     - !ancestor.InheritPermissions → stop
+  e. reached root → merge provider.RootDefaults
+  f. Reverse-cache each ancestor's effective access for sibling optimization
+```
+
+**Legacy walk path** (no materialized ancestors):
+```text
+  a. visited = { resource.ResourceId }
+  b. walk up via provider.GetParentId → provider.GetByIdAsync:
+     - parentId in visited → log cycle, stop
+     - L1 has parent → merge cached entries, stop (sibling optimization)
+     - parent null → log orphan, stop
+     - merge parent.AccessList
+     - !parent.InheritPermissions → stop
+     - continue to parent's parent
+  c. reached root → merge provider.RootDefaults
 ```
 
 ### Edge Cases
@@ -181,7 +214,10 @@ ResolveEffectiveAccess(resource, provider):
 | **Orphan** (parent ID exists but parent not found) | Logged as warning, walk stops |
 | **Broken inheritance** (`InheritPermissions: false`) | Walk stops at that resource; ancestors not merged |
 | **Null ResourceId** (transient resource) | No caching; root defaults used if at root |
-| **Sibling optimization** | If a parent was already resolved in this request, its cached effective access is reused — avoids redundant walks when checking siblings |
+| **Sibling optimization** | If an ancestor was already resolved in this request, its cached effective access is reused — avoids redundant walks when checking siblings |
+| **Empty AncestorResourceIds** | Falls back to legacy walk path (backward compatible) |
+| **Stale AncestorResourceIds** | Missing ancestor in batch → treated as orphan, walk stops gracefully |
+| **Mixed entities in FilterAsync** | Each entity independently uses batch or walk path; L1 cache shared across both |
 
 ---
 
@@ -283,8 +319,36 @@ public sealed class DocumentFolder : IProtectedResource {
     public IReadOnlyList<AccessEntry> AccessList { get; init; } = [];
     public bool InheritPermissions { get; init; } = true;
 
+    // Materialized ancestor chain (nearest-to-farthest).
+    // Auto-maintained by persistence layer on create/move.
+    // Enables O(1) batch hierarchy resolution instead of O(depth) sequential reads.
+    public IReadOnlyList<string> AncestorResourceIds { get; init; } = [];
+
     // IProtectedResource
     string? IProtectedResource.ResourceId => this.Id;
+    string? IProtectedResource.ParentResourceId => this.ParentFolderId;
+
+    // Organization-wide defaults — applied at the root of the hierarchy
+    static IReadOnlyList<AccessEntry> IProtectedResource.RootDefaults => [
+        new AccessEntry {
+            Role = Roles.Admin,
+            Permissions = [
+                Permissions.Folder.Browse,
+                Permissions.Folder.Create,
+                Permissions.Folder.Delete,
+                Permissions.Document.Upload,
+                Permissions.Document.Download,
+                Permissions.Document.Delete
+            ]
+        },
+        new AccessEntry {
+            Role = Roles.Member,
+            Permissions = [
+                Permissions.Folder.Browse,
+                Permissions.Document.Download
+            ]
+        }
+    ];
 }
 ```
 
@@ -307,6 +371,11 @@ public static class Permissions {
 
 ### 3. Implement the provider
 
+Only `GetByIdAsync` is required. `GetParentId` defaults to `resource.ParentResourceId`,
+`RootDefaults` defaults to `T.RootDefaults` (the static virtual on the entity), and
+`GetManyByIdAsync` defaults to sequential fallback. Override any of these for custom
+hierarchy logic or batch optimization.
+
 ```csharp
 public sealed class DocumentFolderAccessEntryProvider(
     IFolderRepository repository) : IAccessEntryProvider<DocumentFolder> {
@@ -314,32 +383,13 @@ public sealed class DocumentFolderAccessEntryProvider(
     public async ValueTask<DocumentFolder?> GetByIdAsync(
         string resourceId, CancellationToken cancellationToken) =>
         await repository.GetByIdAsync(resourceId, cancellationToken);
-
-    public string? GetParentId(DocumentFolder resource) =>
-        resource.ParentFolderId;
-
-    public IReadOnlyList<AccessEntry> RootDefaults { get; } = [
-        new AccessEntry {
-            Role = Roles.Admin,
-            Permissions = [
-                Permissions.Folder.Browse,
-                Permissions.Folder.Create,
-                Permissions.Folder.Delete,
-                Permissions.Document.Upload,
-                Permissions.Document.Download,
-                Permissions.Document.Delete
-            ]
-        },
-        new AccessEntry {
-            Role = Roles.Member,
-            Permissions = [
-                Permissions.Folder.Browse,
-                Permissions.Document.Download
-            ]
-        }
-    ];
 }
 ```
+
+> **Note:** When using `Cirreum.Persistence.Azure`, a default provider is auto-registered
+> via `DefaultAccessEntryProvider<T>` — no manual implementation is needed. The auto-registered
+> provider also overrides `GetManyByIdAsync` to use Cosmos `ReadManyItemsAsync` for true
+> batch reads.
 
 ### 4. Register
 
@@ -380,12 +430,15 @@ public sealed class UploadDocumentHandler(
 1. Handler calls CheckAsync<DocumentFolder>("folder-7", Document.Upload)
 2. ResourceAccessEvaluator reads caller identity from IAuthorizationContextAccessor
    (already resolved by the authorization pipeline — zero re-resolution)
-3. Loads folder-7 via DocumentFolderAccessEntryProvider.GetByIdAsync
+3. Loads folder-7 via provider.GetByIdAsync
 4. folder-7 has InheritPermissions: true
-5. Walks up: folder-7 → folder-3 → null (root)
-6. Merges: folder-7 ACL + folder-3 ACL + RootDefaults
-7. Checks: does any merged entry grant "documents:upload" for the caller's role?
-8. Returns Result.Success or Result.Fail(ForbiddenAccessException)
+5. folder-7.AncestorResourceIds = ["folder-3", "root-folder"]
+   → Batch path: single GetManyByIdAsync(["folder-3", "root-folder"]) call
+   (If AncestorResourceIds were empty, falls back to sequential walk)
+6. Merges: folder-7 ACL + folder-3 ACL + root-folder ACL + RootDefaults
+7. Reverse-caches folder-3 and root-folder effective access for sibling reuse
+8. Checks: does any merged entry grant "documents:upload" for the caller's role?
+9. Returns Result.Success or Result.Fail(ForbiddenAccessException)
 ```
 
 ---
@@ -398,10 +451,14 @@ public sealed class UploadDocumentHandler(
 |------------|-------|---------|
 | `{TypeName}:{ResourceId}` | DI scope (per-request) | `Dictionary` on scoped evaluator |
 
-The L1 cache provides two optimizations:
+The L1 cache provides three optimizations:
 - **Dedup:** Checking the same resource twice in one request resolves once.
 - **Sibling optimization:** When checking folder A and folder B that share a parent,
   the parent's effective access is computed once and reused.
+- **Reverse-caching (batch path):** When the batch path resolves a hierarchy, it
+  caches each ancestor's effective access (entries from that ancestor onward). This
+  means checking any resource under the same subtree reuses cached ancestor data,
+  reducing subsequent batch loads or even eliminating them entirely.
 
 ### Effective Roles
 
@@ -428,6 +485,7 @@ cache handles the hot case (multiple checks in one request) without staleness ri
 | `ResourceAccessDenied` | Warning | Permission denied (includes deny code) |
 | `ResourceAccessCycleDetected` | Warning | Hierarchy cycle found during walk |
 | `ResourceAccessOrphanDetected` | Warning | Parent resource not found during walk |
+| `ResourceAccessBatchLoaded` | Debug | Batch path loaded N ancestors in one call |
 
 ### Metrics (AuthorizationTelemetry)
 
@@ -440,6 +498,53 @@ Every exit path records a decision via `AuthorizationTelemetry.RecordDecision`:
 | Deny | `RESOURCE_NOT_FOUND` |
 
 All instrumentation is zero-cost when OTel is not attached.
+
+---
+
+## Materialized Ancestor Path (Performance Optimization)
+
+For deep hierarchies (e.g., nested folder structures), the sequential walk path
+requires O(depth) individual reads — one `GetByIdAsync` per ancestor. The
+**materialized ancestor path** optimization reduces this to a single batch read.
+
+### How It Works
+
+Entities opt in by populating `IProtectedResource.AncestorResourceIds` — a list
+of ancestor `ResourceId` values ordered nearest-to-farthest:
+
+```csharp
+// A folder 3 levels deep:
+AncestorResourceIds = ["parent-folder-id", "grandparent-folder-id", "root-folder-id"]
+```
+
+When the evaluator sees a non-empty list, it calls `GetManyByIdAsync` once to load
+all ancestors in a single batch, then walks the list in memory.
+
+### Performance Characteristics
+
+| Scenario | Legacy Walk | Batch Path |
+|----------|-------------|------------|
+| Single check, depth N | N reads | 1 batch read |
+| K siblings under same parent | N + (K-1)×0 reads (L1 cache) | 1 batch read + (K-1)×0 (L1 cache) |
+| Move/reparent | N/A | O(descendants) — cascade update |
+
+### Trade-offs
+
+- **Reads are O(1)** — single batch read regardless of depth.
+- **Moves are O(descendants)** — reparenting requires updating the ancestor chain
+  on every descendant. This is acceptable because moves are infrequent compared to reads.
+- **Backward compatible** — entities without `AncestorResourceIds` (empty list) use
+  the legacy walk path automatically.
+
+### Persistence Integration
+
+The `Cirreum.Persistence.Azure` layer auto-maintains `AncestorResourceIds`:
+- **On create**: computes ancestors from the parent's chain and patches via Cosmos DB
+  partial update (`SetByPath`), bypassing init-only property limitations.
+- **On move**: `IProtectedRepository.MoveAsync` updates the entity's ancestors and
+  cascades to all descendants via `ARRAY_CONTAINS` query.
+- **Detection**: Uses `InterfaceMap` reflection (cached per entity type) to check if
+  the entity overrides `AncestorResourceIds`. Only computes/patches when opted in.
 
 ---
 
@@ -474,6 +579,22 @@ Without root defaults, a newly created top-level folder would have an empty ACL 
 nobody could access it, including admins. Root defaults provide the organization-wide
 baseline (e.g., "Admins can do everything, Members can browse"). Resources override
 by adding their own entries or breaking inheritance.
+
+### Why Two Resolution Paths
+
+The batch path (materialized ancestors) and legacy walk path (sequential reads) serve
+different adoption stages. New entities that populate `AncestorResourceIds` get O(1)
+batch reads. Existing entities without it continue working unchanged. The evaluator
+forks at runtime based on the list's presence, so both paths coexist without
+configuration or feature flags.
+
+### Why Default Interface Members on IAccessEntryProvider
+
+Only `GetByIdAsync` is truly app-specific (how to load a resource from your store).
+`GetParentId`, `RootDefaults`, and `GetManyByIdAsync` have sensible defaults that
+delegate to `IProtectedResource`'s own declarations. This keeps provider implementations
+minimal — often just a single method. Custom providers can still override any member
+for advanced hierarchy logic.
 
 ### Why the Provider Is Scoped
 
