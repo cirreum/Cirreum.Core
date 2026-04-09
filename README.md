@@ -174,8 +174,8 @@ builder.Services.AddOpenTelemetry()
 | `cirreum.authz.duration` | Histogram (ms) | resource_type, decision |
 | `cirreum.authz.grant.cache` | Counter | cache_level (bypass/l1-hit/l2/denied-early) |
 | `cirreum.authz.grant.duration` | Histogram (ms) | domain, resource_type |
-| `cirreum.cache.operations` | Counter | status (hit/miss) |
-| `cirreum.cache.duration` | Histogram (ms) | status (hit/miss) |
+| `cirreum.cache.operations` | Counter | status, caller, consumer |
+| `cirreum.cache.duration` | Histogram (ms) | status, caller, consumer |
 
 ### 🏗️ Primitives & Utilities
 
