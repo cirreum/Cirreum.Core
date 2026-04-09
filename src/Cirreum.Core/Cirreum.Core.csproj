@@ -15,8 +15,8 @@
 		<PackageReference Include="Cirreum.Result" Version="1.0.15" />
 		<PackageReference Include="Cirreum.Exceptions" Version="1.0.3" />
 		<PackageReference Include="Microsoft.Extensions.Telemetry.Abstractions" Version="10.4.0" />
-		<PackageReference Include="OpenTelemetry.Api" Version="1.15.0" />
-		<PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.0" />
+		<PackageReference Include="OpenTelemetry.Api" Version="1.15.2" />
+		<PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.2" />
 		<PackageReference Include="FluentValidation" Version="12.1.1" />
 		<PackageReference Include="SmartFormat" Version="3.6.1" />
 		<PackageReference Include="CsvHelper" Version="33.1.0" />
