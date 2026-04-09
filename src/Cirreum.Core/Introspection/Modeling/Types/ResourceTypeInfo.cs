@@ -19,6 +19,8 @@ public sealed record ResourceTypeInfo(
 	IReadOnlyList<AuthorizationRuleTypeInfo> Rules,
 	bool IsGranted = false,
 	string? GrantDomain = null,
+	string? GrantableKind = null,
+	bool IsSelfScoped = false,
 	PermissionSet Permissions = null!
 ) {
 	/// <summary>
@@ -38,6 +40,8 @@ public sealed record ResourceTypeInfo(
 		Rules: [.. this.Rules.Select(r => r.ToRuleInfo())],
 		IsGranted: this.IsGranted,
 		GrantDomain: this.GrantDomain,
+		GrantableKind: this.GrantableKind,
+		IsSelfScoped: this.IsSelfScoped,
 		Permissions: [.. this.Permissions.Select(p => p.ToString())]
 	);
 }

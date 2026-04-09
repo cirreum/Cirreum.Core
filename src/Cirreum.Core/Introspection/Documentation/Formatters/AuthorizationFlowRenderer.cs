@@ -8,7 +8,7 @@ using System.Text;
 /// <remarks>
 /// <para>
 /// This renderer provides multiple visualization formats for the authorization pipeline flow,
-/// making it easy to understand how requests are processed through the authorization system.
+/// making it easy to understand how operations are processed through the authorization system.
 /// </para>
 /// <para>
 /// Available visualization formats:
@@ -48,7 +48,7 @@ public static class AuthorizationFlowRenderer {
 	/// AUTHORIZATION FLOW
 	/// ==================
 	///
-	/// [Request]
+	/// [Operation]
 	///     |
 	///     v
 	/// {Authenticated?}
@@ -69,7 +69,7 @@ public static class AuthorizationFlowRenderer {
 		sb.AppendLine("AUTHORIZATION FLOW");
 		sb.AppendLine("==================");
 		sb.AppendLine();
-		sb.AppendLine("[Request]");
+		sb.AppendLine("[Operation]");
 		sb.AppendLine("    |");
 		sb.AppendLine("    v");
 		sb.AppendLine("{Authenticated?}");
@@ -152,7 +152,7 @@ public static class AuthorizationFlowRenderer {
 		sb.AppendLine("    %% Authorization Flow Diagram");
 		sb.AppendLine();
 		sb.AppendLine("    %% Entry Point");
-		sb.AppendLine("    A[Request] --> B{Authenticated?}");
+		sb.AppendLine("    A[Operation] --> B{Authenticated?}");
 		sb.AppendLine();
 		sb.AppendLine("    %% Authentication Check");
 		sb.AppendLine("    B -->|No| C[UnauthenticatedAccessException]");

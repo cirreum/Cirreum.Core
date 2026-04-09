@@ -66,18 +66,18 @@ public class DomainDocumenter : IDomainDocumenter {
 		var catalog = DomainModel.Instance.GetCatalog();
 
 		// Extract metrics
-		var totalRequests = catalog.Metrics.TotalResources;
-		var protectedRequests = catalog.Metrics.ProtectedResources;
-		var anonymousRequests = catalog.Metrics.AnonymousResources;
+		var totalResources = catalog.Metrics.TotalResources;
+		var protectedResources = catalog.Metrics.ProtectedResources;
+		var anonymousResources = catalog.Metrics.AnonymousResources;
 		var coveragePercentage = catalog.Metrics.OverallCoveragePercentage;
 		var domainBoundaries = catalog.Metrics.TotalDomains;
 
 		sb.AppendLine("### Domain Summary");
 		sb.AppendLine();
 		sb.AppendLine($"- **Domain Boundaries**: {domainBoundaries}");
-		sb.AppendLine($"- **Total Resources**: {totalRequests}");
-		sb.AppendLine($"- **Protected Resources**: {protectedRequests} ({coveragePercentage}%)");
-		sb.AppendLine($"- **Anonymous Resources**: {anonymousRequests}");
+		sb.AppendLine($"- **Total Resources**: {totalResources}");
+		sb.AppendLine($"- **Protected Resources**: {protectedResources} ({coveragePercentage}%)");
+		sb.AppendLine($"- **Anonymous Resources**: {anonymousResources}");
 		sb.AppendLine();
 
 		// Domain details are available in the Domain Architecture tab and analysis results

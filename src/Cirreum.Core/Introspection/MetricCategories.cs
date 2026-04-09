@@ -7,7 +7,10 @@ public static class MetricCategories {
 
 	public const string AnonymousResources = "AnonymousResources.";
 	public const string AuthorizableResources = "AuthorizableResources.";
+	public const string AuthorizationConstraints = "AuthorizationConstraints.";
 	public const string AuthorizationRules = "AuthorizationRules.";
+	public const string GrantedResources = "GrantedResources.";
+	public const string ObjectLevelAcl = "ObjectLevelACL.";
 	public const string PolicyValidation = "PolicyValidation.";
 	public const string RoleHierarchy = "RoleHierarchy.";
 
@@ -24,16 +27,28 @@ public static class MetricCategories {
 			return "Anonymous Resources";
 		}
 
+		if (metricKey.StartsWith(AuthorizableResources)) {
+			return "Authorizable Resources";
+		}
+
+		if (metricKey.StartsWith(AuthorizationConstraints)) {
+			return "Authorization Constraints";
+		}
+
 		if (metricKey.StartsWith(AuthorizationRules)) {
 			return "Authorization Rules";
 		}
 
-		if (metricKey.StartsWith(PolicyValidation)) {
-			return "Policy Validation";
+		if (metricKey.StartsWith(GrantedResources)) {
+			return "Granted Resources";
 		}
 
-		if (metricKey.StartsWith(AuthorizableResources)) {
-			return "Protected Resources";
+		if (metricKey.StartsWith(ObjectLevelAcl)) {
+			return "Object-Level ACL";
+		}
+
+		if (metricKey.StartsWith(PolicyValidation)) {
+			return "Policy Validation";
 		}
 
 		if (metricKey.StartsWith(RoleHierarchy)) {

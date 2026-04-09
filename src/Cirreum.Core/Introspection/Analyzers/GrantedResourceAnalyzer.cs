@@ -1,15 +1,19 @@
 namespace Cirreum.Introspection.Analyzers;
 
+using Cirreum.Authorization.Operations.Grants;
 using Cirreum.Introspection.Modeling;
 using Cirreum.Introspection.Modeling.Types;
-
+using Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
 /// Analyzes granted resources and grant domain hygiene. Detects misconfigurations
 /// such as missing permissions, orphaned domains, inert permission attributes,
-/// and mixed authorization patterns within a single domain.
+/// mixed authorization patterns, missing grant providers, self-scoped patterns,
+/// and cross-domain permission inconsistencies.
 /// </summary>
-public class GrantedResourceAnalyzer : IDomainAnalyzer {
+public class GrantedResourceAnalyzer(
+	IServiceProvider? services = null
+) : IDomainAnalyzer {
 
 	public const string AnalyzerCategory = "Granted Resources";
 
@@ -118,6 +122,84 @@ public class GrantedResourceAnalyzer : IDomainAnalyzer {
 		DetectMixedAuthorizationDomains(allResources, grantDomains, issues);
 
 		// ──────────────────────────────────────────────
+		// 6. No IOperationGrantProvider registered
+		// ──────────────────────────────────────────────
+
+		var grantProviderRegistered = false;
+
+		if (services is not null && grantedResources.Count > 0) {
+			var grantProvider = services.GetService<IOperationGrantProvider>();
+			grantProviderRegistered = grantProvider is not null;
+
+			if (!grantProviderRegistered) {
+				issues.Add(new AnalysisIssue(
+					Category: AnalyzerCategory,
+					Severity: IssueSeverity.Error,
+					Description: $"Found {grantedResources.Count} granted resource(s) but no IOperationGrantProvider " +
+						"is registered. Grant evaluation (Stage 1) cannot run without a grant resolver.",
+					RelatedTypeNames: [],
+					Recommendation: "Register an IOperationGrantProvider implementation via " +
+						"services.AddOperationGrants<TResolver>() to enable grant-based access control."));
+			}
+		}
+
+		// ──────────────────────────────────────────────
+		// 7. Self-scoped operations summary
+		// ──────────────────────────────────────────────
+
+		var selfScoped = grantedResources.Where(r => r.IsSelfScoped).ToList();
+
+		if (selfScoped.Count > 0) {
+			issues.Add(new AnalysisIssue(
+				Category: AnalyzerCategory,
+				Severity: IssueSeverity.Info,
+				Description: $"{selfScoped.Count} self-scoped operation(s) detected. These use identity " +
+					"matching (ExternalId == UserId) instead of owner-scope grant resolution.",
+				RelatedTypeNames: [.. selfScoped.Select(TypeName)],
+				Recommendation: null));
+		}
+
+		// ──────────────────────────────────────────────
+		// 8. Self-scoped operations without permissions
+		// ──────────────────────────────────────────────
+
+		var selfScopedNoPermissions = selfScoped
+			.Where(r => r.Permissions.Count == 0)
+			.ToList();
+
+		if (selfScopedNoPermissions.Count > 0) {
+			issues.Add(new AnalysisIssue(
+				Category: AnalyzerCategory,
+				Severity: IssueSeverity.Info,
+				Description: $"Found {selfScopedNoPermissions.Count} self-scoped operation(s) without " +
+					"[RequiresPermission]. Self-scoped operations rely on identity matching; " +
+					"permissions are optional but enable permission-gated self-access.",
+				RelatedTypeNames: [.. selfScopedNoPermissions.Select(TypeName)],
+				Recommendation: "Add [RequiresPermission] if you need the grant system to verify specific " +
+					"permissions before allowing self-access. Otherwise, identity matching alone is sufficient."));
+		}
+
+		// ──────────────────────────────────────────────
+		// 9. Cross-domain permissions
+		// ──────────────────────────────────────────────
+
+		var crossDomain = grantedResources
+			.Where(r => r.Permissions.Count >= 2)
+			.Where(r => r.Permissions.Select(p => p.Feature).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+			.ToList();
+
+		if (crossDomain.Count > 0) {
+			issues.Add(new AnalysisIssue(
+				Category: AnalyzerCategory,
+				Severity: IssueSeverity.Warning,
+				Description: $"Found {crossDomain.Count} resource(s) with [RequiresPermission] attributes " +
+					"spanning multiple domain features.",
+				RelatedTypeNames: [.. crossDomain.Select(TypeName)],
+				Recommendation: "All permissions on a granted resource should use the same domain feature. " +
+					"Cross-cutting concerns belong in Stage 2 resource authorizers or Stage 3 policies."));
+		}
+
+		// ──────────────────────────────────────────────
 		// Metrics
 		// ──────────────────────────────────────────────
 
@@ -127,12 +209,15 @@ public class GrantedResourceAnalyzer : IDomainAnalyzer {
 			.Distinct(StringComparer.OrdinalIgnoreCase)
 			.Count();
 
-		metrics[$"{AnalyzerCategory}.GrantedResourceCount"] = grantedResources.Count;
-		metrics[$"{AnalyzerCategory}.GrantDomainCount"] = grantDomains.Count;
-		metrics[$"{AnalyzerCategory}.TotalPermissionCount"] = permissionCount;
-		metrics[$"{AnalyzerCategory}.MissingPermissionCount"] = missingPermissions.Count;
-		metrics[$"{AnalyzerCategory}.PermissionsWithoutGrantsCount"] = permissionsWithoutGrants.Count;
-		metrics[$"{AnalyzerCategory}.UnusedDomainCount"] = unusedDomains.Count;
+		metrics[$"{MetricCategories.GrantedResources}GrantedResourceCount"] = grantedResources.Count;
+		metrics[$"{MetricCategories.GrantedResources}GrantDomainCount"] = grantDomains.Count;
+		metrics[$"{MetricCategories.GrantedResources}TotalPermissionCount"] = permissionCount;
+		metrics[$"{MetricCategories.GrantedResources}MissingPermissionCount"] = missingPermissions.Count;
+		metrics[$"{MetricCategories.GrantedResources}PermissionsWithoutGrantsCount"] = permissionsWithoutGrants.Count;
+		metrics[$"{MetricCategories.GrantedResources}UnusedDomainCount"] = unusedDomains.Count;
+		metrics[$"{MetricCategories.GrantedResources}GrantProviderRegistered"] = grantProviderRegistered ? 1 : 0;
+		metrics[$"{MetricCategories.GrantedResources}SelfScopedCount"] = selfScoped.Count;
+		metrics[$"{MetricCategories.GrantedResources}CrossDomainPermissionCount"] = crossDomain.Count;
 
 		// Summary
 		if (grantedResources.Count > 0) {

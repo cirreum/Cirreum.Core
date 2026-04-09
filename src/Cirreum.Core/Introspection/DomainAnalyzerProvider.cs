@@ -37,13 +37,15 @@ public static class DomainAnalyzerProvider {
 			new AuthorizationRuleAnalyzer(),
 			new RoleHierarchyAnalyzer(roleRegistry),
 			new AnonymousResourceAnalyzer(),
-			new GrantedResourceAnalyzer()
+			new GrantedResourceAnalyzer(services)
 		};
 
 		// Only add service-dependent analyzers if services are provided
 		if (services != null) {
 			analyzers.Add(new AuthorizableResourceAnalyzer(services));
+			analyzers.Add(new AuthorizationConstraintAnalyzer(services));
 			analyzers.Add(new PolicyValidatorAnalyzer(services));
+			analyzers.Add(new ProtectedResourceAnalyzer(services));
 		}
 
 		return analyzers;

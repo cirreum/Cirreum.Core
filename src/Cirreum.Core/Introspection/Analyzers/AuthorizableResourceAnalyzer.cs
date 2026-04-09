@@ -18,10 +18,10 @@ public class AuthorizableResourceAnalyzer(
 
 	private static class Issues {
 
-		public static IssueDefinition RequestsWithNoAuthorizer(int count) {
+		public static IssueDefinition OperationsWithNoAuthorizer(int count) {
 			var recommendation = count == 1
-				? "Critical: This request will fail authorization. Create an authorizer for it or mark it as anonymous if public access is intended."
-				: "Critical: These requests will fail authorization. Create an authorizer for each resource or mark them as anonymous if public access is intended.";
+				? "Critical: This operation will fail authorization. Create an authorizer for it or mark it as anonymous if public access is intended."
+				: "Critical: These operations will fail authorization. Create an authorizer for each resource or mark them as anonymous if public access is intended.";
 
 			return new(
 				$"Found {count} resource(s) that implement IAuthorizableOperationBase but have no authorizer defined",
@@ -113,28 +113,28 @@ public class AuthorizableResourceAnalyzer(
 		}
 
 		// Split into resources that MUST have an authorizer vs those that don't
-		var requestResources = unprotectedResources.Where(r => r.RequiresAuthorization).ToList();
-		var nonRequestResources = unprotectedResources.Where(r => !r.RequiresAuthorization).ToList();
+		var operationResources = unprotectedResources.Where(r => r.RequiresAuthorization).ToList();
+		var nonOperationResources = unprotectedResources.Where(r => !r.RequiresAuthorization).ToList();
 
 		// CRITICAL: IAuthorizableOperationBase without authorizer = security gap in the pipeline
-		if (requestResources.Count > 0) {
-			var issue = Issues.RequestsWithNoAuthorizer(requestResources.Count);
+		if (operationResources.Count > 0) {
+			var issue = Issues.OperationsWithNoAuthorizer(operationResources.Count);
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Error,
 				Description: issue.Description,
-				RelatedTypeNames: [.. requestResources.Select(r => r.ResourceType.FullName ?? r.ResourceType.Name)],
+				RelatedTypeNames: [.. operationResources.Select(r => r.ResourceType.FullName ?? r.ResourceType.Name)],
 				Recommendation: issue.Recommendation));
 		}
 
-		// For non-request IAuthorizableObject without authorizer, check policy coverage
-		if (nonRequestResources.Count > 0) {
+		// For non-operation IAuthorizableObject without authorizer, check policy coverage
+		if (nonOperationResources.Count > 0) {
 
-			var withPolicyProtection = nonRequestResources
+			var withPolicyProtection = nonOperationResources
 				.Where(r => HasAttributeBasedPolicyProtection(r.ResourceType, policyValidators))
 				.ToList();
 
-			var withoutPolicyProtection = nonRequestResources
+			var withoutPolicyProtection = nonOperationResources
 				.Where(r => !HasAttributeBasedPolicyProtection(r.ResourceType, policyValidators))
 				.ToList();
 

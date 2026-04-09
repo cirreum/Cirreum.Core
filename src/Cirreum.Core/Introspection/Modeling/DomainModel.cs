@@ -117,16 +117,23 @@ public class DomainModel() {
 			var isCacheableQuery = IsCacheableQuery(resourceType);
 
 			// RequiresAuthorization: is an IAuthorizableOperationBase (flows through pipeline, must have authorizer)
-			var requiresAuthorization = !isAnonymous && ImplementsAuthorizableRequest(resourceType);
+			var requiresAuthorization = !isAnonymous && ImplementsAuthorizableOperation(resourceType);
 
 			// Permission metadata: domain feature and required permissions are available
 			// for all resources in a *.Domain.* namespace, not just grant-aware ones.
 			var grantDomain = RequiredPermissionCache.ResolveDomainNamespace(resourceType);
 			var permissions = RequiredPermissionCache.GetFor(resourceType);
-			var isGranted = typeof(IGrantableMutateBase).IsAssignableFrom(resourceType)
+			var isSelfScoped = typeof(IGrantableSelfBase).IsAssignableFrom(resourceType);
+			var isGranted = isSelfScoped
+				|| typeof(IGrantableMutateBase).IsAssignableFrom(resourceType)
 				|| typeof(IGrantableLookupBase).IsAssignableFrom(resourceType)
-				|| typeof(IGrantableSearchBase).IsAssignableFrom(resourceType)
-				|| typeof(IGrantableSelfBase).IsAssignableFrom(resourceType);
+				|| typeof(IGrantableSearchBase).IsAssignableFrom(resourceType);
+
+			var grantableKind = isSelfScoped ? "Self"
+				: typeof(IGrantableMutateBase).IsAssignableFrom(resourceType) ? "Mutate"
+				: typeof(IGrantableLookupBase).IsAssignableFrom(resourceType) ? "Lookup"
+				: typeof(IGrantableSearchBase).IsAssignableFrom(resourceType) ? "Search"
+				: (string?)null;
 
 			var resourceInfo = new ResourceTypeInfo(
 				ResourceType: resourceType,
@@ -140,6 +147,8 @@ public class DomainModel() {
 				Rules: rules.AsReadOnly(),
 				IsGranted: isGranted,
 				GrantDomain: grantDomain,
+				GrantableKind: grantableKind,
+				IsSelfScoped: isSelfScoped,
 				Permissions: permissions
 			);
 
@@ -343,10 +352,10 @@ public class DomainModel() {
 	/// </returns>
 	/// <remarks>
 	/// <see cref="IAuthorizableOperationBase"/> is the single pipeline discriminator for authorization —
-	/// all request marker interfaces (<c>IAuthorizableOperation</c>, <c>IAuthorizableOperation&lt;T&gt;</c>,
+	/// all operation marker interfaces (<c>IAuthorizableOperation</c>, <c>IAuthorizableOperation&lt;T&gt;</c>,
 	/// and the grant interfaces) inherit from it.
 	/// </remarks>
-	private static bool ImplementsAuthorizableRequest(Type type) {
+	private static bool ImplementsAuthorizableOperation(Type type) {
 		return type.GetInterfaces().Any(i => i.Name == nameof(IAuthorizableOperationBase));
 	}
 
