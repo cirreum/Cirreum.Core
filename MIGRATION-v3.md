@@ -44,8 +44,8 @@ Most of the migration is mechanical. Run these replacements **in order** across 
 | Find | Replace |
 |------|---------|
 | `IAuthorizationPolicyValidator` | `IPolicyValidator` |
-| `AuthorizationValidatorBase<` | See [Authorization Validators](#authorization-validators) |
-| `IAuthorizationResourceValidator<` | Removed — see [Authorization Validators](#authorization-validators) |
+| `AuthorizationValidatorBase<` | `AuthorizerBase<` — see [Authorization Validators](#authorization-validators) |
+| `IAuthorizationResourceValidator<` | `IAuthorizer<` — see [Authorization Validators](#authorization-validators) |
 | `IScopeEvaluator` | `IAuthorizationConstraint` |
 | `AccessScope` | `AuthenticationBoundary` |
 
@@ -100,8 +100,8 @@ These types were removed with no direct 1:1 replacement:
 | `IAuditableRequest` | Auditing is now handled via intercepts and telemetry |
 | `IAuthorizableRequest` | Authorization is now attribute-driven via `[RequiresPermission]` on operation types, resolved through `IAuthorizableOperation` interfaces |
 | `RequestCompletedNotification` | Replaced by `OperationTelemetry` and the notification publisher pipeline |
-| `AuthorizationValidatorBase<T>` | Use `AttributeValidatorBase<TAttribute>` or implement `IPolicyValidator` |
-| `IAuthorizationResourceValidator<T>` | Implement `IPolicyValidator` directly |
+| `AuthorizationValidatorBase<T>` | Use `AuthorizerBase<TAuthorizableObject>` — same FluentValidation pattern, new base class |
+| `IAuthorizationResourceValidator<T>` | Use `IAuthorizer<TAuthorizableObject>` |
 
 ---
 
@@ -109,20 +109,24 @@ These types were removed with no direct 1:1 replacement:
 
 v2's `AuthorizationValidatorBase<TResource>` and `IAuthorizationResourceValidator<TResource>` have been replaced by a more flexible system:
 
-**Option A — Attribute-driven (most common):**
+**Option A — Authorizer (most common):**
 ```csharp
 // v2
-public class MyValidator : AuthorizationValidatorBase<MyResource> {
-    public override Task<ValidationResult> ValidateAsync(...) { ... }
+public class MyAuthorizer : AuthorizationValidatorBase<MyResource> {
+    public MyAuthorizer() {
+        RuleFor(ctx => ctx.UserState).Must(...);
+    }
 }
 
 // v3
-public class MyValidator : AttributeValidatorBase<RequiresPermissionAttribute> {
-    public override Task<ValidationResult> ValidateAsync(...) { ... }
+public class MyAuthorizer : AuthorizerBase<MyAuthorizableObject> {
+    public MyAuthorizer() {
+        RuleFor(ctx => ctx.UserState).Must(...);
+    }
 }
 ```
 
-**Option B — Policy-based (complex rules):**
+**Option B — Policy-based (complex cross-cutting rules):**
 ```csharp
 // v3
 public class MyPolicyValidator : IPolicyValidator {
@@ -210,7 +214,13 @@ Cirreum.Core is the foundation of the platform stack. Migrate bottom-up:
 1. Cirreum.Core              ← this release (v3)
 2. Cirreum infrastructure    ← update NuGet ref, apply renames
 3. Cirreum.Runtime.xxx       ← update NuGet ref, apply renames
-4. Applications (Solvaeon…)  ← update NuGet ref, apply renames
+4. Applications              ← update NuGet ref, apply renames + adopt new features
 ```
 
-Each layer only needs to apply the find-and-replace table from the [Quick Reference](#quick-reference--find-and-replace) section to its own code. The renames are fully mechanical — no logic changes required at any layer.
+Each layer starts by applying the find-and-replace table from the [Quick Reference](#quick-reference--find-and-replace) section — those renames are fully mechanical.
+
+At the **application layer**, you'll also want to evaluate the new authorization capabilities and migrate accordingly:
+
+- **Operation Grants** — If your operations are owner-scoped, update your operation interfaces to implement `IOwnerMutateOperation`, `IOwnerLookupOperation`, `IOwnerSearchOperation`, or `ISelfOperation` as appropriate, and implement an `IOperationGrantProvider` to resolve grants for your domain.
+- **Resource ACLs** — If your domain models need object-level access control, implement `IProtectedResource` on those models and provide an `IAccessEntryProvider` to supply access entries.
+- **Authorization workarounds** — Any manual authorization logic that was bolted on to work around v2's limitations can likely be replaced by the built-in grant evaluation, permission model, or policy validator pipeline. Review and simplify.
