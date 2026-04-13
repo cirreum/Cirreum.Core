@@ -56,16 +56,10 @@ public static class CacheServiceCollectionExtensions {
 		// Register the cache service based on the provider
 		AddCacheableQueryService(services, settings);
 
-		// Wrap the concrete ICacheService with the telemetry decorator.
-		// By this point the app has already had a chance to register its
-		// infra cache implementation (e.g., Hybrid, Distributed), and
-		// AddCacheableQueryService above has applied the fallback.
+		// Wrap the concrete ICacheService with the telemetry decorator and
+		// register keyed instances for known subsystems (query-caching,
+		// grant-resolution). Skips decoration for NoCacheService.
 		DecorateWithInstrumentation(services);
-
-		// Register keyed ICacheService instances so known subsystems
-		// (query-caching, grant-resolution) get their own
-		// InstrumentedCacheService with a baked-in consumer tag.
-		RegisterKeyedCacheServices(services);
 
 		return services;
 	}
@@ -96,87 +90,67 @@ public static class CacheServiceCollectionExtensions {
 	}
 
 	/// <summary>
-	/// Replaces the current <see cref="ICacheService"/> descriptor with a factory
-	/// that wraps the concrete implementation in <see cref="InstrumentedCacheService"/>.
-	/// Skips wrapping <see cref="NoCacheService"/> — there's no cache to observe.
+	/// Wraps the concrete <see cref="ICacheService"/> with <see cref="InstrumentedCacheService"/>
+	/// and registers keyed instances for known subsystems. Skips wrapping entirely when the
+	/// concrete implementation is <see cref="NoCacheService"/> — there's no cache to observe.
 	/// </summary>
 	private static void DecorateWithInstrumentation(IServiceCollection services) {
-		var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ICacheService));
+		var descriptor = services.FirstOrDefault(d =>
+			d.ServiceType == typeof(ICacheService) && !d.IsKeyedService);
 		if (descriptor is null) {
 			return;
 		}
 
+		// NoCacheService is a pass-through — no telemetry needed.
+		// Register it directly for keyed consumers and skip the decorator.
+		if (descriptor.ImplementationType == typeof(NoCacheService)) {
+			services.TryAddKeyedSingleton<ICacheService>(CacheConsumers.QueryCaching, (_, _) => new NoCacheService());
+			services.TryAddKeyedSingleton<ICacheService>(CacheConsumers.GrantResolution, (_, _) => new NoCacheService());
+			return;
+		}
+
+		// For real cache implementations, replace the non-keyed registration with
+		// a decorator that adds telemetry, then register keyed instances that share
+		// the same inner implementation with per-consumer tags.
 		services.Remove(descriptor);
 
+		// Register the raw inner implementation under a private marker so the
+		// decorator and keyed factories can resolve it without re-parsing the
+		// original ServiceDescriptor (which is fragile across .NET versions).
+		services.Add(ServiceDescriptor.Describe(
+			typeof(RawCacheServiceMarker),
+			sp => new RawCacheServiceMarker(
+				(ICacheService)ActivatorUtilities.CreateInstance(
+					sp, descriptor.ImplementationType!)),
+			descriptor.Lifetime));
+
+		// Non-keyed: decorated with "other" consumer tag
 		services.Add(ServiceDescriptor.Describe(
 			typeof(ICacheService),
-			sp => {
-				var inner = ResolveFromDescriptor(sp, descriptor);
-				return inner is NoCacheService
-					? inner
-					: new InstrumentedCacheService(inner, "other");
-			},
+			sp => new InstrumentedCacheService(
+				sp.GetRequiredService<RawCacheServiceMarker>().Inner, "other"),
 			descriptor.Lifetime));
+
+		// Keyed: decorated with specific consumer tags
+		services.TryAddKeyedSingleton<ICacheService>(
+			CacheConsumers.QueryCaching,
+			(sp, _) => new InstrumentedCacheService(
+				sp.GetRequiredService<RawCacheServiceMarker>().Inner,
+				CacheConsumers.QueryCaching));
+
+		services.TryAddKeyedSingleton<ICacheService>(
+			CacheConsumers.GrantResolution,
+			(sp, _) => new InstrumentedCacheService(
+				sp.GetRequiredService<RawCacheServiceMarker>().Inner,
+				CacheConsumers.GrantResolution));
 	}
 
 	/// <summary>
-	/// Registers keyed <see cref="ICacheService"/> instances for known subsystems.
-	/// Each keyed instance wraps the same concrete cache implementation but carries
-	/// a distinct consumer tag on its <see cref="InstrumentedCacheService"/> decorator.
+	/// Internal marker that holds the raw (non-decorated) cache implementation.
+	/// Prevents the decorator from needing to re-resolve from a captured
+	/// <see cref="ServiceDescriptor"/>, which is fragile across .NET versions.
 	/// </summary>
-	private static void RegisterKeyedCacheServices(IServiceCollection services) {
-		// Snapshot the current non-keyed descriptor so the keyed factories can
-		// resolve the same inner implementation.
-		var descriptor = services.FirstOrDefault(d =>
-			d.ServiceType == typeof(ICacheService) && d.ServiceKey is null);
-		if (descriptor is null) {
-			return;
-		}
-
-		RegisterKeyed(services, CacheConsumers.QueryCaching, descriptor);
-		RegisterKeyed(services, CacheConsumers.GrantResolution, descriptor);
-	}
-
-	private static void RegisterKeyed(
-		IServiceCollection services,
-		string consumerKey,
-		ServiceDescriptor nonKeyedDescriptor) {
-
-		services.Add(ServiceDescriptor.DescribeKeyed(
-			typeof(ICacheService),
-			consumerKey,
-			(sp, _) => {
-				var inner = ResolveInner(sp);
-				return inner is NoCacheService
-					? inner
-					: new InstrumentedCacheService(inner, consumerKey);
-			},
-			nonKeyedDescriptor.Lifetime));
-	}
-
-	/// <summary>
-	/// Resolves the raw (non-decorated) <see cref="ICacheService"/> from the
-	/// non-keyed registration. The non-keyed registration is already wrapped in
-	/// <see cref="InstrumentedCacheService"/>, so we unwrap one level to avoid
-	/// double-instrumenting.
-	/// </summary>
-	private static ICacheService ResolveInner(IServiceProvider sp) {
-		var service = sp.GetRequiredService<ICacheService>();
-		return service is InstrumentedCacheService instrumented
-			? instrumented.Inner
-			: service;
-	}
-
-	private static ICacheService ResolveFromDescriptor(
-		IServiceProvider sp,
-		ServiceDescriptor descriptor) {
-
-		if (descriptor.ImplementationInstance is ICacheService instance) {
-			return instance;
-		}
-		if (descriptor.ImplementationFactory is not null) {
-			return (ICacheService)descriptor.ImplementationFactory(sp);
-		}
-		return (ICacheService)ActivatorUtilities.CreateInstance(sp, descriptor.ImplementationType!);
+	private sealed class RawCacheServiceMarker(ICacheService inner) {
+		public ICacheService Inner => inner;
 	}
 }
