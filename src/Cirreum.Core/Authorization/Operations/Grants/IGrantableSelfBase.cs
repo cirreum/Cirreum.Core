@@ -1,5 +1,7 @@
 namespace Cirreum.Authorization.Operations.Grants;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 /// Base detection interface for self-scoped authorization targets. Carries the authorizable object <c>Id</c>
 /// from which the grant evaluator extracts the <see cref="ExternalId"/> to compare
@@ -51,5 +53,6 @@ public interface IGrantableSelfBase {
 	/// evaluator checks this before attempting the identity match. Override to enforce
 	/// format constraints (e.g., composite key structure). Defaults to a non-null check.
 	/// </summary>
+	[MemberNotNullWhen(true, nameof(Id), nameof(ExternalId))]
 	bool IsValidId => this.Id is not null;
 }
