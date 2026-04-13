@@ -31,6 +31,12 @@ namespace Cirreum.Security;
 public interface IAuthenticationBoundaryResolver {
 
 	/// <summary>
+	/// Well-known key for stashing the resolved authentication scheme
+	/// that actually authenticated the request.
+	/// </summary>
+	const string ResolvedSchemeKey = "__Cirreum_ResolvedAuthScheme";
+
+	/// <summary>
 	/// Computes the authentication boundary for the given user state and authentication scheme.
 	/// </summary>
 	/// <param name="userState">The authenticated user state.</param>
