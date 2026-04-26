@@ -65,33 +65,40 @@ An operation runs through nested interceptors. The default domain
 pipeline wraps like this:
 
 ```text
-┌─ Validation ─────────────────────────────────────────────────────────┐
-│  ┌─ Authorization ────────────────────────────────────────────────┐  │
-│  │  Stage 1 — Grants + Constraints (pre-handler)                  │  │
-│  │  Stage 2 — Object Authorizers (pre-handler)                    │  │
-│  │  Stage 3 — Policy Validators (pre-handler)                     │  │
-│  │  ┌─ (Custom Intercepts) ───────────────────────────────────┐   │  │
-│  │  │  ┌─ HandlerPerformance ──────────────────────────────┐  │   │  │
-│  │  │  │  ┌─ QueryCaching ─────────────────────────────┐   │  │   │  │
-│  │  │  │  │                                            │   │  │   │  │
-│  │  │  │  │  ┌─ Handler ───────────────────────────┐   │   │  │   │  │
-│  │  │  │  │  │  Stage 4 — Resource ACLs (in-handler)│   │   │  │   │  │
-│  │  │  │  │  │  (IResourceAccessEvaluator)          │   │   │  │   │  │
-│  │  │  │  │  └──────────────────────────────────────┘   │   │  │   │  │
-│  │  │  │  │                                            │   │  │   │  │
-│  │  │  │  └────────────────────────────────────────────┘   │  │   │  │
-│  │  │  └───────────────────────────────────────────────────┘  │   │  │
-│  │  └─────────────────────────────────────────────────────────┘   │  │
-│  └────────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────┘
+┌─ Validation ──────────────────────────────────────────────────────────────┐
+│  ┌─ Authorization ─────────────────────────────────────────────────────┐  │
+│  │  Stage 1 — Grants + Constraints (pre-handler)                       │  │
+│  │  Stage 2 — Object Authorizers (pre-handler)                         │  │
+│  │  Stage 3 — Policy Validators (pre-handler)                          │  │
+│  │  ┌─ GrantedLookupAudit (Pattern C audit, post-handler) ──────────┐  │  │
+│  │  │  ┌─ (Custom Intercepts) ────────────────────────────────────┐ │  │  │
+│  │  │  │  ┌─ HandlerPerformance ───────────────────────────────┐  │ │  │  │
+│  │  │  │  │  ┌─ QueryCaching ──────────────────────────────┐   │  │ │  │  │
+│  │  │  │  │  │                                             │   │  │ │  │  │
+│  │  │  │  │  │  ┌─ Handler ────────────────────────────┐   │   │  │ │  │  │
+│  │  │  │  │  │  │  Stage 4 — Resource ACLs (in-handler)│   │   │  │ │  │  │
+│  │  │  │  │  │  │  (IResourceAccessEvaluator)          │   │   │  │ │  │  │
+│  │  │  │  │  │  └──────────────────────────────────────┘   │   │  │ │  │  │
+│  │  │  │  │  │                                             │   │  │ │  │  │
+│  │  │  │  │  └─────────────────────────────────────────────┘   │  │ │  │  │
+│  │  │  │  └────────────────────────────────────────────────────┘  │ │  │  │
+│  │  │  └──────────────────────────────────────────────────────────┘ │  │  │
+│  │  └───────────────────────────────────────────────────────────────┘  │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
 Authorization is not a single layer — it's a pipeline within the pipeline.
 Stages 1–3 run as a pre-handler intercept, gating the operation before
-the handler executes. Stage 4 (Resource ACLs) runs *inside* the handler
-itself — the handler loads data, then calls `IResourceAccessEvaluator` to
-check object-level permissions. The handler is an active participant in
-authorization, not just the thing being protected.
+the handler executes. `GrantedLookupAudit` runs after Authorization to
+catch Pattern C bypasses — when an `IGrantableLookupBase` operation
+completes without the handler reading `IOperationGrantAccessor.Current`,
+it emits a structured warning + OTel tag for observability (does not
+deny — handler has already returned). Stage 4 (Resource ACLs) runs
+*inside* the handler itself — the handler loads data, then calls
+`IResourceAccessEvaluator` to check object-level permissions. The
+handler is an active participant in authorization, not just the thing
+being protected.
 
 Each interceptor has a **pre-** phase (code before `await next()`) and a
 **post-** phase (code after). For example, `QueryCaching` checks the
@@ -275,6 +282,13 @@ services.AddConductor(
 
 The order is exactly the order you register.
 
+> [!NOTE]
+> Raw mode does **not** auto-wire `GrantedLookupAudit<,>`. If you use the grant
+> pipeline (`IGrantableLookupBase` operations) and want the Pattern C runtime
+> audit, register it manually after `Authorization<,>`:
+> `.AddOpenIntercept(typeof(Cirreum.Authorization.Operations.Grants.GrantedLookupAudit<,>))`.
+> `AddDomainServices` registers it automatically as part of the standard pipeline.
+
 ### Domain Mode (Deterministic)
 
 When using `AddDomainServices`, Conductor applies a standard domain
@@ -282,11 +296,12 @@ pipeline. Registration order runs **outermost → innermost** (the first
 listed wraps everything below it; the last listed wraps the handler):
 
 ```text
-Validation            ← outermost (runs first pre-handler, last post-handler)
+Validation              ← outermost (runs first pre-handler, last post-handler)
 → Authorization
+→ GrantedLookupAudit    (Pattern C audit; auto-registered by AddDomainServices)
 → (Custom Intercepts)
 → HandlerPerformance
-→ QueryCaching        ← innermost (wraps the handler directly)
+→ QueryCaching          ← innermost (wraps the handler directly)
 ```
 
 This is enforced by tests:

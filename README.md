@@ -140,6 +140,7 @@ A high-performance operation pipeline engine with comprehensive support for comm
 **Built-in Intercepts** (outermost → innermost, wrapping the handler)
 - **Validation** - FluentValidation integration
 - **Authorization** - Three-stage Scope / Resource / Policy pipeline
+- **GrantedLookupAudit** - Pattern C runtime audit; emits a warning log + OTel tag when an `IGrantableLookupBase` operation completes without the handler reading the grant accessor (handler-deferred ownership check skipped)
 - **HandlerPerformance** - Operation timing and metrics
 - **QueryCaching** - Automatic result caching with configurable providers
 
