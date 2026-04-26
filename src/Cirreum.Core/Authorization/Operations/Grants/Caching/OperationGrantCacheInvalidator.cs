@@ -26,12 +26,12 @@ public sealed class OperationGrantCacheInvalidator(
 	}
 
 	/// <inheritdoc />
-	public ValueTask InvalidateDomainAsync(
-		string domainFeature,
+	public ValueTask InvalidateFeatureAsync(
+		string feature,
 		CancellationToken cancellationToken = default) {
 
-		ArgumentException.ThrowIfNullOrWhiteSpace(domainFeature);
-		var tag = OperationGrantCacheKeys.DomainTag(domainFeature);
+		ArgumentException.ThrowIfNullOrWhiteSpace(feature);
+		var tag = OperationGrantCacheKeys.FeatureTag(feature);
 		return this._cacheService.RemoveByTagAsync(tag, cancellationToken);
 	}
 }

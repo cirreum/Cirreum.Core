@@ -3,7 +3,7 @@ namespace Cirreum.Authorization.Operations.Grants;
 /// <summary>
 /// App-implemented contract for grant resolution. A single universal resolver handles
 /// all bounded contexts, using <c>context.DomainFeature</c> and
-/// <c>context.Permissions</c> to query the grants table.
+/// <c>context.RequiredGrants</c> to query the grants table.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -22,7 +22,7 @@ public interface IOperationGrantProvider {
 
 	/// <summary>
 	/// Queries the app's grants table. Returns the owner IDs — and any auxiliary dimensions —
-	/// where the caller holds ALL permissions in <c>context.Permissions</c>.
+	/// where the caller holds ALL permissions in <c>context.RequiredGrants</c>.
 	/// </summary>
 	/// <remarks>
 	/// <para>

@@ -20,7 +20,7 @@ using System.Runtime.CompilerServices;
 /// </para>
 /// </remarks>
 internal sealed class ResourceAccessEvaluator(
-	IAuthorizationContextAccessor contextAccessor,
+	IAuthorizationContextAccessor authorizationContextAccessor,
 	IServiceProvider services,
 	ILogger<ResourceAccessEvaluator> logger
 ) : IResourceAccessEvaluator {
@@ -152,7 +152,7 @@ internal sealed class ResourceAccessEvaluator(
 	/// to be populated by the time any handler calls into this evaluator.
 	/// </summary>
 	private (IUserState UserState, IImmutableSet<Role> EffectiveRoles) ResolveCaller() {
-		var authContext = contextAccessor.Current
+		var authContext = authorizationContextAccessor.Current
 			?? throw new InvalidOperationException(
 				"IAuthorizationContextAccessor.Current is null. "
 				+ "ResourceAccessEvaluator requires the authorization pipeline to have run.");

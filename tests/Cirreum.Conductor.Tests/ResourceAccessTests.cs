@@ -525,6 +525,47 @@ public class ResourceAccessTests {
 	}
 
 	[TestMethod]
+	public async Task Batch_path_does_not_over_grant_when_inheritance_breaking_ancestor_is_stale() {
+		// Security regression: a stale AncestorResourceIds chain references a missing
+		// ancestor that — if it had been loaded — would have set InheritPermissions: false
+		// and stopped the walk. The framework cannot inspect the missing entity, so it
+		// MUST treat the orphan as a hard stop. Otherwise a deletion that wasn't cascaded
+		// to descendants becomes an authorization escalation: the child silently inherits
+		// from grandparents that the missing ancestor would have blocked.
+		//
+		// Setup:
+		//   GP — has DeletePerm, would be reached only if walk continues past missing P
+		//   P  — DELETED FROM STORE (stale chain)
+		//   C  — Ancestors: ["P", "GP"], own ACL: ReadPerm
+		//
+		// Expected: walk stops at missing P. C does NOT inherit GP's DeletePerm.
+
+		var grandparent = new TestFolder("gp", [
+			new() { Role = UserRole, Permissions = [DeletePerm] }
+		], ParentId: null, InheritPermissions: true);
+
+		// Parent intentionally NOT included in the resource set — simulates stale chain
+		// where P was deleted but C's AncestorResourceIds wasn't updated.
+
+		var child = new TestFolder("c", [
+			new() { Role = UserRole, Permissions = [ReadPerm] }
+		], ParentId: "p", InheritPermissions: true,
+			Ancestors: ["p", "gp"]);
+
+		var sut = BuildEvaluator(resources: [grandparent, child]);
+
+		// Child's own ACL still grants ReadPerm.
+		Assert.IsTrue((await sut.CheckAsync(child, ReadPerm, this.TestContext.CancellationToken)).IsSuccess);
+
+		// CRITICAL: GP's DeletePerm must NOT leak through. The orphan stops the walk —
+		// the framework can't know whether P would have broken inheritance, so it must
+		// fail closed.
+		Assert.IsFalse((await sut.CheckAsync(child, DeletePerm, this.TestContext.CancellationToken)).IsSuccess,
+			"Stale ancestor chain must not over-grant by walking past a missing ancestor that " +
+			"could have set InheritPermissions: false. The orphan must act as a hard stop.");
+	}
+
+	[TestMethod]
 	public async Task Batch_path_handles_cycle_in_ancestor_chain() {
 		// Ancestor chain contains the entity itself (cycle)
 		var folder = new TestFolder("A", [

@@ -1,6 +1,7 @@
 ﻿namespace Cirreum.Conductor.Configuration;
 
 using Cirreum.Authorization.Operations;
+using Cirreum.Authorization.Operations.Grants;
 using Cirreum.Conductor.Intercepts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -134,10 +135,12 @@ public class ConductorOptionsBuilder {
 	}
 
 	internal void ConfigureIntercepts(ConductorBuilder builder) {
+
 		// Core intercepts in fixed order
 		builder
 			.AddOpenIntercept(typeof(Validation<,>), this._dispatcherLifetime)
-			.AddOpenIntercept(typeof(Authorization<,>), this._dispatcherLifetime);
+			.AddOpenIntercept(typeof(Authorization<,>), this._dispatcherLifetime)
+			.AddOpenIntercept(typeof(GrantedLookupAudit<,>), this._dispatcherLifetime);
 
 		// Custom intercepts (extensibility point)
 		foreach (var config in this._interceptConfigurations) {
@@ -148,6 +151,7 @@ public class ConductorOptionsBuilder {
 		builder
 			.AddOpenIntercept(typeof(HandlerPerformance<,>), this._dispatcherLifetime)
 			.AddOpenIntercept(typeof(QueryCaching<,>), this._dispatcherLifetime);
+
 	}
 
 }

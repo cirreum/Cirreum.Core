@@ -1,8 +1,13 @@
 # Authorization Pipeline — Detailed Sequence
 
+> [!NOTE]
+> **Read first:** [Authorization](README.md) — the user guide. This
+> document is the deep dive into the evaluator: preflight, role resolution,
+> stage strategies, telemetry exit paths, and allocation notes.
+
 Detailed view of the three-stage authorization pipeline executed by
 `DefaultAuthorizationEvaluator`. For the high-level request flow showing
-where this pipeline fits, see [FLOW.md](./FLOW.md).
+where this pipeline fits, see [FLOW.md](FLOW.md).
 
 ```mermaid
 sequenceDiagram

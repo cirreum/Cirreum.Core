@@ -1,15 +1,17 @@
 namespace Cirreum.Introspection.Analyzers;
 
+using Cirreum.Authorization.Operations;
 using Cirreum.Authorization.Operations.Grants;
+using Cirreum.Conductor;
 using Cirreum.Introspection.Modeling;
 using Cirreum.Introspection.Modeling.Types;
 using Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
 /// Analyzes granted resources and grant domain hygiene. Detects misconfigurations
-/// such as missing permissions, orphaned domains, inert permission attributes,
-/// mixed authorization patterns, missing grant providers, self-scoped patterns,
-/// and cross-domain permission inconsistencies.
+/// such as missing permissions, missing grant providers, mixed authorization patterns,
+/// cross-feature permission inconsistencies, and unsafe combinations of caching with
+/// grant-aware operation interfaces.
 /// </summary>
 public class GrantedResourceAnalyzer(
 	IServiceProvider? services = null
@@ -32,7 +34,7 @@ public class GrantedResourceAnalyzer(
 			.ToList();
 
 		// ──────────────────────────────────────────────
-		// 1. Granted resources without [RequiresPermission]
+		// 1. Granted resources without [RequiresGrant]
 		// ──────────────────────────────────────────────
 
 		var missingPermissions = grantedResources
@@ -43,16 +45,16 @@ public class GrantedResourceAnalyzer(
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
-				Description: $"Found {missingPermissions.Count} granted resource(s) without [RequiresPermission]. " +
+				Description: $"Found {missingPermissions.Count} granted resource(s) without [RequiresGrant]. " +
 					"These resources participate in the grant pipeline but have no permission gate, " +
 					"so grant evaluation cannot enforce access control.",
 				RelatedTypeNames: [.. missingPermissions.Select(TypeName)],
-				Recommendation: "Add [RequiresPermission(\"name\")] to each granted resource to define " +
-					"the permission(s) required for access."));
+				Recommendation: "Add [RequiresGrant(\"name\")] to each granted resource to define " +
+					"the grant permission(s) required for access."));
 		}
 
 		// ──────────────────────────────────────────────
-		// 2. [RequiresPermission] on non-granted resources
+		// 2. [RequiresGrant] on non-granted resources
 		// ──────────────────────────────────────────────
 
 		var permissionsWithoutGrants = allResources
@@ -63,13 +65,13 @@ public class GrantedResourceAnalyzer(
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Info,
-				Description: $"Found {permissionsWithoutGrants.Count} resource(s) with [RequiresPermission] " +
-					"that do not implement a Granted interface. Permissions are available on " +
-					"AuthorizationContext.Permissions for use in resource authorizers.",
+				Description: $"Found {permissionsWithoutGrants.Count} resource(s) with [RequiresGrant] " +
+					"that do not implement a Granted interface. The declared permissions are available on " +
+					"AuthorizationContext.RequiredGrants for inspection in resource authorizers.",
 				RelatedTypeNames: [.. permissionsWithoutGrants.Select(TypeName)],
 				Recommendation: "If grant-based access control is intended, add the appropriate Granted " +
 					"interface (e.g., IOwnerMutateOperation). Otherwise, ensure the resource authorizer " +
-					"consumes Permissions for authorization decisions."));
+					"consumes RequiredGrants for authorization decisions."));
 		}
 
 		// ──────────────────────────────────────────────
@@ -94,35 +96,13 @@ public class GrantedResourceAnalyzer(
 		}
 
 		// ──────────────────────────────────────────────
-		// 4. Domain namespaces with granted interfaces but no granted resources
-		// ──────────────────────────────────────────────
-
-		var namespaceDomains = DiscoverNamespaceDomains();
-		var usedDomains = new HashSet<string>(grantDomains, StringComparer.OrdinalIgnoreCase);
-
-		var unusedDomains = namespaceDomains
-			.Where(d => !usedDomains.Contains(d))
-			.ToList();
-
-		if (unusedDomains.Count > 0) {
-			issues.Add(new AnalysisIssue(
-				Category: AnalyzerCategory,
-				Severity: IssueSeverity.Info,
-				Description: $"Found {unusedDomains.Count} domain namespace(s) with no granted resources: " +
-					string.Join(", ", unusedDomains) + ".",
-				RelatedTypeNames: unusedDomains,
-				Recommendation: "If these domains should use grant-based access control, add the appropriate " +
-					"Granted interface (IOwnerMutateOperation, IOwnerLookupOperation<T>, etc.) to their resources."));
-		}
-
-		// ──────────────────────────────────────────────
-		// 5. Mixed authorization within a domain
+		// 4. Mixed authorization within a domain
 		// ──────────────────────────────────────────────
 
 		DetectMixedAuthorizationDomains(allResources, grantDomains, issues);
 
 		// ──────────────────────────────────────────────
-		// 6. No IOperationGrantProvider registered
+		// 5. No IOperationGrantProvider registered
 		// ──────────────────────────────────────────────
 
 		var grantProviderRegistered = false;
@@ -144,7 +124,7 @@ public class GrantedResourceAnalyzer(
 		}
 
 		// ──────────────────────────────────────────────
-		// 7. Self-scoped operations summary
+		// 6. Self-scoped operations summary
 		// ──────────────────────────────────────────────
 
 		var selfScoped = grantedResources.Where(r => r.IsSelfScoped).ToList();
@@ -160,7 +140,7 @@ public class GrantedResourceAnalyzer(
 		}
 
 		// ──────────────────────────────────────────────
-		// 8. Self-scoped operations without permissions
+		// 7. Self-scoped operations without permissions
 		// ──────────────────────────────────────────────
 
 		var selfScopedNoPermissions = selfScoped
@@ -172,31 +152,62 @@ public class GrantedResourceAnalyzer(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Info,
 				Description: $"Found {selfScopedNoPermissions.Count} self-scoped operation(s) without " +
-					"[RequiresPermission]. Self-scoped operations rely on identity matching; " +
+					"[RequiresGrant]. Self-scoped operations rely on identity matching; " +
 					"permissions are optional but enable permission-gated self-access.",
 				RelatedTypeNames: [.. selfScopedNoPermissions.Select(TypeName)],
-				Recommendation: "Add [RequiresPermission] if you need the grant system to verify specific " +
+				Recommendation: "Add [RequiresGrant] if you need the grant system to verify specific " +
 					"permissions before allowing self-access. Otherwise, identity matching alone is sufficient."));
 		}
 
 		// ──────────────────────────────────────────────
-		// 9. Cross-domain permissions
+		// 8. Cross-feature permissions
 		// ──────────────────────────────────────────────
 
-		var crossDomain = grantedResources
+		var crossFeature = grantedResources
 			.Where(r => r.Permissions.Count >= 2)
 			.Where(r => r.Permissions.Select(p => p.Feature).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
 			.ToList();
 
-		if (crossDomain.Count > 0) {
+		if (crossFeature.Count > 0) {
 			issues.Add(new AnalysisIssue(
 				Category: AnalyzerCategory,
 				Severity: IssueSeverity.Warning,
-				Description: $"Found {crossDomain.Count} resource(s) with [RequiresPermission] attributes " +
-					"spanning multiple domain features.",
-				RelatedTypeNames: [.. crossDomain.Select(TypeName)],
-				Recommendation: "All permissions on a granted resource should use the same domain feature. " +
+				Description: $"Found {crossFeature.Count} resource(s) with [RequiresGrant] attributes " +
+					"spanning multiple features.",
+				RelatedTypeNames: [.. crossFeature.Select(TypeName)],
+				Recommendation: "All permissions on a granted resource should use the same feature. " +
 					"Cross-cutting concerns belong in Stage 2 resource authorizers or Stage 3 policies."));
+		}
+
+		// ──────────────────────────────────────────────
+		// 9. Unsafe ICacheableOperation + grant interface combinations
+		// ──────────────────────────────────────────────
+		//
+		// SAFE:   IOwnerCacheableLookupOperation<T> — designed for this combination;
+		//         framework composes {owner}:{boundary}:{CacheKey}, adding tenant scope.
+		// UNSAFE: any other IGrantable*Base + ICacheableOperation — shared cache entry
+		//         spans callers with potentially different grant scopes, causing leaks.
+
+		var unsafeCacheableGrants = allResources
+			.Where(r => r.IsGranted && r.IsCacheableQuery)
+			.Where(r => !typeof(IOwnerCacheableLookupOperation<>)
+				.IsAssignableFromGenericInterface(r.ResourceType))
+			.ToList();
+
+		if (unsafeCacheableGrants.Count > 0) {
+			issues.Add(new AnalysisIssue(
+				Category: AnalyzerCategory,
+				Severity: IssueSeverity.Error,
+				Description: $"Found {unsafeCacheableGrants.Count} resource(s) combining ICacheableOperation " +
+					"with a grant-aware interface other than IOwnerCacheableLookupOperation<T>. " +
+					"ICacheableOperation entries are shared across all callers; mixing with grant " +
+					"semantics can leak data to callers whose grant scope no longer covers the cached " +
+					"entry.",
+				RelatedTypeNames: [.. unsafeCacheableGrants.Select(TypeName)],
+				Recommendation: "If owner-scoped caching is intended, switch to IOwnerCacheableLookupOperation<T> " +
+					"— the framework composes the OwnerId and authentication boundary into the cache key. " +
+					"Otherwise, drop ICacheableOperation; per-caller authorization decisions cannot share " +
+					"a cache entry safely."));
 		}
 
 		// ──────────────────────────────────────────────
@@ -210,14 +221,14 @@ public class GrantedResourceAnalyzer(
 			.Count();
 
 		metrics[$"{MetricCategories.GrantedResources}GrantedResourceCount"] = grantedResources.Count;
-		metrics[$"{MetricCategories.GrantedResources}GrantDomainCount"] = grantDomains.Count;
+		metrics[$"{MetricCategories.GrantedResources}GrantFeatureCount"] = grantDomains.Count;
 		metrics[$"{MetricCategories.GrantedResources}TotalPermissionCount"] = permissionCount;
 		metrics[$"{MetricCategories.GrantedResources}MissingPermissionCount"] = missingPermissions.Count;
 		metrics[$"{MetricCategories.GrantedResources}PermissionsWithoutGrantsCount"] = permissionsWithoutGrants.Count;
-		metrics[$"{MetricCategories.GrantedResources}UnusedDomainCount"] = unusedDomains.Count;
 		metrics[$"{MetricCategories.GrantedResources}GrantProviderRegistered"] = grantProviderRegistered ? 1 : 0;
 		metrics[$"{MetricCategories.GrantedResources}SelfScopedCount"] = selfScoped.Count;
-		metrics[$"{MetricCategories.GrantedResources}CrossDomainPermissionCount"] = crossDomain.Count;
+		metrics[$"{MetricCategories.GrantedResources}CrossFeaturePermissionCount"] = crossFeature.Count;
+		metrics[$"{MetricCategories.GrantedResources}UnsafeCacheableGrantCount"] = unsafeCacheableGrants.Count;
 
 		// Summary
 		if (grantedResources.Count > 0) {
@@ -272,35 +283,28 @@ public class GrantedResourceAnalyzer(
 
 	}
 
-	/// <summary>
-	/// Derives domain feature names from all authorizable resource types' namespaces.
-	/// </summary>
-	private static HashSet<string> DiscoverNamespaceDomains() {
-		var domains = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-		foreach (var assembly in AssemblyScanner.ScanAssemblies()) {
-			Type[] types;
-			try {
-				types = assembly.GetTypes();
-			} catch {
-				continue;
-			}
-
-			foreach (var type in types) {
-				if (!type.IsClass || type.IsAbstract) {
-					continue;
-				}
-				var domain = DomainFeatureResolver.Resolve(type);
-				if (domain is not null) {
-					domains.Add(domain);
-				}
-			}
-		}
-
-		return domains;
-	}
-
 	private static string TypeName(ResourceTypeInfo r) =>
 		r.ResourceType.FullName ?? r.ResourceType.Name;
 
+}
+
+internal static class GenericInterfaceExtensions {
+
+	/// <summary>
+	/// Returns <see langword="true"/> when <paramref name="candidate"/> implements a closed
+	/// construction of the open generic interface <paramref name="openGenericInterface"/>
+	/// (e.g., does the type implement <c>IOwnerCacheableLookupOperation&lt;&gt;</c> for any
+	/// <c>T</c>).
+	/// </summary>
+	internal static bool IsAssignableFromGenericInterface(this Type openGenericInterface, Type candidate) {
+		if (!openGenericInterface.IsGenericTypeDefinition || !openGenericInterface.IsInterface) {
+			return false;
+		}
+		foreach (var iface in candidate.GetInterfaces()) {
+			if (iface.IsGenericType && iface.GetGenericTypeDefinition() == openGenericInterface) {
+				return true;
+			}
+		}
+		return false;
+	}
 }

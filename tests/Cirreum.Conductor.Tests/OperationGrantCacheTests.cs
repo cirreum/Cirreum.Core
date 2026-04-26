@@ -79,7 +79,7 @@ public class OperationGrantCacheTests {
 
 		var factory = BuildFactory(grantResolver, cacheService, settings);
 
-		// Both TestDeleteCmd and TestDeleteCmd2 require [RequiresPermission("delete")]
+		// Both TestDeleteCmd and TestDeleteCmd2 require [RequiresGrant("delete")]
 		var ctx1 = BuildContext(new TestDeleteCmd());
 		var ctx2 = BuildContext(new TestDeleteCmd2());
 
@@ -118,7 +118,7 @@ public class OperationGrantCacheTests {
 		var cacheService = new InMemoryTestCacheService();
 		var settings = new OperationGrantCacheSettings {
 			Expiration = TimeSpan.FromMinutes(5),
-			DomainOverrides = new Dictionary<string, OperationGrantCacheDomainOverride> {
+			FeatureOverrides = new Dictionary<string, OperationGrantCacheFeatureOverride> {
 				["testgrant"] = new() { Expiration = TimeSpan.FromMinutes(10) }
 			}
 		};
@@ -333,17 +333,17 @@ namespace Cirreum.Conductor.Tests.Domain.TestGrant {
 	using Cirreum.Authorization.Operations.Grants;
 	using Cirreum.Conductor;
 
-	[RequiresPermission("delete")]
+	[RequiresGrant("delete")]
 	internal sealed class TestDeleteCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 
-	[RequiresPermission("delete")]
+	[RequiresGrant("delete")]
 	internal sealed class TestDeleteCmd2 : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 
-	[RequiresPermission("read")]
+	[RequiresGrant("read")]
 	internal sealed class TestReadCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}

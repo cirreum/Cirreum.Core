@@ -135,7 +135,7 @@ A high-performance operation pipeline engine with comprehensive support for comm
 - `IOwnerMutateOperation` / `IOwnerLookupOperation<TResultValue>` / `IOwnerSearchOperation<TResultValue>` - Owner-scoped grant-aware operations
 - `IOwnerCacheableLookupOperation<TResultValue>` - Owner-scoped cacheable lookups
 - `ISelfMutateOperation` / `ISelfLookupOperation<TResultValue>` - Self-scoped identity operations
-- `ICacheableQuery<TResultValue>` - Query result caching with sliding/absolute expiration + cache tags
+- `ICacheableOperation<TResultValue>` - Query result caching with sliding/absolute expiration + cache tags
 
 **Built-in Intercepts** (outermost → innermost, wrapping the handler)
 - **Validation** - FluentValidation integration
@@ -217,7 +217,7 @@ Definitions that support Cirreum's architectural patterns:
 | Interface | Auth | Cache | Owner-Gated | Use Case |
 |-----------|:----:|:-----:|:-----------:|----------|
 | `IOperation` / `IOperation<T>` | ✗ | ✗ | ✗ | Internal / anonymous |
-| `ICacheableQuery<T>` | ✗ | ✓ | ✗ | Public cached lookups |
+| `ICacheableOperation<T>` | ✗ | ✓ | ✗ | Public cached lookups |
 | `IAuthorizableOperation` / `IAuthorizableOperation<T>` | ✓ | ✗ | ✗ | Protected operations (reads and writes) |
 | `IOwnerMutateOperation` / `<TResultValue>` | ✓ | ✗ | ✓ | Grant-aware writes |
 | `IOwnerLookupOperation<TResultValue>` | ✓ | ✗ | ✓ | Grant-aware point-reads |
@@ -286,7 +286,7 @@ AuthorizationContext<T> (Authorization Decisions)
     ├─> WHO: UserState (IUserState) — delegates UserId, UserName, etc.
     ├─> ROLES: EffectiveRoles (inheritance-expanded)
     ├─> TARGET: AuthorizableObject
-    ├─> PERMISSIONS: PermissionSet (from RequiredPermissionCache)
+    ├─> PERMISSIONS: PermissionSet (from RequiredGrantCache)
     └─> DOMAIN: DomainFeature (from DomainFeatureResolver)
 ```
 
@@ -344,7 +344,7 @@ knowing about grant tables:
 
 ```csharp
 // 1. Define grant-aware operations (domain derived from namespace convention)
-[RequiresPermission("delete")]
+[RequiresGrant("delete")]
 public sealed record DeleteIssue(string Id) : IOwnerMutateOperation {
     public string? OwnerId { get; set; }
 }
@@ -355,7 +355,7 @@ public class AppOperationGrantProvider : IOperationGrantProvider {
         AuthorizationContext<TAuthorizableObject> context, CancellationToken ct)
         where TAuthorizableObject : IAuthorizableObject {
         // Query your grants table
-        var ownerIds = await db.GetGrantedOwners(context.UserId, context.Permissions);
+        var ownerIds = await db.GetGrantedOwners(context.UserId, context.RequiredGrants);
         return new OperationGrantResult(ownerIds);
     }
 }
@@ -448,12 +448,13 @@ This library:
 
 ## Documentation
 
-- [Context Architecture](src/Cirreum.Core/CONTEXT.md) - Operation & authorization context architecture
-- [Authorization Flow](src/Cirreum.Core/Authorization/FLOW.md) - High-level operation → authorization flow
-- [Authorization Sequence](src/Cirreum.Core/Authorization/SEQUENCE.md) - Detailed three-stage pipeline
-- [Grants](src/Cirreum.Core/Authorization/Operations/Grants/README.md) - Grant-based access control with Mutate/Lookup/Search/Self enforcement
-- [Resources](src/Cirreum.Core/Authorization/Resources/README.md) - Object-level ACL evaluation with hierarchy walking
-- [Conductor](src/Cirreum.Core/Conductor/README.md) - In-process operation pipeline + dispatcher
+- [Authorization (user guide)](src/Cirreum.Core/Authorization/README.md) — start here for anything auth-related: pipeline, permissions, roles, the decision table for picking the right tool
+  - [Authorization Flow](src/Cirreum.Core/Authorization/FLOW.md) — full request flow from HTTP entry through pipeline exit
+  - [Pipeline Sequence](src/Cirreum.Core/Authorization/SEQUENCE.md) — three-stage evaluator internals, telemetry, allocation notes
+  - [Grants](src/Cirreum.Core/Authorization/Operations/Grants/README.md) — grant-based access control (Stage 1 Step 0)
+  - [Resources](src/Cirreum.Core/Authorization/Resources/README.md) — object-level ACLs evaluated in-handler
+- [Context Architecture](src/Cirreum.Core/CONTEXT.md) — operation & authorization context architecture
+- [Conductor](src/Cirreum.Core/Conductor/README.md) — in-process operation pipeline + dispatcher
 
 ## Contribution Guidelines
 

@@ -6,10 +6,10 @@ using Cirreum.Caching;
 {
   "Cirreum": {
 	"Cache": {
-	  "Provider": "InMemory",
+	  "Provider": "InMemory", // Hybrid, Distributed, None
 	  "DefaultExpiration": {
-		"Expiration": "00:05:00",
-		"LocalExpiration": "00:02:00",
+		"Expiration": "00:05:00", // L2 cache service
+		"LocalExpiration": "00:02:00", // L1 in-process cache
 		"FailureExpiration": "00:00:30"
 	  }
 	},
@@ -17,7 +17,9 @@ using Cirreum.Caching;
 	  "Cache": {
 		"QueryOverrides": {
 		  "GetCriticalUserDataQuery": {
-			"Expiration": "00:00:30"
+			"Expiration": "00:00:30",
+			//"LocalExpiration": "00:02:00", // exclude to use global default
+			"FailureExpiration": "00:03:00"
 		  }
 		}
 	  }

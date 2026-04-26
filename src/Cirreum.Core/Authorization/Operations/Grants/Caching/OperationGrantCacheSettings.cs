@@ -11,8 +11,8 @@ namespace Cirreum.Authorization.Operations.Grants.Caching;
 /// scope) and L2 (cross-request via <c>ICacheService</c>).
 /// </para>
 /// <para>
-/// Settings can be overridden per domain via <see cref="DomainOverrides"/>, keyed by
-/// the domain feature name (e.g., <c>"issues"</c>).
+/// Settings can be overridden per feature via <see cref="FeatureOverrides"/>, keyed by
+/// the namespace-derived feature name (e.g., <c>"issues"</c>).
 /// </para>
 /// </remarks>
 public sealed class OperationGrantCacheSettings {
@@ -37,9 +37,9 @@ public sealed class OperationGrantCacheSettings {
 	public TimeSpan? Expiration { get; set; }
 
 	/// <summary>
-	/// Per-domain overrides keyed by the domain feature name
+	/// Per-feature overrides keyed by the namespace-derived feature name
 	/// (e.g., <c>"issues"</c>, <c>"admin"</c>). Overrides are merged with the
 	/// top-level settings; <see langword="null"/> fields fall through to the default.
 	/// </summary>
-	public Dictionary<string, OperationGrantCacheDomainOverride> DomainOverrides { get; set; } = [];
+	public Dictionary<string, OperationGrantCacheFeatureOverride> FeatureOverrides { get; set; } = [];
 }

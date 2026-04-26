@@ -107,8 +107,22 @@ public static class AuthorizationTelemetry {
 	/// <summary>Tag: grant cache level (bypass / l1-hit / l2 / denied-early).</summary>
 	public const string GrantCacheLevelTag = "cirreum.authz.grant.cache_level";
 
-	/// <summary>Tag: domain feature for grant resolution.</summary>
-	public const string GrantDomainTag = "cirreum.authz.grant.domain";
+	/// <summary>Tag: feature (bounded context) for grant resolution.</summary>
+	public const string GrantFeatureTag = "cirreum.authz.grant.feature";
+
+	/// <summary>
+	/// Tag: <see langword="true"/> when Stage 1 auto-stamped <c>OwnerId</c> from a
+	/// single-owner grant rather than receiving it from the caller. Forensic signal —
+	/// distinguish framework-inferred owner from caller-supplied in audit traces.
+	/// </summary>
+	public const string OwnerAutoStampedTag = "cirreum.authz.grant.owner_auto_stamped";
+
+	/// <summary>
+	/// Tag: <see langword="true"/> when a Pattern C lookup completed without the handler
+	/// reading <c>IOperationGrantAccessor.Current</c> — an authorization bypass surface
+	/// (handler returned data without performing post-fetch ownership check).
+	/// </summary>
+	public const string PatternCBypassTag = "cirreum.authz.grant.pattern_c_bypass";
 
 	// Metrics ——————————————————————————————————————————————————
 
@@ -210,7 +224,7 @@ public static class AuthorizationTelemetry {
 	/// for L2/cold-path resolutions.
 	/// </summary>
 	internal static void RecordGrantResolution(
-		string? domain,
+		string? feature,
 		string? resourceType,
 		string cacheLevel,
 		double? durationMs = null) {
@@ -219,8 +233,8 @@ public static class AuthorizationTelemetry {
 			{ GrantCacheLevelTag, cacheLevel }
 		};
 
-		if (domain is not null) {
-			tags.Add(GrantDomainTag, domain);
+		if (feature is not null) {
+			tags.Add(GrantFeatureTag, feature);
 		}
 		if (resourceType is not null) {
 			tags.Add(ResourceTypeTag, resourceType);

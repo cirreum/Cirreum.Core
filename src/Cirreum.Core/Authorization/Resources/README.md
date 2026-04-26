@@ -1,19 +1,27 @@
 # Resource Access
 
-## Object-Level ACL Evaluation for Cirreum Applications
+> [!NOTE]
+> **Read first:** [Authorization](../README.md) — the user guide. This
+> document covers the object-level ACL system in depth; it assumes you
+> understand where data-time checks fit relative to the request-time pipeline.
 
-Resource Access is Cirreum's opt-in object-level permission system. It answers
-the question *"does this caller have permission X on this specific data object?"*
-— evaluated **inside the handler** after the object is loaded, complementing the
-request-time pipeline that runs before it.
+## Object-Level ACL Evaluation
 
-This is the third authorization tier:
+Resource Access answers a single question, evaluated **inside the handler**
+after the object is loaded:
+
+> *"Does this caller have permission X on this specific data object?"*
+
+It complements the request-time pipeline rather than replacing it. The
+pipeline gates "can this caller invoke this operation?" before any data is
+loaded; Resource Access gates "given this loaded object, may they act on
+it?" Both can apply to the same request.
 
 | Tier | Answers | When | Where |
 |------|---------|------|-------|
-| **Authorization** (root) | *Does this caller have the right roles/claims?* | Pre-handler (pipeline) | `AuthorizerBase<T>` |
+| **Pipeline (Stage 1–3)** | *Roles, scope, runtime policies* | Pre-handler | `AuthorizerBase<T>`, constraints, policies |
 | **Operations.Grants** | *Which owners can this caller access?* | Pre-handler (Stage 1) | `OperationGrantEvaluator` |
-| **Resources** | *Does this caller have permission X on this object?* | In-handler (data-time) | `IResourceAccessEvaluator` |
+| **Resources** *(this doc)* | *Does this caller have permission X on this object?* | In-handler (data-time) | `IResourceAccessEvaluator` |
 
 Resource Access does **not** replace Grants or Roles — it layers on top. Grants
 answer "which tenants"; Resources answer "which folders/documents/projects within
@@ -291,6 +299,104 @@ This is a common pattern: leaf objects delegate authorization to their container
 
 ---
 
+## App Pattern: Base Handler for Standardized Filtering
+
+If you find yourself repeating `FilterAsync` across many list handlers, an
+**app-level abstract base handler** is the right place to centralize the flow.
+The pipeline is the wrong layer (intercepts don't know the operation-specific
+permission verb, and post-handler filtering breaks pagination + caching), but
+inside the handler the work *is* repetitive. An abstract base captures the
+template while keeping the layering honest.
+
+### Unbounded list
+
+```csharp
+public abstract class FilteredListHandler<TOperation, TItem>(
+    IResourceAccessEvaluator access)
+    : IOperationHandler<TOperation, IReadOnlyList<TItem>>
+    where TOperation : IOperation<IReadOnlyList<TItem>>
+    where TItem : IProtectedResource {
+
+    protected abstract Permission RequiredPermission { get; }
+    protected abstract Task<IReadOnlyList<TItem>> LoadAsync(
+        TOperation operation, CancellationToken ct);
+
+    public async Task<Result<IReadOnlyList<TItem>>> HandleAsync(
+        TOperation operation, CancellationToken ct = default) {
+
+        var loaded = await this.LoadAsync(operation, ct);
+        var authorized = await access.FilterAsync(loaded, this.RequiredPermission, ct);
+        return Result.Ok(authorized);
+    }
+}
+
+public sealed class ListFoldersHandler(IResourceAccessEvaluator access, IFolderRepository repo)
+    : FilteredListHandler<ListFolders, DocumentFolder>(access) {
+
+    protected override Permission RequiredPermission => Permissions.Folder.Browse;
+
+    protected override Task<IReadOnlyList<DocumentFolder>> LoadAsync(
+        ListFolders operation, CancellationToken ct) =>
+        repo.GetAllAsync(operation.WorkspaceId, ct);
+}
+```
+
+### Paginated list
+
+Filter post-load and your `totalCount` lies — page 2 may skip ahead, hasMore
+becomes wrong, and the UI's row count doesn't match what's reachable. The
+correct shape pushes the reachability predicate **into the query** so paging
+is computed against the filtered set in the data layer:
+
+```csharp
+public abstract class FilteredPagedHandler<TOperation, TItem>(
+    IResourceAccessEvaluator access)
+    : IOperationHandler<TOperation, PagedResult<TItem>>
+    where TOperation : IOperation<PagedResult<TItem>>
+    where TItem : IProtectedResource {
+
+    protected abstract Permission RequiredPermission { get; }
+    protected abstract Task<PagedResult<TItem>> LoadAsync(
+        TOperation operation, IReadOnlyCollection<string> reachableResourceIds, CancellationToken ct);
+
+    public async Task<Result<PagedResult<TItem>>> HandleAsync(
+        TOperation operation, CancellationToken ct = default) {
+
+        // Resolve which resources the caller can reach for this permission, once.
+        var reachable = await access.GetReachableIdsAsync<TItem>(this.RequiredPermission, ct);
+        var page = await this.LoadAsync(operation, reachable, ct);
+        return Result.Ok(page);
+    }
+}
+```
+
+The hook signature forces every paged handler to honor the scope at query time;
+post-load filtering is no longer possible by construction.
+
+### Caching is incompatible
+
+Do **not** combine these bases with `ICacheableOperation<T>`. ACL membership is
+per-caller; a shared cache entry would leak rows to callers who lost access
+since the cache populated. If a handler needs both, refresh the cache scope
+manually or model it as a non-cached query.
+
+### Why two (or three) bases, not one
+
+A "do everything" base ends up with so many toggles that you might as well
+write the handler. Each shape captures one contract cleanly:
+
+| Shape | Base | Filter strategy |
+|---|---|---|
+| Unbounded list | `FilteredListHandler<TOperation, TItem>` | Load all, `FilterAsync` post-load |
+| Paginated list | `FilteredPagedHandler<TOperation, TItem>` | Resolve reachable IDs, push into query |
+| Single lookup with existence-hiding | `FilteredLookupHandler<TOperation, TItem>` | Load by ID, `CheckAsync`, return 404 on deny |
+
+These are **app-level conventions** — Cirreum doesn't ship them. Many
+handlers don't have list shapes at all, and forcing inheritance in Core
+would imply otherwise.
+
+---
+
 ## DI Registration
 
 ```csharp
@@ -386,10 +492,11 @@ public sealed class DocumentFolderAccessEntryProvider(
 }
 ```
 
-> **Note:** When using `Cirreum.Persistence.Azure`, a default provider is auto-registered
-> via `DefaultAccessEntryProvider<T>` — no manual implementation is needed. The auto-registered
-> provider also overrides `GetManyByIdAsync` to use Cosmos `ReadManyItemsAsync` for true
-> batch reads.
+> [!NOTE]
+> When using `Cirreum.Persistence.Azure`, a default provider is auto-registered
+> via `DefaultAccessEntryProvider<T>` — no manual implementation is needed. The
+> auto-registered provider also overrides `GetManyByIdAsync` to use Cosmos
+> `ReadManyItemsAsync` for true batch reads.
 
 ### 4. Register
 
@@ -606,7 +713,8 @@ L1 cache naturally aligns with the request lifetime.
 
 ## Related Documentation
 
-- [Authorization Flow](../FLOW.md) — high-level operation → authorization flow
-- [Authorization Sequence](../SEQUENCE.md) — detailed three-stage pipeline
-- [Grants](../Operations/Grants/README.md) — grant-based access control (Stage 1)
+- [Authorization (parent guide)](../README.md) — pipeline overview, permission model, core types
+- [Authorization Flow](../FLOW.md) — full request flow from HTTP entry through pipeline exit
+- [Pipeline Sequence](../SEQUENCE.md) — three-stage pipeline internals
+- [Grants](../Operations/Grants/README.md) — grant-based access control (Stage 1 Step 0)
 - [Context Architecture](../../CONTEXT.md) — operation & authorization context

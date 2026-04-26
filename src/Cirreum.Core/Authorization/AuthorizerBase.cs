@@ -88,7 +88,7 @@ public abstract class AuthorizerBase<TAuthorizableObject>
 	/// <summary>
 	/// Registers nested rules under a gate that applies them only when the operation
 	/// declares the specified <paramref name="permission"/> via
-	/// <see cref="RequiresPermissionAttribute"/>.
+	/// <see cref="RequiresGrantAttribute"/>.
 	/// </summary>
 	/// <param name="permission">The permission whose presence enables the nested rules.</param>
 	/// <param name="configure">The action that defines the nested rules.</param>
@@ -98,22 +98,22 @@ public abstract class AuthorizerBase<TAuthorizableObject>
 	/// </returns>
 	/// <example>
 	/// <code>
-	/// this.WhenPermission(IssuePermissions.Delete, () =>
+	/// this.WhenRequiresGrant(IssuePermissions.Delete, () =>
 	///     this.HasAnyRole(Roles.IssueManager, Roles.IssueEscalator))
 	/// .Otherwise(() =>
 	///     this.HasRole(Roles.ReadOnlyUser));
 	/// </code>
 	/// </example>
-	protected IConditionBuilder WhenPermission(Permission permission, Action configure) {
+	protected IConditionBuilder WhenRequiresGrant(Permission permission, Action configure) {
 		ArgumentNullException.ThrowIfNull(permission);
 		ArgumentNullException.ThrowIfNull(configure);
-		return this.When(ctx => ctx.Permissions.Contains(permission), configure);
+		return this.When(ctx => ctx.RequiredGrants.Contains(permission), configure);
 	}
 
 	/// <summary>
 	/// Registers nested rules under a gate that applies them only when the operation
 	/// declares any of the specified <paramref name="permissions"/> via
-	/// <see cref="RequiresPermissionAttribute"/>.
+	/// <see cref="RequiresGrantAttribute"/>.
 	/// </summary>
 	/// <param name="permissions">The permissions to check — rules apply when any is present.</param>
 	/// <param name="configure">The action that defines the nested rules.</param>
@@ -123,22 +123,22 @@ public abstract class AuthorizerBase<TAuthorizableObject>
 	/// </returns>
 	/// <example>
 	/// <code>
-	/// this.WhenAnyPermission([IssuePermissions.Delete, IssuePermissions.Archive], () =>
+	/// this.WhenRequiresAnyGrant([IssuePermissions.Delete, IssuePermissions.Archive], () =>
 	///     this.HasRole(Roles.IssueManager))
 	/// .Otherwise(() =>
 	///     this.HasAnyRole(Roles.User, Roles.ReadOnlyUser));
 	/// </code>
 	/// </example>
-	protected IConditionBuilder WhenAnyPermission(Permission[] permissions, Action configure) {
+	protected IConditionBuilder WhenRequiresAnyGrant(Permission[] permissions, Action configure) {
 		ArgumentNullException.ThrowIfNull(permissions);
 		ArgumentNullException.ThrowIfNull(configure);
-		return this.When(ctx => ctx.Permissions.ContainsAny(permissions), configure);
+		return this.When(ctx => ctx.RequiredGrants.ContainsAny(permissions), configure);
 	}
 
 	/// <summary>
 	/// Registers nested rules under a gate that applies them only when the operation
 	/// declares all of the specified <paramref name="permissions"/> via
-	/// <see cref="RequiresPermissionAttribute"/>.
+	/// <see cref="RequiresGrantAttribute"/>.
 	/// </summary>
 	/// <param name="permissions">The permissions to check — rules apply when all are present.</param>
 	/// <param name="configure">The action that defines the nested rules.</param>
@@ -148,20 +148,20 @@ public abstract class AuthorizerBase<TAuthorizableObject>
 	/// </returns>
 	/// <example>
 	/// <code>
-	/// this.WhenAllPermissions([IssuePermissions.Delete, IssuePermissions.Admin], () =>
+	/// this.WhenRequiresAllGrants([IssuePermissions.Delete, IssuePermissions.Admin], () =>
 	///     this.HasRole(Roles.SuperAdmin));
 	/// </code>
 	/// </example>
-	protected IConditionBuilder WhenAllPermissions(Permission[] permissions, Action configure) {
+	protected IConditionBuilder WhenRequiresAllGrants(Permission[] permissions, Action configure) {
 		ArgumentNullException.ThrowIfNull(permissions);
 		ArgumentNullException.ThrowIfNull(configure);
-		return this.When(ctx => ctx.Permissions.ContainsAll(permissions), configure);
+		return this.When(ctx => ctx.RequiredGrants.ContainsAll(permissions), configure);
 	}
 
 	/// <summary>
 	/// Registers nested rules under a gate that applies them only when the operation
 	/// does not declare the specified <paramref name="permission"/> via
-	/// <see cref="RequiresPermissionAttribute"/>.
+	/// <see cref="RequiresGrantAttribute"/>.
 	/// </summary>
 	/// <param name="permission">The permission whose absence enables the nested rules.</param>
 	/// <param name="configure">The action that defines the nested rules.</param>
@@ -171,22 +171,22 @@ public abstract class AuthorizerBase<TAuthorizableObject>
 	/// </returns>
 	/// <example>
 	/// <code>
-	/// this.UnlessPermission(IssuePermissions.Delete, () =>
+	/// this.UnlessRequiresGrant(IssuePermissions.Delete, () =>
 	///     this.HasRole(Roles.ReadOnlyUser))
 	/// .Otherwise(() =>
 	///     this.HasAnyRole(Roles.IssueManager, Roles.IssueEscalator));
 	/// </code>
 	/// </example>
-	protected IConditionBuilder UnlessPermission(Permission permission, Action configure) {
+	protected IConditionBuilder UnlessRequiresGrant(Permission permission, Action configure) {
 		ArgumentNullException.ThrowIfNull(permission);
 		ArgumentNullException.ThrowIfNull(configure);
-		return this.When(ctx => !ctx.Permissions.Contains(permission), configure);
+		return this.When(ctx => !ctx.RequiredGrants.Contains(permission), configure);
 	}
 
 	/// <summary>
 	/// Registers nested rules under a gate that applies them only when the operation
 	/// does not declare any of the specified <paramref name="permissions"/> via
-	/// <see cref="RequiresPermissionAttribute"/>.
+	/// <see cref="RequiresGrantAttribute"/>.
 	/// </summary>
 	/// <param name="permissions">The permissions to check — rules apply when none are present.</param>
 	/// <param name="configure">The action that defines the nested rules.</param>
@@ -194,16 +194,16 @@ public abstract class AuthorizerBase<TAuthorizableObject>
 	/// An <see cref="IConditionBuilder"/> that can be chained with <c>.Otherwise(...)</c>
 	/// to register rules for the inverse case.
 	/// </returns>
-	protected IConditionBuilder UnlessAnyPermission(Permission[] permissions, Action configure) {
+	protected IConditionBuilder UnlessRequiresAnyGrant(Permission[] permissions, Action configure) {
 		ArgumentNullException.ThrowIfNull(permissions);
 		ArgumentNullException.ThrowIfNull(configure);
-		return this.When(ctx => !ctx.Permissions.ContainsAny(permissions), configure);
+		return this.When(ctx => !ctx.RequiredGrants.ContainsAny(permissions), configure);
 	}
 
 	/// <summary>
 	/// Registers nested rules under a gate that applies them only when the operation
 	/// does not declare all of the specified <paramref name="permissions"/> via
-	/// <see cref="RequiresPermissionAttribute"/>.
+	/// <see cref="RequiresGrantAttribute"/>.
 	/// </summary>
 	/// <param name="permissions">The permissions to check — rules apply when not all are present.</param>
 	/// <param name="configure">The action that defines the nested rules.</param>
@@ -211,10 +211,10 @@ public abstract class AuthorizerBase<TAuthorizableObject>
 	/// An <see cref="IConditionBuilder"/> that can be chained with <c>.Otherwise(...)</c>
 	/// to register rules for the inverse case.
 	/// </returns>
-	protected IConditionBuilder UnlessAllPermissions(Permission[] permissions, Action configure) {
+	protected IConditionBuilder UnlessRequiresAllGrants(Permission[] permissions, Action configure) {
 		ArgumentNullException.ThrowIfNull(permissions);
 		ArgumentNullException.ThrowIfNull(configure);
-		return this.When(ctx => !ctx.Permissions.ContainsAll(permissions), configure);
+		return this.When(ctx => !ctx.RequiredGrants.ContainsAll(permissions), configure);
 	}
 
 }

@@ -405,6 +405,8 @@ public sealed class LifetimeTests {
 			.ToArray();
 
 		// Validate expected order: Validation -> Authorization -> HandlerPerformance -> QueryCaching
+		// (Raw AddConductor wires intercepts manually via the builder; the GrantedLookupAudit<,>
+		// is supplied by AddDomainServices/ConductorOptionsBuilder, not AddConductor.)
 		Assert.AreEqual(typeof(Validation<,>), implTypes[0], "First intercept should be Validation<,>.");
 		Assert.AreEqual(typeof(Authorization<,>), implTypes[1], "Second intercept should be Authorization<,>.");
 		Assert.AreEqual(typeof(HandlerPerformance<,>), implTypes[2], "Third intercept should be HandlerPerformance<,>.");
@@ -431,14 +433,15 @@ public sealed class LifetimeTests {
 				sd.ServiceType.GetGenericTypeDefinition() == typeof(IIntercept<,>))
 			.ToList();
 
-		// We expect exactly 5 intercept registrations:
+		// We expect exactly 6 intercept registrations:
 		// 1. Validation
 		// 2. Authorization
-		// 3. Custom (LifetimeIntercept)
-		// 4. HandlerPerformance
-		// 5. QueryCaching
-		Assert.HasCount(5, interceptDescriptors,
-			$"Expected 5 intercept registrations, but found {interceptDescriptors.Count}.");
+		// 3. GrantedLookupAudit (Pattern C audit, framework-supplied)
+		// 4. Custom (LifetimeIntercept)
+		// 5. HandlerPerformance
+		// 6. QueryCaching
+		Assert.HasCount(6, interceptDescriptors,
+			$"Expected 6 intercept registrations, but found {interceptDescriptors.Count}.");
 
 		static Type ToOpenGeneric(Type type)
 			=> type.IsGenericType ? type.GetGenericTypeDefinition() : type;
@@ -454,15 +457,17 @@ public sealed class LifetimeTests {
 			"First intercept should be Validation<,>.");
 		Assert.AreEqual(typeof(Authorization<,>), orderedImplementationTypes[1],
 			"Second intercept should be Authorization<,>.");
+		Assert.AreEqual(typeof(Authorization.Operations.Grants.GrantedLookupAudit<,>), orderedImplementationTypes[2],
+			"Third intercept should be GrantedLookupAudit<,> (Pattern C audit).");
 
 		// This is the "custom" intercept added via AddCustomIntercepts
-		Assert.AreEqual(typeof(LifetimeIntercept<,>), orderedImplementationTypes[2],
-			"Third intercept should be the custom Validation<,> intercept.");
+		Assert.AreEqual(typeof(LifetimeIntercept<,>), orderedImplementationTypes[3],
+			"Fourth intercept should be the custom Validation<,> intercept.");
 
-		Assert.AreEqual(typeof(HandlerPerformance<,>), orderedImplementationTypes[3],
-			"Fourth intercept should be HandlerPerformance<,>.");
-		Assert.AreEqual(typeof(QueryCaching<,>), orderedImplementationTypes[4],
-			"Fifth intercept should be QueryCaching<,>.");
+		Assert.AreEqual(typeof(HandlerPerformance<,>), orderedImplementationTypes[4],
+			"Fifth intercept should be HandlerPerformance<,>.");
+		Assert.AreEqual(typeof(QueryCaching<,>), orderedImplementationTypes[5],
+			"Sixth intercept should be QueryCaching<,>.");
 
 	}
 

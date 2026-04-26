@@ -3,32 +3,44 @@ namespace Cirreum.Authorization.Operations;
 using Cirreum.Conductor;
 
 /// <summary>
-/// Marker for an authorized request with no response (void).
+/// A void-returning operation that flows through the authorization pipeline before its
+/// handler runs. The minimal "this operation must be authorized" declaration —
+/// composes <see cref="IOperation"/> (Conductor routing) with
+/// <see cref="IAuthorizableOperationBase"/> (Authorization participation).
 /// </summary>
 /// <remarks>
-/// Implements <see cref="IAuthorizableOperationBase"/> for authorization pipeline participation
-/// and <see cref="IOperation"/> for conductor routing.
-/// For grant-aware (grant-based) operations, use the grant interfaces:
+/// <para>
+/// Use this when an operation needs role-based, claim-based, or constraint-based
+/// authorization but does not need owner-scoped grant resolution or self-identity
+/// matching. For those, use the grant interfaces:
 /// <see cref="IOwnerMutateOperation"/>,
 /// <see cref="IOwnerLookupOperation{TResultValue}"/>,
 /// <see cref="IOwnerSearchOperation{TResultValue}"/>,
 /// <see cref="ISelfMutateOperation"/>, or
-/// <see cref="ISelfLookupOperation{TResultValue}"/>.
+/// <see cref="ISelfLookupOperation{TResultValue}"/> — all of which transitively
+/// implement <see cref="IAuthorizableOperation"/>.
+/// </para>
 /// </remarks>
 public interface IAuthorizableOperation : IAuthorizableOperationBase, IOperation;
 
 /// <summary>
-/// Marker for an authorized request with a response.
+/// An operation that returns <typeparamref name="TResultValue"/> and flows through the
+/// authorization pipeline before its handler runs. Composes
+/// <see cref="IOperation{TResultValue}"/> (Conductor routing) with
+/// <see cref="IAuthorizableOperationBase"/> (Authorization participation).
 /// </summary>
-/// <typeparam name="TResultValue">The type of response returned by the request.</typeparam>
+/// <typeparam name="TResultValue">The value produced on success.</typeparam>
 /// <remarks>
-/// Implements <see cref="IAuthorizableOperationBase"/> for authorization pipeline participation
-/// and <see cref="IOperation{TResultValue}"/> for conductor routing.
-/// For grant-aware (grant-based) operations, use the grant interfaces:
+/// <para>
+/// Use this when an operation returns a value and needs role-based, claim-based, or
+/// constraint-based authorization but does not need owner-scoped grant resolution or
+/// self-identity matching. For those, use the grant interfaces:
 /// <see cref="IOwnerMutateOperation{TResultValue}"/>,
 /// <see cref="IOwnerLookupOperation{TResultValue}"/>,
 /// <see cref="IOwnerSearchOperation{TResultValue}"/>,
 /// <see cref="ISelfMutateOperation{TResultValue}"/>, or
-/// <see cref="ISelfLookupOperation{TResultValue}"/>.
+/// <see cref="ISelfLookupOperation{TResultValue}"/> — all of which transitively
+/// implement <see cref="IAuthorizableOperation{TResultValue}"/>.
+/// </para>
 /// </remarks>
 public interface IAuthorizableOperation<out TResultValue> : IAuthorizableOperationBase, IOperation<TResultValue>;

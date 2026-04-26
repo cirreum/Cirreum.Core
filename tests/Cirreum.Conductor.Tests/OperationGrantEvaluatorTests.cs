@@ -352,7 +352,7 @@ public class OperationGrantEvaluatorTests {
 
 		var extraTags = cacheKeyContext.ExtraTags;
 		Assert.IsNotNull(extraTags);
-		CollectionAssert.Contains(extraTags, $"tenant:{CallerTenantId}");
+		CollectionAssert.Contains(extraTags, $"owner:{CallerTenantId}");
 	}
 
 	[TestMethod]
@@ -370,7 +370,7 @@ public class OperationGrantEvaluatorTests {
 		var extraTags = cacheKeyContext.ExtraTags;
 		Assert.IsNotNull(extraTags);
 		Assert.HasCount(1, extraTags);
-		Assert.AreEqual($"tenant:{CallerTenantId}", extraTags[0]);
+		Assert.AreEqual($"owner:{CallerTenantId}", extraTags[0]);
 	}
 
 	// List — OwnerIds enforcement + stamping
@@ -482,7 +482,7 @@ public class OperationGrantEvaluatorTests {
 		public IReadOnlyList<string>? OwnerIds { get; set; }
 	}
 
-	private sealed class GrantedCacheableRead : IGrantableLookupBase, ICacheableQuery<string>, IAuthorizableObject {
+	private sealed class GrantedCacheableRead : IGrantableLookupBase, ICacheableOperation<string>, IAuthorizableObject {
 		public string? OwnerId { get; set; }
 		public string CacheKey => "test-key";
 		public string[]? ExtraTags { get; set; }

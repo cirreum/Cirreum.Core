@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 sealed class QueryCaching<TOperation, TResultValue>
   : IIntercept<TOperation, TResultValue>
-	where TOperation : ICacheableQuery<TResultValue> {
+	where TOperation : ICacheableOperation<TResultValue> {
 
 	private readonly ICacheService _cache;
 	private readonly ConductorSettings _conductorSettings;
@@ -51,8 +51,8 @@ sealed class QueryCaching<TOperation, TResultValue>
 		var cacheKey = this.ComposeCacheKey(context.Operation.CacheKey);
 		var cacheTags = this.ComposeCacheTags(context.Operation.CacheTags);
 
-		if (this._logger.IsEnabled(LogLevel.Debug)) {
-			this._logger.LogDebug(
+		if (this._logger.IsEnabled(LogLevel.Information)) {
+			this._logger.LogInformation(
 				"Processing cacheable query: {QueryType} (CacheKey: {CacheKey})",
 				context.OperationType,
 				cacheKey);
@@ -69,8 +69,8 @@ sealed class QueryCaching<TOperation, TResultValue>
 			cacheTags,
 			cancellationToken);
 
-		if (this._logger.IsEnabled(LogLevel.Debug)) {
-			this._logger.LogDebug(
+		if (this._logger.IsEnabled(LogLevel.Information)) {
+			this._logger.LogInformation(
 				"Query {QueryType} completed: Status={Status}",
 				context.OperationType,
 				result.IsSuccess ? "Success" : "Failed");

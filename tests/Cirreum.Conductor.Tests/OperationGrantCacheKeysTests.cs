@@ -6,14 +6,14 @@ using Cirreum.Authorization.Operations.Grants.Caching;
 [TestClass]
 public class OperationGrantCacheKeysTests {
 
-	// PermissionSet.ToSignature
+	// SignatureOf
 	// -------------------------------------------------------------
 
 	[TestMethod]
 	public void Single_permission_signature_is_operation_only() {
 		var set = new PermissionSet([new Permission("issues", "delete")]);
 
-		Assert.AreEqual("delete", set.ToSignature());
+		Assert.AreEqual("delete", OperationGrantCacheKeys.SignatureOf(set));
 	}
 
 	[TestMethod]
@@ -24,12 +24,12 @@ public class OperationGrantCacheKeysTests {
 			new Permission("issues", "audit"),
 		]);
 
-		Assert.AreEqual("audit+delete+write", set.ToSignature());
+		Assert.AreEqual("audit+delete+write", OperationGrantCacheKeys.SignatureOf(set));
 	}
 
 	[TestMethod]
 	public void Empty_permissions_produce_empty_signature() {
-		Assert.AreEqual(string.Empty, PermissionSet.Empty.ToSignature());
+		Assert.AreEqual(string.Empty, OperationGrantCacheKeys.SignatureOf(PermissionSet.Empty));
 	}
 
 	[TestMethod]
@@ -43,7 +43,7 @@ public class OperationGrantCacheKeysTests {
 			new Permission("issues", "delete"),
 		]);
 
-		Assert.AreEqual(a.ToSignature(), b.ToSignature());
+		Assert.AreEqual(OperationGrantCacheKeys.SignatureOf(a), OperationGrantCacheKeys.SignatureOf(b));
 	}
 
 	// BuildKey
@@ -89,7 +89,7 @@ public class OperationGrantCacheKeysTests {
 
 		Assert.HasCount(2, tags);
 		Assert.AreEqual("grant:caller:user-123", tags[0]);
-		Assert.AreEqual("grant:domain:issues", tags[1]);
+		Assert.AreEqual("grant:feature:issues", tags[1]);
 	}
 
 	[TestMethod]
@@ -98,7 +98,7 @@ public class OperationGrantCacheKeysTests {
 	}
 
 	[TestMethod]
-	public void DomainTag_format() {
-		Assert.AreEqual("grant:domain:issues", OperationGrantCacheKeys.DomainTag("issues"));
+	public void FeatureTag_format() {
+		Assert.AreEqual("grant:feature:issues", OperationGrantCacheKeys.FeatureTag("issues"));
 	}
 }

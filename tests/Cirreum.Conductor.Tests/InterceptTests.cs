@@ -97,7 +97,7 @@ public class InterceptTests {
 
 	// For QueryCaching tests
 	public record CacheableTestQuery(int Id)
-		: ICacheableQuery<string> {
+		: ICacheableOperation<string> {
 		public string CacheKey => $"test-{this.Id}";
 		public CacheExpirationSettings CacheExpiration => new() {
 			Expiration = TimeSpan.FromMinutes(10)
@@ -125,7 +125,7 @@ public class InterceptTests {
 
 	// Cacheable authorizable query composite (replaces obsolete IDomainCacheableQuery<T>)
 	public record DomainCacheableTestRequest(string UserId)
-		: IAuthorizableOperation<string>, ICacheableQuery<string> {
+		: IAuthorizableOperation<string>, ICacheableOperation<string> {
 		public string CacheKey => nameof(DomainCacheableTestRequest);
 	}
 
@@ -787,7 +787,7 @@ public class InterceptTests {
 		// Verify it resolves for cacheable queries
 		var intercept = sp.GetService<IIntercept<CacheableTestQuery, string>>();
 		Assert.IsNotNull(intercept,
-			"QueryCaching should resolve for ICacheableQuery");
+			"QueryCaching should resolve for ICacheableOperation");
 		Assert.IsInstanceOfType<QueryCaching<CacheableTestQuery, string>>(intercept);
 
 	}

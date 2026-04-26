@@ -1,6 +1,12 @@
 
 # Authorization Flow
 
+> [!NOTE]
+> **Read first:** [Authorization](README.md) — the user guide. This
+> document is the request-flow companion: where the pipeline sits between
+> HTTP and the handler, and how `Result.Fail(...)` propagates back to the
+> client.
+
 High-level view of how an authorized operation moves through Cirreum, from
 HTTP entry to the three-stage authorization pipeline and back.
 
@@ -88,10 +94,12 @@ sequenceDiagram
   matching (self-scoped) before any authorization constraint runs. If the
   object is not granted, this step is a no-op pass. See the
   [Grants README](Operations/Grants/README.md) for details.
-- **Permissions are general-purpose.** `[RequiresPermission]` attributes are
-  resolved for all authorizable objects — not just granted ones. The
-  resolved `PermissionSet` is available on `AuthorizationContext.Permissions`
-  for use by object authorizers (Stage 2) and policy validators (Stage 3).
+- **Grant requirements are declarative.** `[RequiresGrant]` attributes declare
+  the permissions an operation needs on the target owner. Stage 1 enforces
+  them against the caller's grants. The resolved `PermissionSet` is also
+  available on `AuthorizationContext.RequiredGrants` for *inspection* by
+  Stage 2 object authorizers and Stage 3 policy validators — those stages
+  do not enforce the attribute themselves.
 - **Result, not exceptions.** Authentication/authorization failures are
   returned as `Result.Fail(...)` through the pipeline. Exceptions inside
   an evaluator are caught and converted at the pipeline boundary.

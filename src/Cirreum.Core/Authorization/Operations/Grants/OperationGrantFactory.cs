@@ -16,7 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 /// <list type="number">
 ///   <item><description>Unauthenticated caller → <see cref="OperationGrant.Denied"/>.</description></item>
 ///   <item><description><see cref="IOperationGrantProvider.ShouldBypassAsync"/> returns <see langword="true"/> → <see cref="OperationGrant.Unrestricted"/> (always live, never cached).</description></item>
-///   <item><description>No <see cref="AuthorizationContext{TAuthorizableObject}.Permissions"/> declared → <see cref="OperationGrant.Denied"/> (misconfig guard).</description></item>
+///   <item><description>No <see cref="AuthorizationContext{TAuthorizableObject}.RequiredGrants"/> declared → <see cref="OperationGrant.Denied"/> (misconfig guard).</description></item>
 ///   <item><description>L1 check: scoped in-memory dictionary keyed by cache key string.</description></item>
 ///   <item><description>L2 check: <see cref="ICacheService"/> via <c>GetOrCreateAsync</c>.</description></item>
 ///   <item><description>Cold path: invoke <see cref="IOperationGrantProvider.ResolveGrantsAsync"/> + <see cref="IOperationGrantProvider.ResolveHomeOwnerAsync"/> + merge.</description></item>
@@ -28,15 +28,6 @@ sealed class OperationGrantFactory(
 	CacheSettings rootCacheSettings,
 	OperationGrantCacheSettings cacheSettings
 ) : IOperationGrantFactory {
-
-	private readonly IOperationGrantProvider _grantResolver =
-		grantResolver ?? throw new ArgumentNullException(nameof(grantResolver));
-	private readonly ICacheService _cacheService =
-		cacheService ?? throw new ArgumentNullException(nameof(cacheService));
-	private readonly CacheSettings _rootCacheSettings =
-		rootCacheSettings ?? throw new ArgumentNullException(nameof(rootCacheSettings));
-	private readonly OperationGrantCacheSettings _cacheSettings =
-		cacheSettings ?? throw new ArgumentNullException(nameof(cacheSettings));
 
 	// L1: scoped memoization — same cache key string as L2 for shared identity
 	private readonly Dictionary<string, OperationGrant> _grantCache = [];
@@ -52,46 +43,47 @@ sealed class OperationGrantFactory(
 
 		if (!context.IsAuthenticated) {
 			AuthorizationTelemetry.RecordGrantResolution(
-				domain: null, resourceType, AuthorizationTelemetry.GrantLevelDeniedEarly);
+				feature: null, resourceType, AuthorizationTelemetry.GrantLevelDeniedEarly);
 			return OperationGrant.Denied;
 		}
 
 		// Bypass is always live — never cached. Admin promotion is immediate.
-		if (await this._grantResolver.ShouldBypassAsync(context, cancellationToken).ConfigureAwait(false)) {
+		if (await grantResolver.ShouldBypassAsync(context, cancellationToken).ConfigureAwait(false)) {
 			AuthorizationTelemetry.RecordGrantResolution(
-				domain: null, resourceType, AuthorizationTelemetry.GrantLevelBypass);
+				feature: null, resourceType, AuthorizationTelemetry.GrantLevelBypass);
 			return OperationGrant.Unrestricted;
 		}
 
-		var domainFeature = context.DomainFeature ?? "unknown";
+		var feature = context.DomainFeature ?? "unknown";
+		var grants = context.RequiredGrants;
 
-		if (context.Permissions.Count == 0) {
+		if (grants.Count == 0) {
 			AuthorizationTelemetry.RecordGrantResolution(
-				domainFeature, resourceType, AuthorizationTelemetry.GrantLevelDeniedEarly);
+				feature, resourceType, AuthorizationTelemetry.GrantLevelDeniedEarly);
 			return OperationGrant.Denied;
 		}
 
 		var callerId = context.UserState.Id;
 		var cacheKey = OperationGrantCacheKeys.BuildKey(
-			this._cacheSettings.Version,
+			cacheSettings.Version,
 			callerId,
-			domainFeature,
-			context.Permissions);
+			feature,
+			grants);
 
 		// L1: scoped memoization
 		if (this._grantCache.TryGetValue(cacheKey, out var cached)) {
 			AuthorizationTelemetry.RecordGrantResolution(
-				domainFeature, resourceType, AuthorizationTelemetry.GrantLevelL1Hit);
+				feature, resourceType, AuthorizationTelemetry.GrantLevelL1Hit);
 			return cached;
 		}
 
 		// L2: cross-request cache. When provider is None, NoCacheService
 		// executes the factory directly — no branching needed.
 		var l2Start = Timing.Start();
-		var grant = await this.CreateWithL2CacheAsync(context, cacheKey, callerId, domainFeature, cancellationToken)
+		var grant = await this.CreateWithL2CacheAsync(context, cacheKey, callerId, feature, cancellationToken)
 			.ConfigureAwait(false);
 		AuthorizationTelemetry.RecordGrantResolution(
-			domainFeature, resourceType, AuthorizationTelemetry.GrantLevelL2,
+			feature, resourceType, AuthorizationTelemetry.GrantLevelL2,
 			durationMs: Timing.GetElapsedMilliseconds(l2Start));
 
 		this._grantCache[cacheKey] = grant;
@@ -111,7 +103,7 @@ sealed class OperationGrantFactory(
 		var tags = OperationGrantCacheKeys.BuildTags(callerId, domainFeature);
 		var settings = this.BuildEffectiveCacheSettings(domainFeature);
 
-		return await this._cacheService.GetOrCreateAsync(
+		return await cacheService.GetOrCreateAsync(
 			cacheKey,
 			async ct => await this.CreateFromGrantResolverAsync(context, ct).ConfigureAwait(false),
 			settings,
@@ -126,11 +118,11 @@ sealed class OperationGrantFactory(
 		CancellationToken cancellationToken)
 		where TAuthorizableObject : IAuthorizableObject {
 
-		var granted = await this._grantResolver
+		var granted = await grantResolver
 			.ResolveGrantsAsync(context, cancellationToken)
 			.ConfigureAwait(false);
 
-		var homeOwner = await this._grantResolver
+		var homeOwner = await grantResolver
 			.ResolveHomeOwnerAsync(context, cancellationToken)
 			.ConfigureAwait(false);
 
@@ -144,10 +136,10 @@ sealed class OperationGrantFactory(
 
 	private CacheExpirationSettings BuildEffectiveCacheSettings(string domainFeature) {
 		// Cascade: domain override → grant-level default → root CacheSettings default
-		var defaults = this._rootCacheSettings.DefaultExpiration;
+		var defaults = rootCacheSettings.DefaultExpiration;
 
-		var expiration = this._cacheSettings.Expiration ?? defaults.Expiration;
-		if (this._cacheSettings.DomainOverrides.TryGetValue(domainFeature, out var ov) &&
+		var expiration = cacheSettings.Expiration ?? defaults.Expiration;
+		if (cacheSettings.FeatureOverrides.TryGetValue(domainFeature, out var ov) &&
 			ov.Expiration.HasValue) {
 			expiration = ov.Expiration.Value;
 		}

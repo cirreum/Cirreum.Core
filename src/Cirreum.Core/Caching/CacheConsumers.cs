@@ -8,9 +8,13 @@ namespace Cirreum.Caching;
 /// </summary>
 public static class CacheConsumers {
 
-	/// <summary>Conductor query-caching intercept.</summary>
+	/// <summary>
+	/// Conductor query-caching intercept.
+	/// </summary>
 	public const string QueryCaching = "query-caching";
 
-	/// <summary>Authorization grant resolution (L2 cross-request cache).</summary>
+	/// <summary>
+	/// Authorization grant resolution (L2 cross-request cache).
+	/// </summary>
 	public const string GrantResolution = "grant-resolution";
 }

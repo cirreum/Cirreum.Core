@@ -33,13 +33,6 @@ public sealed class OperationGrantEvaluator(
 	IOperationGrantAccessor grantAccessor,
 	CacheKeyContext cacheKeyContext) {
 
-	private readonly IOperationGrantFactory _grantFactory =
-		grantFactory ?? throw new ArgumentNullException(nameof(grantFactory));
-	private readonly IOperationGrantAccessor _grantAccessor =
-		grantAccessor ?? throw new ArgumentNullException(nameof(grantAccessor));
-	private readonly CacheKeyContext _cacheKeyContext =
-		cacheKeyContext ?? throw new ArgumentNullException(nameof(cacheKeyContext));
-
 	/// <summary>
 	/// Evaluates the grant-aware scope gate against the authorizable object in the given context.
 	/// </summary>
@@ -70,11 +63,11 @@ public sealed class OperationGrantEvaluator(
 		}
 
 		// Owner-scoped: grant resolution required.
-		var grant = await this._grantFactory
+		var grant = await grantFactory
 			.CreateAsync(context, cancellationToken)
 			.ConfigureAwait(false);
 
-		this._grantAccessor.Set(grant);
+		grantAccessor.Set(grant);
 
 		if (grant.IsDenied) {
 			EmitTelemetry(context, DenyCodes.GrantDenied);
@@ -84,7 +77,7 @@ public sealed class OperationGrantEvaluator(
 		var result = search is not null
 			? EvaluateSearch(search, grant)
 			: mutate is not null
-			? EvaluateMutate(context, mutate, grant)
+			? this.EvaluateMutate(context, mutate, grant)
 			: this.EvaluateLookup(context, lookup!, grant);
 
 		EmitTelemetry(context, result.IsValid ? AuthorizationTelemetry.ReasonPass : DenyReason(result));
@@ -118,7 +111,7 @@ public sealed class OperationGrantEvaluator(
 		}
 
 		// Non-match: check for admin/privilege bypass via grant resolution.
-		var grant = await this._grantFactory
+		var grant = await grantFactory
 			.CreateAsync(context, cancellationToken)
 			.ConfigureAwait(false);
 
@@ -133,29 +126,40 @@ public sealed class OperationGrantEvaluator(
 
 	// Owner-scoped enforcement ————————————————————————————————
 
-	private static ValidationResult EvaluateMutate<TAuthorizableObject>(
+	private ValidationResult EvaluateMutate<TAuthorizableObject>(
 		AuthorizationContext<TAuthorizableObject> context,
 		IGrantableMutateBase mutate,
 		OperationGrant grant) where TAuthorizableObject : notnull, IAuthorizableObject {
 
-		if (!string.IsNullOrWhiteSpace(mutate.OwnerId)) {
+		if (mutate.OwnerId.HasValue()) {
 			return grant.Contains(mutate.OwnerId!)
 				? Pass()
-				: Deny(DenyCodes.OwnerNotInReach, "Requested owner is not in the caller's granted access.");
+				: Deny(DenyCodes.OwnerNotInReach, "Requested owner is not in the caller's granted permissions.");
 		}
 
-		// OwnerId is null — enrich from grant.
+		// OwnerId is null — enforce presence in grant for bounded grants.
+		// Unrestricted grants are exempt since they have no owner bounds.
 		if (context.AuthenticationBoundary == AuthenticationBoundary.Global) {
 			return Deny(DenyCodes.OwnerIdRequired, "OwnerId is required for cross-tenant writes.");
 		}
+		// For tenant-scoped auth, require OwnerId when grant is not unrestricted to prevent mistakes.
 		if (grant.IsUnrestricted) {
 			return Deny(DenyCodes.OwnerIdRequired, "OwnerId is required — caller's grant is unrestricted.");
 		}
+
+		// Single owner in grant — auto-stamp and pass.
+		// Surface the framework's inference via the grant accessor + activity tag so
+		// downstream consumers can distinguish caller-supplied OwnerId from auto-stamped.
 		if (grant.OwnerIds is { Count: 1 }) {
 			mutate.OwnerId = grant.OwnerIds[0];
+			grantAccessor.MarkOwnerAutoStamped();
+			Activity.Current?.SetTag(AuthorizationTelemetry.OwnerAutoStampedTag, true);
 			return Pass();
 		}
+
+		// Multiple owners — ambiguous, require explicit OwnerId to prevent mistakes.
 		return Deny(DenyCodes.OwnerAmbiguous, "OwnerId is required — caller's grant contains multiple owners.");
+
 	}
 
 	private ValidationResult EvaluateLookup<TAuthorizableObject>(
@@ -173,7 +177,7 @@ public sealed class OperationGrantEvaluator(
 		}
 
 		// Cacheable lookup: Global callers MUST supply OwnerId to prevent unbounded cache bucket.
-		if (context.AuthorizableObject is ICacheableQuery) {
+		if (context.AuthorizableObject is ICacheableOperation) {
 			if (context.AuthenticationBoundary == AuthenticationBoundary.Global) {
 				return Deny(DenyCodes.CacheableReadOwnerIdRequired,
 					"OwnerId is required for cross-tenant cacheable lookups.");
@@ -217,13 +221,13 @@ public sealed class OperationGrantEvaluator(
 		IGrantableLookupBase lookup)
 		where TAuthorizableObject : notnull, IAuthorizableObject {
 
-		if (context.AuthorizableObject is not ICacheableQuery) {
+		if (context.AuthorizableObject is not ICacheableOperation) {
 			return;
 		}
 
 		var boundary = context.AuthenticationBoundary;
-		this._cacheKeyContext.SetPrefix($"owner:{lookup.OwnerId}:boundary:{boundary}");
-		this._cacheKeyContext.SetExtraTags([$"tenant:{lookup.OwnerId}"]);
+		cacheKeyContext.SetPrefix($"owner:{lookup.OwnerId}:boundary:{boundary}");
+		cacheKeyContext.SetExtraTags([$"owner:{lookup.OwnerId}"]);
 	}
 
 	// Helpers ————————————————————————————————————————————————

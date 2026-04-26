@@ -3,26 +3,30 @@ namespace Cirreum.Authorization;
 using System.Collections;
 
 /// <summary>
-/// An immutable, ordered collection of <see cref="Permission"/> instances declared on a
-/// resource type. Provides query helpers for checking feature areas, operations, and
-/// building deterministic cache signatures.
+/// An immutable, ordered collection of <see cref="Permission"/> values with helpers for
+/// membership tests, feature/operation queries, feature-scoped filtering, and deterministic
+/// signature generation.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <see cref="PermissionSet"/> is the runtime representation of all
-/// <see cref="RequiresPermissionAttribute"/> declarations on a request. It is created
-/// once per request type by <see cref="RequiredPermissionCache"/> and shared across
-/// all requests — the set is fully immutable after construction.
+/// <see cref="PermissionSet"/> is general-purpose — it is not tied to grants, ACLs, or any
+/// specific authorization stage. The grant pipeline uses it as the runtime representation of
+/// <see cref="RequiresGrantAttribute"/> declarations (built once per type by
+/// <see cref="RequiredGrantCache"/> and exposed via
+/// <see cref="AuthorizationContext{TAuthorizableObject}.RequiredGrants"/>), but any code may
+/// construct or consume a set for its own purposes.
 /// </para>
 /// <para>
-/// Available on <c>AuthorizationContext.Permissions</c> for every authorization
-/// stage — grant evaluators, resource authorizers, and policy validators.
+/// Equality between elements follows <see cref="Permission"/> record equality — case-insensitive
+/// on both <see cref="Permission.Feature"/> and <see cref="Permission.Operation"/>. The set is
+/// sealed and fully immutable after construction.
 /// </para>
 /// </remarks>
 public sealed class PermissionSet : IReadOnlyList<Permission> {
 
 	/// <summary>
-	/// A shared empty set representing "no permissions declared."
+	/// Shared empty set. Returned wherever a query or filter produces no results, so callers
+	/// can compare against this instance without allocating.
 	/// </summary>
 	public static readonly PermissionSet Empty = new([]);
 
@@ -36,7 +40,7 @@ public sealed class PermissionSet : IReadOnlyList<Permission> {
 	public int Count => this._items.Length;
 
 	/// <summary>
-	/// Returns <see langword="true"/> when the set contains no permissions.
+	/// <see langword="true"/> when the set contains no permissions.
 	/// </summary>
 	public bool IsEmpty => this._items.Length == 0;
 
@@ -51,9 +55,7 @@ public sealed class PermissionSet : IReadOnlyList<Permission> {
 	IEnumerator IEnumerable.GetEnumerator() => this._items.GetEnumerator();
 
 	/// <summary>
-	/// Returns <see langword="true"/> if the set contains the specified permission
-	/// (compared by <see cref="Permission"/> record equality — case-insensitive on
-	/// both <see cref="Permission.Feature"/> and <see cref="Permission.Operation"/>).
+	/// <see langword="true"/> if the set contains <paramref name="permission"/>.
 	/// </summary>
 	public bool Contains(Permission permission) {
 		for (var i = 0; i < this._items.Length; i++) {
@@ -65,19 +67,19 @@ public sealed class PermissionSet : IReadOnlyList<Permission> {
 	}
 
 	/// <summary>
-	/// Returns <see langword="true"/> if the set contains a permission matching the
-	/// <c>"feature:operation"</c> string (e.g., <c>"issues:delete"</c>).
+	/// <see langword="true"/> if the set contains the permission expressed in
+	/// <c>"feature:operation"</c> format (e.g., <c>"issues:delete"</c>). The string is parsed
+	/// via <see cref="Permission.Parse"/>.
 	/// </summary>
 	/// <exception cref="FormatException">
-	/// Thrown when <paramref name="featureAndOperation"/> is not in <c>"feature:operation"</c> format.
+	/// <paramref name="featureAndOperation"/> is not in <c>"feature:operation"</c> form.
 	/// </exception>
 	public bool Contains(string featureAndOperation) =>
 		this.Contains(Permission.Parse(featureAndOperation));
 
 	/// <summary>
-	/// Returns <see langword="true"/> if the set contains any of the specified permissions.
+	/// <see langword="true"/> if the set contains at least one of <paramref name="permissions"/>.
 	/// </summary>
-	/// <param name="permissions">The permissions to check for.</param>
 	public bool ContainsAny(params Permission[] permissions) {
 		for (var i = 0; i < permissions.Length; i++) {
 			if (this.Contains(permissions[i])) {
@@ -88,9 +90,8 @@ public sealed class PermissionSet : IReadOnlyList<Permission> {
 	}
 
 	/// <summary>
-	/// Returns <see langword="true"/> if the set contains all of the specified permissions.
+	/// <see langword="true"/> if the set contains every one of <paramref name="permissions"/>.
 	/// </summary>
-	/// <param name="permissions">The permissions to check for.</param>
 	public bool ContainsAll(params Permission[] permissions) {
 		for (var i = 0; i < permissions.Length; i++) {
 			if (!this.Contains(permissions[i])) {
@@ -101,8 +102,8 @@ public sealed class PermissionSet : IReadOnlyList<Permission> {
 	}
 
 	/// <summary>
-	/// Returns <see langword="true"/> if any permission in the set belongs to the
-	/// specified feature area (e.g., <c>"issues"</c>).
+	/// <see langword="true"/> if any permission in the set belongs to the given feature area
+	/// (e.g., <c>"issues"</c>). Comparison is case-insensitive.
 	/// </summary>
 	public bool HasFeature(string feature) {
 		for (var i = 0; i < this._items.Length; i++) {
@@ -114,8 +115,8 @@ public sealed class PermissionSet : IReadOnlyList<Permission> {
 	}
 
 	/// <summary>
-	/// Returns <see langword="true"/> if any permission in the set has the specified
-	/// operation verb (e.g., <c>"delete"</c>).
+	/// <see langword="true"/> if any permission in the set has the given operation verb
+	/// (e.g., <c>"delete"</c>), regardless of feature. Comparison is case-insensitive.
 	/// </summary>
 	public bool HasOperation(string operation) {
 		for (var i = 0; i < this._items.Length; i++) {
@@ -127,8 +128,8 @@ public sealed class PermissionSet : IReadOnlyList<Permission> {
 	}
 
 	/// <summary>
-	/// Returns the subset of permissions belonging to the specified feature area.
-	/// Returns <see cref="Empty"/> if no permissions match.
+	/// Returns the subset of permissions belonging to <paramref name="feature"/>, or
+	/// <see cref="Empty"/> if none match. Comparison is case-insensitive.
 	/// </summary>
 	public PermissionSet ForFeature(string feature) {
 		List<Permission>? filtered = null;
@@ -138,34 +139,6 @@ public sealed class PermissionSet : IReadOnlyList<Permission> {
 			}
 		}
 		return filtered is null ? Empty : new PermissionSet(filtered);
-	}
-
-	/// <summary>
-	/// Builds a deterministic, sorted signature from the permission operation names.
-	/// Used for cache key construction — AND semantics require order-independent keys.
-	/// </summary>
-	/// <returns>
-	/// A <c>"+"</c>-joined string of sorted operation names (e.g., <c>"archive+delete"</c>),
-	/// or <see cref="string.Empty"/> when the set is empty.
-	/// </returns>
-	public string ToSignature() {
-		if (this._items.Length == 0) {
-			return string.Empty;
-		}
-		if (this._items.Length == 1) {
-			return this._items[0].Operation;
-		}
-
-		var names = new string[this._items.Length];
-		for (var i = 0; i < this._items.Length; i++) {
-			names[i] = this._items[i].Operation;
-		}
-
-		// WARNING: this is required for accurate and consistent cache keys — do not change to an order-dependent join!
-		Array.Sort(names, StringComparer.Ordinal);
-
-		return string.Join('+', names);
-
 	}
 
 }

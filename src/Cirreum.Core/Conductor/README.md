@@ -154,7 +154,7 @@ services.AddConductor(
 
 ---
 
-### 2. Application Mode (`AddDomainServices`) — Recommended
+### 2. Application Mode (`AddDomainServices`)
 
 This gives you the opinionated, safe defaults:
 
@@ -181,7 +181,7 @@ services.AddDomainServices(Configuration, options => {
 
 ---
 
-### 3. DomainBuilder Integration
+### 3. DomainBuilder Integration — Recommended
 
 Highest-level integration for apps that should not touch Conductor internals directly:
 
@@ -203,7 +203,7 @@ Conductor settings control runtime behavior:
 | Setting | Description |
 |---------|-------------|
 | `PublisherStrategy` | Determines how notification handlers are invoked. |
-| `Cache.Provider` | InMemory, Distributed, None. |
+| `Cache.Provider` | InMemory, Hybrid, Distributed, None. |
 | `Cache.DefaultExpiration` | Global TTL for cached queries. |
 
 ### From configuration

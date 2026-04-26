@@ -113,7 +113,7 @@ public class DomainModel() {
 			// IsAnonymous: not an IAuthorizableObject (doesn't participate in authorization)
 			var isAnonymous = !IsAuthorizableResource(resourceType);
 
-			// IsCacheableQuery: is an ICacheableQuery (the query results are cached and returned to prevent re-query)
+			// IsCacheableQuery: is an ICacheableOperation (the query results are cached and returned to prevent re-query)
 			var isCacheableQuery = IsCacheableQuery(resourceType);
 
 			// RequiresAuthorization: is an IAuthorizableOperationBase (flows through pipeline, must have authorizer)
@@ -121,8 +121,8 @@ public class DomainModel() {
 
 			// Permission metadata: domain feature and required permissions are available
 			// for all resources in a *.Domain.* namespace, not just grant-aware ones.
-			var grantDomain = RequiredPermissionCache.ResolveDomainNamespace(resourceType);
-			var permissions = RequiredPermissionCache.GetFor(resourceType);
+			var grantDomain = RequiredGrantCache.ResolveDomainFeature(resourceType);
+			var permissions = RequiredGrantCache.GetFor(resourceType);
 			var isSelfScoped = typeof(IGrantableSelfBase).IsAssignableFrom(resourceType);
 			var isGranted = isSelfScoped
 				|| typeof(IGrantableMutateBase).IsAssignableFrom(resourceType)
@@ -334,13 +334,13 @@ public class DomainModel() {
 	}
 
 	/// <summary>
-	/// Determines whether the specified type implements the ICacheableQuery interface.
+	/// Determines whether the specified type implements the ICacheableOperation interface.
 	/// </summary>
-	/// <param name="type">The type to examine for implementation of the ICacheableQuery interface.</param>
-	/// <returns>true if the specified type implements ICacheableQuery; otherwise, false.</returns>
+	/// <param name="type">The type to examine for implementation of the ICacheableOperation interface.</param>
+	/// <returns>true if the specified type implements ICacheableOperation; otherwise, false.</returns>
 	private static bool IsCacheableQuery(Type type) {
 		var interfaces = type.GetInterfaces();
-		return interfaces.Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICacheableQuery<>));
+		return interfaces.Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICacheableOperation<>));
 	}
 
 	/// <summary>

@@ -155,11 +155,16 @@ public sealed record AuthorizationContext<TAuthorizableObject>(
 	public string? DomainFeature => DomainFeatureResolver.Resolve<TAuthorizableObject>();
 
 	/// <summary>
-	/// The distinct set of permissions declared on <typeparamref name="TAuthorizableObject"/> via
-	/// <see cref="RequiresPermissionAttribute"/>. Hoisted once per type from
-	/// <see cref="RequiredPermissionCache"/>; available to every authorization stage without
-	/// per-request reflection. AND semantics — every listed permission is required.
+	/// The distinct set of grant permissions declared on <typeparamref name="TAuthorizableObject"/> via
+	/// <see cref="RequiresGrantAttribute"/>. Hoisted once per type from
+	/// <see cref="RequiredGrantCache"/>. Stage 1 enforces these against the caller's grants;
+	/// Stage 2 and Stage 3 may inspect the same set as read-only context. AND semantics —
+	/// every listed permission is required.
 	/// </summary>
-	public PermissionSet Permissions => RequiredPermissionCache.GetFor<TAuthorizableObject>();
+	/// <remarks>
+	/// Returns the *required* (declared) grant permissions for the operation — not the caller's
+	/// held permissions, and not the permissions on any <see cref="Resources.AccessEntry"/>.
+	/// </remarks>
+	public PermissionSet RequiredGrants => RequiredGrantCache.GetFor<TAuthorizableObject>();
 
 }

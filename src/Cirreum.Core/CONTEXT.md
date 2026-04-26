@@ -51,7 +51,7 @@ authorization pipeline and reused by downstream consumers (e.g.,
 │ Helper methods:                                   │   │                                                   │
 │ • HasActiveTenant()                               │   │ Additional:                                       │
 │ • IsFromProvider(provider)                        │   │ • AuthorizableObject (TAuthorizableObject)        │
-│ • IsInDepartment(department)                      │   │ • Permissions (RequiredPermissionCache)            │
+│ • IsInDepartment(department)                      │   │ • RequiredGrants (RequiredGrantCache)             │
 │                                                   │   │ • DomainFeature (DomainFeatureResolver)            │
 └───────────────────────────────────────────────────┘   └───────────────────────────────────────────────────┘
 ```
@@ -174,7 +174,7 @@ authorization pipeline and reused by downstream consumers (e.g.,
 │ • Timestamp (captured at ctor)   │   │  (sealed, extends base)                   │
 │ • ElapsedDuration (computed)     │   │                                            │
 │                                  │   │ • AuthorizableObject                       │
-│                                  │   │ • Permissions (RequiredPermissionCache)     │
+│                                  │   │ • RequiredGrants (RequiredGrantCache)  │
 │                                  │   │ • DomainFeature (DomainFeatureResolver)     │
 └──────────────────────────────────┘   └──────────────────────────────────────────┘
 ```
@@ -223,7 +223,7 @@ AuthorizationContext owns authorization decisions:
     ├─> WHO: UserState (same IUserState, delegates for identity/profile)
     ├─> ROLES: EffectiveRoles (inheritance-expanded, computed once)
     ├─> TARGET: AuthorizableObject being evaluated
-    ├─> PERMISSIONS: PermissionSet (from RequiredPermissionCache)
+    ├─> PERMISSIONS: PermissionSet (from RequiredGrantCache)
     └─> DOMAIN: DomainFeature (from DomainFeatureResolver)
 ```
 
@@ -293,7 +293,7 @@ Benefits:
 
 ### AuthorizationContext&lt;TAuthorizableObject&gt; (Generic Derived) Additional Properties
 - `AuthorizableObject` (TAuthorizableObject) — the object being evaluated
-- `Permissions` → `RequiredPermissionCache.GetFor<TAuthorizableObject>()`
+- `RequiredGrants` → `RequiredGrantCache.GetFor<TAuthorizableObject>()`
 - `DomainFeature` → `DomainFeatureResolver.Resolve<TAuthorizableObject>()`
 
 ### IAuthorizationContextAccessor

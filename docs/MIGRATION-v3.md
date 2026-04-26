@@ -1,5 +1,11 @@
 # Cirreum.Core v3 Migration Guide
 
+> **From:** v2.x &nbsp;•&nbsp; **To:** v3.x
+>
+> Migrating from v3 → v4? See [MIGRATION-v4.md](MIGRATION-v4.md) instead — v4 is
+> a separate release that introduces grant-vocabulary clarity and runtime security
+> signals on top of v3.
+
 Cirreum.Core v3 is a terminology and architectural clarity release. The runtime behavior is unchanged — all breaking changes are **rename-only** and can be resolved with find-and-replace. No logic changes, no behavioral differences, no data migration.
 
 ## Why v3?
@@ -48,6 +54,17 @@ Most of the migration is mechanical. Run these replacements **in order** across 
 | `IAuthorizationResourceValidator<` | `IAuthorizer<` — see [Authorization Validators](#authorization-validators) |
 | `IScopeEvaluator` | `IAuthorizationConstraint` |
 | `AccessScope` | `AuthenticationBoundary` |
+| `[RequiresPermission(...)]` | `[RequiresGrant(...)]` — attribute renamed to reflect Stage 1 grant-only enforcement; ctor surface unchanged (operation-only or feature+operation) |
+| `RequiresPermissionAttribute` | `RequiresGrantAttribute` |
+| `RequiredPermissionCache` | `RequiredGrantCache` |
+| `AuthorizationContext<T>.Permissions` | `AuthorizationContext<T>.RequiredGrants` — property renamed; same `PermissionSet` value, clearer that it's the *declared* requirements (not caller-held permissions, not ACE permissions) |
+| `RequiredPermissionCache.ResolveDomainNamespace` | `RequiredGrantCache.ResolveDomainFeature` |
+| `AuthorizerBase<T>.WhenPermission` | `AuthorizerBase<T>.WhenRequiresGrant` |
+| `AuthorizerBase<T>.WhenAnyPermission` | `AuthorizerBase<T>.WhenRequiresAnyGrant` |
+| `AuthorizerBase<T>.WhenAllPermissions` | `AuthorizerBase<T>.WhenRequiresAllGrants` |
+| `AuthorizerBase<T>.UnlessPermission` | `AuthorizerBase<T>.UnlessRequiresGrant` |
+| `AuthorizerBase<T>.UnlessAnyPermission` | `AuthorizerBase<T>.UnlessRequiresAnyGrant` |
+| `AuthorizerBase<T>.UnlessAllPermissions` | `AuthorizerBase<T>.UnlessRequiresAllGrants` |
 
 ### 5. Caching
 
@@ -57,6 +74,7 @@ Most of the migration is mechanical. Run these replacements **in order** across 
 | `InMemoryCacheableQueryService` | `InMemoryCacheService` |
 | `NoCacheQueryService` | `NoCacheService` |
 | `QueryCacheSettings` | `CacheExpirationSettings` |
+| `ICacheableQuery` / `ICacheableQuery<TResultValue>` | `ICacheableOperation` / `ICacheableOperation<TResultValue>` — interface renamed to align with Cirreum's CQRS-neutral operation vocabulary; `TResultValue` parameter unchanged. The `QueryCaching` intercept and `QueryOverrides` settings keep their existing names |
 
 ### 6. Introspection (formerly Authorization.Analysis)
 
@@ -98,7 +116,7 @@ These types were removed with no direct 1:1 replacement:
 |--------------|----------------|
 | `IDomainRequest` | Use `IOperation` or `IOperation<TResultValue>` directly |
 | `IAuditableRequest` | Auditing is now handled via intercepts and telemetry |
-| `IAuthorizableRequest` | Authorization is now attribute-driven via `[RequiresPermission]` on operation types, resolved through `IAuthorizableOperation` interfaces |
+| `IAuthorizableRequest` | Authorization is now attribute-driven via `[RequiresGrant]` on operation types, resolved through `IAuthorizableOperation` interfaces |
 | `RequestCompletedNotification` | Replaced by `OperationTelemetry` and the notification publisher pipeline |
 | `AuthorizationValidatorBase<T>` | Use `AuthorizerBase<TAuthorizableObject>` — same FluentValidation pattern, new base class |
 | `IAuthorizationResourceValidator<T>` | Use `IAuthorizer<TAuthorizableObject>` |
@@ -195,7 +213,7 @@ These are additive features — no migration required, but worth knowing about:
 |---------|-------------|
 | **Operation Grants** | Owner-scoped grant-based access control with caching, invalidation, and warm-up |
 | **Resource Access** | Object-level ACL evaluation via `IProtectedResource` and `IResourceAccessEvaluator` |
-| **Permission Model** | First-class `Permission`, `PermissionSet`, and `[RequiresPermission]` attribute |
+| **Permission Model** | First-class `Permission`, `PermissionSet`, and `[RequiresGrant]` attribute |
 | **Authorization Constraints** | `IAuthorizationConstraint` for global cross-cutting authorization gates |
 | **Authorization Telemetry** | Centralized OpenTelemetry instrumentation for the authorization pipeline |
 | **Cache Consumer Tagging** | `cirreum.cache.consumer` metric tag distinguishes cache usage by subsystem |

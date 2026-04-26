@@ -1,35 +1,37 @@
 # Grants
 
-## Grant-Based Access Control for Cirreum Applications
+> [!NOTE]
+> **Read first:** [Authorization](../../README.md) — the user guide. This
+> document assumes you understand the three-stage pipeline, `[RequiresGrant]`,
+> and `PermissionSet`. It covers grants-specific detail only.
 
-Grants is Cirreum's opt-in grant-based access control system that
-**augments the existing authorization pipeline** — it does not replace RBAC or ABAC.
-The base authorization system (roles, object authorizers, policy validators) continues
-to work exactly as before. Grants adds a new dimension: *"for this operation, which
-owners can this caller access?"* — answered before the handler runs, without the handler
-knowing anything about grant tables or relationships.
+## Grant-Based Access Control
 
-Grants integrates into the existing three-stage authorization pipeline as **Stage 1 Step 0**,
-running before authorization constraints, object authorizers, and policy validators. Resources
-that don't implement a Granted interface are completely unaffected — the grant gate is
-a no-op pass with zero overhead.
+Grants is Cirreum's opt-in **Stage 1 / Step 0** gate. It answers a single
+question before the handler runs:
+
+> *"For this operation, which owners can this caller access?"*
+
+The handler never touches the grants table. The app implements
+`IOperationGrantProvider` (a thin data lookup); Core orchestrates resolution,
+caching, and enforcement. Resources without a granted interface bypass the
+gate entirely — zero overhead.
 
 ---
 
 ## Table of Contents
 
 1. [Core Concepts](#core-concepts)
-2. [Architecture](#architecture)
-3. [Domain Resolution](#domain-resolution)
-4. [Request Interfaces](#request-interfaces)
-5. [Grant Enforcement](#grant-enforcement)
-6. [Permission Model](#permission-model)
-7. [Grant Resolution Flow](#grant-resolution-flow)
-8. [Caching](#caching)
-9. [Discovery & Analysis](#discovery--analysis)
-10. [DI Registration](#di-registration)
-11. [Configuration](#configuration)
-12. [Design Decisions](#design-decisions)
+2. [Component Roles](#component-roles)
+3. [Operation Interfaces](#operation-interfaces)
+4. [Grant Enforcement](#grant-enforcement)
+5. [Grant Resolution Flow](#grant-resolution-flow)
+6. [Caching](#caching)
+7. [Discovery & Analysis](#discovery--analysis)
+8. [DI Registration](#di-registration)
+9. [Configuration](#configuration)
+10. [Customization Patterns](#customization-patterns)
+11. [Design Decisions](#design-decisions)
 
 ---
 
@@ -38,41 +40,21 @@ a no-op pass with zero overhead.
 | Concept | Description |
 |---------|-------------|
 | **Grant** | A stored relationship: *"caller X holds permission P on owner Y"* |
-| **Domain** | A bounded context (e.g., Issues, Documents) derived from the C# namespace convention |
-| **Permission** | A feature-scoped capability (e.g., `issues:delete`, `issues:read`) |
-| **OperationGrant** | The computed set of owners a caller can touch for a given operation |
-| **Grant Kinds** | Mutate / Lookup / Search / Self — the four grant-aware operation patterns |
+| **OperationGrant** | The computed set of owners a caller can touch for a given operation. Three shapes: Denied / Unrestricted / Bounded |
+| **Grant Kinds** | Mutate / Lookup / Search / Self — the four grant-aware operation patterns, each with distinct enforcement timing |
+| **HomeOwner** | Optional default owner merged into the grant set (e.g., the caller's primary tenant) |
+| **Bypass** | App-defined wildcard skip (e.g., super-admin) — produces `Unrestricted`, never cached |
 
 ### What Grants Is Not
 
-- **Not RBAC** — roles live in Stage 2 object authorizers. Grants don't replace roles;
-  they answer *"which owners"*, not *"which actions"*.
-- **Not a grant store** — Core defines the pipeline and contracts. The app implements
-  `IOperationGrantProvider` to query its own grants table.
-- **Not mandatory** — if you never call `AddOperationGrants`, the pipeline behaves exactly
-  as before. Zero overhead, zero configuration.
+- **Not RBAC.** Roles live in Stage 2 authorizers. Grants answer *"which owners"*, not *"which actions"*.
+- **Not a grant store.** Core defines the pipeline and contracts; the app's `IOperationGrantProvider` queries its own grants table.
+- **Not mandatory.** Skip `AddOperationGrants` and the gate is inert.
+- **Not Resource ACLs.** Those are object-level, evaluated in-handler — see [Resources](../../Resources/README.md).
 
 ---
 
-## Architecture
-
-```text
-                         ┌──────────────────────────────────────────────────────┐
-                         │                 Authorization Pipeline                │
-                         ├──────────────────────────────────────────────────────┤
-                         │ Stage 1 — Scope (first-failure short-circuit)        │
-                         │   Step 0: OperationGrantEvaluator (if Granted)        │  ← Grants
-                         │   Step 1: IAuthorizationConstraint[] (app-provided, optional)  │
-                         │                                                      │
-                         │ Stage 2 — Object Authorizers (aggregate, short-circuit)│
-                         │   AuthorizerBase<T> (roles, ABAC rules)      │
-                         │                                                      │
-                         │ Stage 3 — Policy (aggregate)                         │
-                         │   IPolicyValidator[] (hours, quotas, kill-switches)  │
-                         └──────────────────────────────────────────────────────┘
-```
-
-### Component Roles
+## Component Roles
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -110,27 +92,11 @@ a no-op pass with zero overhead.
 
 ---
 
-## Domain Resolution
-
-The domain feature is derived structurally from the C# namespace convention — no
-marker interface or attribute is needed:
-
-```text
-MyApp.Domain.Issues.Commands.DeleteIssue  →  domain = "issues"
-MyApp.Domain.Admin.Queries.ListUsers      →  domain = "admin"
-```
-
-`DomainFeatureResolver` finds the first segment after `"Domain"` in the type's namespace
-and lowercases it. The resolved domain is available on `AuthorizationContext.DomainFeature`
-and `OperationContext.DomainFeature`.
-
----
-
 ## Operation Interfaces
 
 Grants provides composable interfaces that layer on top of existing Conductor operation
 types. Each operation pattern requires **one interface** — no marker interfaces or
-generic domain parameters:
+generic feature parameters:
 
 ### Owner-Scoped (tenant/company)
 
@@ -139,7 +105,7 @@ generic domain parameters:
 | `IOwnerMutateOperation` | `IAuthorizableOperation` | `OwnerId` (scalar) | Single-owner write (void) |
 | `IOwnerMutateOperation<TResultValue>` | `IAuthorizableOperation<TResultValue>` | `OwnerId` (scalar) | Single-owner write with response |
 | `IOwnerLookupOperation<TResultValue>` | `IAuthorizableOperation<TResultValue>` | `OwnerId` (scalar) | Single-owner read |
-| `IOwnerCacheableLookupOperation<TResultValue>` | `ICacheableQuery<TResultValue>` | `OwnerId` | Cacheable single-owner read |
+| `IOwnerCacheableLookupOperation<TResultValue>` | `ICacheableOperation<TResultValue>` | `OwnerId` | Cacheable single-owner read |
 | `IOwnerSearchOperation<TResultValue>` | `IAuthorizableOperation<TResultValue>` | `OwnerIds` (plural) | Cross-owner query |
 
 ### Self-Scoped (user-owned)
@@ -154,17 +120,17 @@ generic domain parameters:
 
 ```csharp
 // Owner-scoped: which tenant?
-[RequiresPermission("delete")]
+[RequiresGrant("delete")]
 public sealed record DeleteIssue(string Id) : IOwnerMutateOperation {
     public string? OwnerId { get; set; }
 }
 
-[RequiresPermission("read")]
+[RequiresGrant("read")]
 public sealed record GetIssue(string Id) : IOwnerLookupOperation<Issue> {
     public string? OwnerId { get; set; }
 }
 
-[RequiresPermission("read")]
+[RequiresGrant("read")]
 public sealed record ListIssues : IOwnerSearchOperation<IReadOnlyList<Issue>> {
     public IReadOnlyList<string>? OwnerIds { get; set; }
 }
@@ -198,15 +164,129 @@ OwnerId null:
 
 ### Lookup (owner-scoped)
 
-```text
-OwnerId supplied  →  OwnerId ∈ grant? Pass : Deny
-OwnerId null      →  Pass (Pattern C — grant stashed on IOperationGrantAccessor,
-                      handler checks post-fetch entity's owner against grant)
+Lookups have two distinct patterns the framework supports — **Pattern A** and
+**Pattern C** — distinguished by where the ownership check runs and whether
+resource existence is hidden from unauthorized callers. Choose based on
+whether the *existence* of the resource is itself sensitive.
+
+> [!NOTE]
+> **Why no Pattern B?** The alphabet skips intentionally. Pattern A is the
+> pre-flight check; Pattern C is the post-fetch check. There is no Pattern B
+> because the third option ("pre-flight check, but return 404 on miss") would
+> require the framework to lie about whether the owner is in scope before any
+> data is loaded — which adds nothing over Pattern A and confuses the response
+> contract. Pattern D is similarly not a thing here; data-time ACL evaluation
+> via `IResourceAccessEvaluator` is its own concept, not a numbered pattern.
+
+#### Pattern A — Pre-flight enforcement (existence revealed)
+
+The caller supplies `OwnerId` on the request. Stage 1 verifies
+`OwnerId ∈ grant` *before* the handler runs and denies on miss.
+
+| Aspect | Behavior |
+|---|---|
+| Where the check runs | Stage 1, before handler |
+| Caller supplies | Non-null `OwnerId` on the operation |
+| Response on miss | **403 Forbidden** (`OwnerNotInReach` deny code) |
+| Existence handling | Revealed — the caller learns the owner exists but is out of reach |
+| Use when | The owner identifier is non-sensitive (caller already knows it from another context — e.g., a tenant subdomain, a known organization slug) |
+
+```csharp
+public sealed record GetTenantSettings(string OwnerId, string Key)
+    : IOwnerLookupOperation<TenantSettings>;
+
+// Caller invokes with OwnerId = "tenant-acme"
+// Stage 1: grant.Contains("tenant-acme")? Yes → handler runs; No → 403
 ```
 
-**Pattern C (existence-hiding):** The handler fetches the entity, checks
-`grant.Contains(entity.OwnerId)`, and returns 404 (not 403) if the caller
-doesn't have access — preventing information leakage about resource existence.
+The handler doesn't need to consult `IOperationGrantAccessor` for ownership —
+Stage 1 already enforced it. (The handler may still read the accessor for
+auxiliary dimensions stored in `OperationGrant.Extensions`.)
+
+#### Pattern C — Post-fetch existence-hiding
+
+The caller invokes the operation with `OwnerId == null`. Stage 1 cannot
+enforce ownership without knowing the target, so it stashes the resolved
+grant on `IOperationGrantAccessor` and *passes*. The handler is then
+responsible for fetching the entity and verifying ownership before returning
+data.
+
+| Aspect | Behavior |
+|---|---|
+| Where the check runs | Inside the handler, after the fetch |
+| Caller supplies | `null` `OwnerId`; resource identified by some other key (e.g., `Id`, slug) |
+| Response on miss | **404 Not Found** — same response as "doesn't exist" |
+| Existence handling | Hidden — caller cannot distinguish "doesn't exist" from "exists but you can't access it" |
+| Use when | Resource existence is sensitive: financial records, HR data, support tickets, anything where leaking "this ID is real" matters |
+
+```csharp
+public sealed record GetIssue(string Id) : IOwnerLookupOperation<Issue>;
+
+public sealed class GetIssueHandler(
+    IIssueRepository repo,
+    IOperationGrantAccessor grantAccessor)
+    : IOperationHandler<GetIssue, Issue> {
+
+    public async Task<Result<Issue>> HandleAsync(GetIssue op, CancellationToken ct) {
+        var issue = await repo.GetAsync(op.Id, ct);
+        if (issue is null) {
+            return Result<Issue>.Fail(new NotFoundException(op.Id));
+        }
+
+        // Reading Current sets WasRead = true; satisfies the runtime audit.
+        var grant = grantAccessor.Current;
+        if (!grant.Contains(issue.OwnerId)) {
+            return Result<Issue>.Fail(new NotFoundException(op.Id)); // 404, not 403
+        }
+
+        return Result.Ok(issue);
+    }
+}
+```
+
+> [!IMPORTANT]
+> Pattern C is the **highest-risk surface** in the grant pipeline. The
+> framework cannot enforce the post-fetch check — that's handler code. If the
+> handler forgets, the request was permitted at the gate, the entity was
+> returned, and no ownership check ever ran. The `GrantedLookupAudit<,>`
+> intercept (described below) is the runtime backstop that detects this.
+
+### Decision flow
+
+The Stage 1 evaluator's decision logic for `IGrantableLookupBase` operations:
+
+```text
+OwnerId supplied  →  OwnerId ∈ grant? Pass : Deny           [Pattern A]
+OwnerId null      →  Stash grant; Pass; handler checks       [Pattern C]
+```
+
+For cacheable lookups (`IOwnerCacheableLookupOperation<T>`), the null-OwnerId
+branch is denied for `Global`-boundary callers — see
+[Permission Model](#permission-model-grants-specific-notes) for why
+cross-tenant caching with a null owner would create an unbounded cache
+bucket.
+
+### Pattern C runtime audit
+
+Because Pattern C correctness depends on handler code the framework cannot
+inspect, the framework ships a `GrantedLookupAudit<,>` intercept as a runtime
+backstop. It runs after the handler for every `IGrantableLookupBase` operation,
+captures whether the request entered as Pattern A or Pattern C, and watches
+the accessor's `WasRead` flag.
+
+If a Pattern C lookup completes without the handler ever reading
+`IOperationGrantAccessor.Current`, the intercept emits:
+
+- **Structured warning log** — `PatternCBypassDetected` (EventId 9001) with the
+  operation type name
+- **OTel activity tag** — `cirreum.authz.grant.pattern_c_bypass = true`
+
+Wire these into your dashboards and alerting so a forgotten `grant.Contains(...)`
+call surfaces in dev/CI before a real bypass ships. The audit does not deny
+(the handler has already returned by the time it runs) — its purpose is
+observability and operational confidence, not enforcement. Pair it with the
+`AuthorizationConfigurationException` startup gate for full coverage:
+misconfigurations fail fast at boot; missed handler checks surface at runtime.
 
 ### Search (owner-scoped)
 
@@ -237,47 +317,35 @@ via `IOwnedApplicationUser.IsEnabled`. Disabled users are denied regardless of g
 
 ---
 
-## Permission Model
+## Permission Model (Grants-Specific Notes)
 
-### Declaration
+The general permission model — `Permission`, `PermissionSet`, the
+`[RequiresGrant]` attribute, AND-stacking, namespace-derived feature — is
+covered in the [parent README](../../README.md#permission-model). Grants adds
+**one extra rule** beyond the general behaviour:
 
-Permissions are declared on any authorizable object via `[RequiresPermission]`.
-On granted resources, permissions drive grant resolution (Stage 1). On non-granted
-resources, permissions are available on `ctx.Permissions` for use in resource
-authorizers (Stage 2) and policy validators (Stage 3).
+### Cross-Domain Validation
 
-```csharp
-// Single-arg — feature auto-resolved from namespace convention
-[RequiresPermission("delete")]
-public sealed record DeleteIssue : IOwnerMutateOperation { ... }
-
-// Two-arg explicit — feature validated against namespace-derived domain
-[RequiresPermission("issues", "delete")]
-public sealed record ArchiveIssue : IOwnerMutateOperation { ... }
-
-// Permission constant — feature validated
-[RequiresPermission(Permissions.Issues.Delete)]
-public sealed record PurgeIssue : IOwnerMutateOperation { ... }
-```
-
-### Feature Validation
-
-All permissions on a granted resource **must** use the domain's feature. A mismatch
-throws `InvalidOperationException` at startup:
+On a granted resource (a type implementing one of the `IGrantable*` interfaces),
+all `[RequiresGrant]` permissions **must** use the domain feature derived from
+the type's namespace. Mismatches throw `InvalidOperationException` at pipeline
+setup:
 
 ```csharp
+// Type lives in MyApp.Domain.Issues.* → domain feature is "issues"
+
 // Runtime error — feature "audit" does not match domain "issues"
-[RequiresPermission("audit", "write")]
+[RequiresGrant("audit", "write")]
 public sealed record BadAction : IOwnerMutateOperation { ... }
 ```
 
-Cross-cutting concerns (audit logging, rate limiting) belong in Stage 2 resource
-authorizers or Stage 3 policy validators — not in grant permissions.
+Cross-cutting concerns (audit logging, rate limiting) belong in Stage 2
+authorizers or Stage 3 policies — not in grant permissions on a granted
+resource.
 
-### AND Semantics
-
-When multiple permissions are declared, the caller must hold **all** of them on the
-target owner(s). Permissions are evaluated with AND semantics, not OR.
+This rule does not apply to non-granted resources: `[RequiresGrant]` is still
+read by `RequiredGrantCache` and surfaced on `ctx.RequiredGrants`, but no
+domain enforcement is performed.
 
 ---
 
@@ -334,23 +402,57 @@ flowchart TD
 ### Cache Key Format
 
 ```
-grant:v{version}:{callerId}:{domain}:{permissionSignature}
+grant:v{version}:{callerId}:{feaure}:{permissionSignature}
 ```
 
 - **`callerId`** — covers both C2M (human users with delegated permissions) and M2M
   (service principals with app roles)
-- **`domain`** — the namespace-derived feature name (e.g., `issues`)
+- **`feature`** — the namespace-derived feature name (e.g., `issues`)
 - **`permissionSignature`** — sorted, `+`-joined permission operation names (e.g., `delete+write`)
 
-Sorting is required for **cache correctness**: permissions use AND semantics, so
-`["delete","archive"]` and `["archive","delete"]` must hit the same entry.
+**Why the signature is sorted.** When an operation declares multiple permissions
+(AND semantics — the caller must hold *all* of them), the *order* in which the
+permissions appear in source doesn't change what's being required. Consider two
+operations in `MyApp.Domain.Issues.*` that stack the same permissions in
+different orders:
+
+```csharp
+// Both live in *.Domain.Issues.* — the feature resolves to "issues" for both.
+[RequiresGrant("delete")]    // → issues:delete
+[RequiresGrant("archive")]   // → issues:archive
+public sealed record A : IOwnerMutateOperation { ... }
+
+[RequiresGrant("archive")]   // → issues:archive
+[RequiresGrant("delete")]    // → issues:delete
+public sealed record B : IOwnerMutateOperation { ... }
+```
+
+Both reduce to: *"caller must hold `issues:delete` AND `issues:archive` on the
+target owner."* Same precondition, same set of full `Permission` values
+(`{issues:archive, issues:delete}`), same DB query.
+
+The signature only needs to encode the **operation names** — every permission
+on a granted resource shares the same feature (cross-feature declarations are
+rejected at startup), and the feature is already a separate segment of the
+cache key. Without sorting, the operation lists would serialize in declaration
+order and produce different signatures for the same precondition:
+
+| Operation | Declared order | Signature (unsorted) | Signature (sorted) |
+|---|---|---|---|
+| A | `[delete, archive]` | `"delete+archive"` | `"archive+delete"` |
+| B | `[archive, delete]` | `"archive+delete"` | `"archive+delete"` |
+
+Without sorting, A and B miss each other's cache entries despite asking the
+same question — every grant resolution doubles. Sorting normalizes the order
+so identical requirements always produce the same key, and the cache hit rate
+compounds across related operations.
 
 ### Cache Tags
 
 | Tag | Purpose |
 |-----|---------|
 | `grant:caller:{callerId}` | Invalidate all entries for a user |
-| `grant:domain:{domain}` | Invalidate all entries for a domain |
+| `grant:feature:{feature}` | Invalidate all entries for a feature |
 
 ### Grant Resolution Telemetry
 
@@ -384,9 +486,106 @@ hit/miss counters and operation duration at the L2 boundary.
 // After granting/revoking — invalidate the affected user
 await cacheInvalidator.InvalidateCallerAsync(targetUserId);
 
-// After a domain-wide policy change — invalidate all users in this domain
-await cacheInvalidator.InvalidateDomainAsync("issues");
+// After a feature-wide policy change — invalidate all users for that feature
+await cacheInvalidator.InvalidateFeatureAsync("issues");
 ```
+
+---
+
+## Consistency Model
+
+This is the part that determines what your security guarantees actually are. Read it
+carefully if you're shipping into a regulated environment.
+
+### The contract
+
+| Surface | Consistency | When it changes |
+|---|---|---|
+| **`ShouldBypassAsync` (admin/super-admin promotion and revocation)** | **Strong, live.** Never cached, evaluated on every request. | Immediate — adding or removing a caller from the bypass set takes effect on the very next request. |
+| **`OperationGrant` resolution (regular grants)** | **Eventually consistent up to L2 TTL.** Cached at L1 (per-request) and L2 (cross-request). | Until the cached entry expires *or* the app calls the invalidator. |
+| **Pattern C handler ownership check** | **Strong.** Reads the grant directly from the resolved `OperationGrant` for the current request. | Per-request — no caching at this layer. |
+
+### Why this split
+
+Bypass is the most security-sensitive decision (it grants `Unrestricted` access). Caching
+revocation here would mean a freshly de-promoted admin keeps elevated privileges until
+TTL expiry — unacceptable. Bypass is cheap (an in-memory role/claim check), so it always
+runs live.
+
+Grant resolution involves a database lookup against the app's grants table. Caching is
+the difference between sustained throughput and N+1 DB reads per request. Cirreum
+chooses **eventual consistency with explicit invalidation** rather than strong
+consistency with consistency tokens (which is what Google's Zanzibar / OpenFGA model
+gives you, at the cost of a snapshot infrastructure that Cirreum doesn't ship). For most
+applications this is the right trade; for high-stakes auth (HIPAA, financial), see the
+"When eventual consistency isn't enough" note below.
+
+### Revocation invariants the app owns
+
+When a grant is *revoked* in the app's database, the cached entry is stale until one of
+three things happens:
+
+1. **TTL expiry** — the L2 entry expires naturally. Acceptable for non-urgent revocations
+   if your TTL is appropriately tight.
+2. **Explicit invalidation** — the app calls
+   `IOperationGrantCacheInvalidator.InvalidateCallerAsync(callerId)` (or the feature-wide
+   variant) at revocation time. Required for prompt revocation.
+3. **Version bump** — incrementing
+   `Cirreum:Authorization:Grants:Cache:Version` invalidates *every* cached entry
+   simultaneously. Useful for major policy changes or as a kill-switch during incident
+   response.
+
+> **Cirreum cannot detect revocations on its own.** The framework does not observe the
+> app's grants table; the app is responsible for calling the invalidator at revocation
+> time. This is documented as an app responsibility in the
+> [parent Compliance Boundary section](../../README.md#compliance-boundary). If you
+> miss this hook, revocations propagate at TTL speed, not real-time.
+
+### Picking a TTL
+
+Three considerations:
+
+- **Throughput.** Lower TTL → more L2 misses → more DB reads. Tune per environment.
+- **Revocation latency.** Higher TTL → longer staleness window if explicit invalidation
+  is missed. Treat TTL as the *worst-case* revocation propagation time.
+- **Cache invalidation correctness.** If you reliably call the invalidator on every
+  grant change, TTL serves only as a backstop. If you don't, TTL becomes your real
+  consistency boundary.
+
+Defaults are configurable per-feature via `FeatureOverrides` (see
+[Configuration](#configuration)) — a high-throughput read-mostly feature can run a longer
+TTL than one with frequent grant churn.
+
+### Cache key hygiene
+
+Cache keys include `version`, `callerId`, `feature`, and `permissionSignature`. Two
+implications worth knowing:
+
+- **Same caller, different operations with the same permission set on the same domain
+  share a cache entry.** This is intentional and the L2 hit rate compounds across
+  related operations.
+- **Permissions are sorted into a stable signature** before keying — so
+  `[delete, archive]` and `[archive, delete]` collide on the same entry rather than
+  miss each other. Without sorting, AND-semantics permissions would silently double the
+  miss rate.
+
+### When eventual consistency isn't enough
+
+If your domain requires strong consistency on grant revocation (e.g., immediate
+lock-out on termination, regulatory holds), choose one of:
+
+- **Disable L2 caching for that domain.** Set `Expiration = TimeSpan.Zero` in the
+  domain override. Grants resolve on every request — full strong consistency at the
+  cost of throughput.
+- **Aggressive invalidation discipline.** Treat every revocation path in your codebase
+  as requiring an `InvalidateCallerAsync` call. Document and enforce via code review;
+  consider a wrapper on your grants repository that invalidates on every write.
+- **Layer a ReBAC store.** OpenFGA / SpiceDB ship with consistency tokens (Zookies)
+  that solve this problem at the data layer. Implement `IOperationGrantProvider`
+  against one of those stores and benefit from their snapshot semantics.
+
+The framework gives you the seams — choose the consistency posture that matches your
+risk profile.
 
 ---
 
@@ -401,7 +600,7 @@ No parallel discovery mechanism is needed.
 
 - `ResourceTypeInfo.IsGranted` — whether the resource implements a Granted interface
 - `ResourceTypeInfo.GrantDomain` — the namespace-derived domain feature
-- `ResourceTypeInfo.Permissions` — resolved permissions from `[RequiresPermission]`
+- `ResourceTypeInfo.Permissions` — resolved permissions from `[RequiresGrant]`
 
 These flow through to the serializable `ResourceInfo` export for API transport and
 the `DomainCatalog` for organized resource browsing.
@@ -426,8 +625,8 @@ The analyzer detects grant-specific misconfigurations:
 
 | Check | Severity | Description |
 |-------|----------|-------------|
-| Missing permissions | Warning | Granted resource without `[RequiresPermission]` — no permission gate |
-| Permissions without grants | Info | `[RequiresPermission]` on non-granted resource — permissions available on `ctx.Permissions` for object authorizers |
+| Missing permissions | Warning | Granted resource without `[RequiresGrant]` — no permission gate |
+| Permissions without grants | Info | `[RequiresGrant]` on non-granted resource — declared set available on `ctx.RequiredGrants` for object authorizers |
 | No object authorizer | Info | Granted resource without Stage 2 authorizer — grants-only is valid but flagged |
 | Unused domains | Info | Namespace domains with no granted resources |
 | Mixed authorization | Info | Domain boundary with both granted and non-granted resources — possible incomplete migration |
@@ -435,12 +634,12 @@ The analyzer detects grant-specific misconfigurations:
 All metrics flow into the standard `AnalysisReport` and `DomainSnapshot`:
 
 ```text
-Granted Resources.GrantedResourceCount     = 12
-Granted Resources.GrantDomainCount         = 3
-Granted Resources.TotalPermissionCount     = 8
-Granted Resources.MissingPermissionCount   = 0
+Granted Resources.GrantedResourceCount         = 12
+Granted Resources.GrantFeatureCount            = 3
+Granted Resources.TotalPermissionCount         = 8
+Granted Resources.MissingPermissionCount       = 0
 Granted Resources.PermissionsWithoutGrantsCount = 1
-Granted Resources.UnusedDomainCount        = 0
+Granted Resources.UnsafeCacheableGrantCount    = 0
 ```
 
 ---
@@ -488,7 +687,7 @@ services.AddGrantAuthorization(
         "Cache": {
           "Version": 1,
           "Expiration": "00:05:00",
-          "DomainOverrides": {
+          "FeatureOverrides": {
             "issues": { "Expiration": "00:10:00" }
           }
         }
@@ -502,7 +701,7 @@ services.AddGrantAuthorization(
 |---------|---------|-------------|
 | `Version` | `1` | Bump to invalidate all stale cache entries |
 | `Expiration` | inherited from `CacheSettings.DefaultExpiration` | Default cache entry TTL |
-| `DomainOverrides` | `{}` | Per-domain overrides keyed by namespace-derived feature name |
+| `FeatureOverrides` | `{}` | Per-feature overrides keyed by namespace-derived feature name |
 
 ---
 
@@ -637,7 +836,8 @@ cache keys and miss each other's entries — causing unnecessary cold-path resol
 
 ## Related Documentation
 
-- [Authorization Flow](../FLOW.md) — high-level operation → authorization flow
-- [Authorization Sequence](../SEQUENCE.md) — detailed three-stage pipeline
-- [Operation & Authorization Context](../../CONTEXT.md) — context architecture and AuthenticationBoundary
-- [Conductor](../../Conductor/README.md) — in-process operation pipeline + dispatcher
+- [Authorization (parent guide)](../../README.md) — pipeline overview, permission model, core types
+- [Authorization Flow](../../FLOW.md) — full request flow from HTTP entry through pipeline exit
+- [Pipeline Sequence](../../SEQUENCE.md) — three-stage pipeline internals
+- [Resources](../../Resources/README.md) — object-level ACLs (data-time)
+- [Operation & Authorization Context](../../../CONTEXT.md) — context architecture and AuthenticationBoundary

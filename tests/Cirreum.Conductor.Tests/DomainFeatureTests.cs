@@ -33,12 +33,12 @@ public class DomainFeatureTests {
 		Assert.AreEqual("issues", result);
 	}
 
-	// RequiredPermissionCache — single-arg feature resolution
+	// RequiredGrantCache — single-arg feature resolution
 	// -------------------------------------------------------------
 
 	[TestMethod]
 	public void Single_arg_permission_resolves_feature_from_namespace() {
-		var permissions = RequiredPermissionCache.GetFor<DeleteIssueCmd>();
+		var permissions = RequiredGrantCache.GetFor<DeleteIssueCmd>();
 
 		Assert.HasCount(1, permissions);
 		Assert.AreEqual("issues", permissions[0].Feature);
@@ -47,7 +47,7 @@ public class DomainFeatureTests {
 
 	[TestMethod]
 	public void Two_arg_permission_validates_matching_feature() {
-		var permissions = RequiredPermissionCache.GetFor<ArchiveIssueCmd>();
+		var permissions = RequiredGrantCache.GetFor<ArchiveIssueCmd>();
 
 		Assert.HasCount(1, permissions);
 		Assert.AreEqual("issues", permissions[0].Feature);
@@ -57,18 +57,18 @@ public class DomainFeatureTests {
 	[TestMethod]
 	public void Mismatched_feature_on_granted_resource_throws() {
 		Assert.ThrowsExactly<InvalidOperationException>(
-			() => RequiredPermissionCache.GetFor<CrossDomainCmd>());
+			() => RequiredGrantCache.GetFor<CrossFeatureCmd>());
 	}
 
 	[TestMethod]
 	public void Single_arg_on_type_without_domain_namespace_throws() {
 		Assert.ThrowsExactly<InvalidOperationException>(
-			() => RequiredPermissionCache.GetFor<NonGrantedWithNameOnly>());
+			() => RequiredGrantCache.GetFor<NonGrantedWithNameOnly>());
 	}
 
 	[TestMethod]
 	public void Multiple_permissions_are_all_resolved() {
-		var permissions = RequiredPermissionCache.GetFor<MultiPermCmd>();
+		var permissions = RequiredGrantCache.GetFor<MultiPermCmd>();
 
 		Assert.HasCount(2, permissions);
 		Assert.IsTrue(permissions.Any(p => p.Operation == "write"));
@@ -78,7 +78,7 @@ public class DomainFeatureTests {
 
 	[TestMethod]
 	public void Duplicate_permissions_are_deduplicated() {
-		var permissions = RequiredPermissionCache.GetFor<DuplicatePermCmd>();
+		var permissions = RequiredGrantCache.GetFor<DuplicatePermCmd>();
 
 		Assert.HasCount(1, permissions);
 		Assert.AreEqual("delete", permissions[0].Operation);
@@ -86,14 +86,14 @@ public class DomainFeatureTests {
 
 	[TestMethod]
 	public void No_permission_attributes_returns_empty() {
-		var permissions = RequiredPermissionCache.GetFor<NoPermCmd>();
+		var permissions = RequiredGrantCache.GetFor<NoPermCmd>();
 
 		Assert.HasCount(0, permissions);
 	}
 
 	// Non-Domain namespace test double (stays in Cirreum.Conductor.Tests namespace)
 
-	[RequiresPermission("delete")]
+	[RequiresGrant("delete")]
 	private sealed class NonGrantedWithNameOnly : IAuthorizableOperation;
 }
 }
@@ -109,29 +109,29 @@ namespace Cirreum.Conductor.Tests.Domain.Issues {
 	using Cirreum.Authorization.Operations.Grants;
 	using Cirreum.Conductor;
 
-	[RequiresPermission("delete")]
+	[RequiresGrant("delete")]
 	internal sealed class DeleteIssueCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 
-	[RequiresPermission("issues", "archive")]
+	[RequiresGrant("issues", "archive")]
 	internal sealed class ArchiveIssueCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 
-	[RequiresPermission("audit", "write")]
-	internal sealed class CrossDomainCmd : IOwnerMutateOperation {
+	[RequiresGrant("audit", "write")]
+	internal sealed class CrossFeatureCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 
-	[RequiresPermission("write")]
-	[RequiresPermission("audit")]
+	[RequiresGrant("write")]
+	[RequiresGrant("audit")]
 	internal sealed class MultiPermCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}
 
-	[RequiresPermission("delete")]
-	[RequiresPermission("issues", "delete")]
+	[RequiresGrant("delete")]
+	[RequiresGrant("issues", "delete")]
 	internal sealed class DuplicatePermCmd : IOwnerMutateOperation {
 		public string? OwnerId { get; set; }
 	}

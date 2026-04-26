@@ -103,6 +103,22 @@ public static class AnalysisReportFormatters {
 			sb.AppendLine($"| {category} | {issueCount} |");
 		}
 
+		// Runtime signals & compliance pointer
+		sb.AppendLine();
+		sb.AppendLine("## Runtime Signals & Compliance");
+		sb.AppendLine();
+		sb.AppendLine("This report covers the **static** authorization graph — types, registrations, analyzer findings. For **runtime** security posture, observe these OTel activity tags emitted on every operation:");
+		sb.AppendLine();
+		sb.AppendLine("| OTel Activity Tag | Surfaces |");
+		sb.AppendLine("|-------------------|----------|");
+		sb.AppendLine("| `cirreum.authz.decision` | Per-stage pass/deny telemetry across the three-stage pipeline |");
+		sb.AppendLine("| `cirreum.authz.grant.owner_auto_stamped` | Stage 1 inferred OwnerId from a single-owner grant rather than the caller supplying it |");
+		sb.AppendLine("| `cirreum.authz.grant.pattern_c_bypass` | A Pattern C lookup completed without the handler reading `IOperationGrantAccessor.Current` — possible bypass |");
+		sb.AppendLine();
+		sb.AppendLine("For the framework's compliance model (NIST SP 800-53 AC-3 / AC-6 / AU-2, NIST SP 800-162 ABAC, OWASP ASVS V4, OWASP Top 10 #1, ISO/IEC 27001 A.9.4.1), see the **Compliance Boundary** section in `Authorization/README.md`.");
+		sb.AppendLine();
+		sb.AppendLine("Boot-time enforcement: call `app.Services.ValidateAuthorizationConfiguration()` after host build to convert Error-severity findings in this report into a startup failure.");
+
 		return sb.ToString();
 	}
 
@@ -141,6 +157,21 @@ public static class AnalysisReportFormatters {
 				}
 			}
 		}
+
+		sb.AppendLine();
+		sb.AppendLine("RUNTIME SIGNALS & COMPLIANCE");
+		sb.AppendLine("----------------------------");
+		sb.AppendLine("This report covers the static authorization graph. For runtime posture,");
+		sb.AppendLine("observe these OTel activity tags on every operation:");
+		sb.AppendLine("  - cirreum.authz.decision                     Per-stage pass/deny telemetry");
+		sb.AppendLine("  - cirreum.authz.grant.owner_auto_stamped     Framework auto-inferred OwnerId");
+		sb.AppendLine("  - cirreum.authz.grant.pattern_c_bypass       Pattern C bypass detected at runtime");
+		sb.AppendLine();
+		sb.AppendLine("Compliance model: see Authorization/README.md (NIST 800-53 AC-3/AC-6/AU-2,");
+		sb.AppendLine("NIST 800-162 ABAC, OWASP ASVS V4, OWASP Top 10 #1, ISO/IEC 27001 A.9.4.1).");
+		sb.AppendLine();
+		sb.AppendLine("Boot-time enforcement: call app.Services.ValidateAuthorizationConfiguration()");
+		sb.AppendLine("after host build to throw on Error-severity findings in this report.");
 
 		return sb.ToString();
 	}
@@ -289,6 +320,21 @@ public static class AnalysisReportFormatters {
 
 		sb.AppendLine("  </tbody>");
 		sb.AppendLine("</table>");
+
+		// Runtime Signals & Compliance appendix
+		sb.AppendLine();
+		sb.AppendLine("<h2>Runtime Signals &amp; Compliance</h2>");
+		sb.AppendLine("<p>This report covers the <strong>static</strong> authorization graph &mdash; types, registrations, analyzer findings. For <strong>runtime</strong> security posture, observe these OTel activity tags emitted on every operation:</p>");
+		sb.AppendLine("<table>");
+		sb.AppendLine("  <thead><tr><th>OTel Activity Tag</th><th>Surfaces</th></tr></thead>");
+		sb.AppendLine("  <tbody>");
+		sb.AppendLine("    <tr><td><code>cirreum.authz.decision</code></td><td>Per-stage pass/deny telemetry across the three-stage pipeline</td></tr>");
+		sb.AppendLine("    <tr><td><code>cirreum.authz.grant.owner_auto_stamped</code></td><td>Stage 1 inferred OwnerId from a single-owner grant rather than the caller supplying it</td></tr>");
+		sb.AppendLine("    <tr><td><code>cirreum.authz.grant.pattern_c_bypass</code></td><td>A Pattern C lookup completed without the handler reading <code>IOperationGrantAccessor.Current</code> &mdash; possible bypass</td></tr>");
+		sb.AppendLine("  </tbody>");
+		sb.AppendLine("</table>");
+		sb.AppendLine("<p>For the framework's compliance model (NIST SP 800-53 AC-3 / AC-6 / AU-2, NIST SP 800-162 ABAC, OWASP ASVS V4, OWASP Top 10 #1, ISO/IEC 27001 A.9.4.1), see the <strong>Compliance Boundary</strong> section in <code>Authorization/README.md</code>.</p>");
+		sb.AppendLine("<p><strong>Boot-time enforcement:</strong> call <code>app.Services.ValidateAuthorizationConfiguration()</code> after host build to convert Error-severity findings in this report into a startup failure.</p>");
 
 		// JavaScript for filtering
 		sb.AppendLine(@"
