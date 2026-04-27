@@ -31,6 +31,12 @@ using Microsoft.Extensions.DependencyInjection;
 /// warnings and info-level findings are not fatal but are present on the exception's
 /// <see cref="AuthorizationConfigurationException.Report"/> for inspection.
 /// </para>
+/// <para>
+/// Both extensions internally create a DI scope via <see cref="ServiceProviderServiceExtensions.CreateScope"/>
+/// so scoped services (<see cref="IAuthorizationRoleRegistry"/>, the policy/constraint/grant
+/// service collections that analyzers depend on) resolve correctly. Calling these methods
+/// against the root provider is safe under .NET's default scope-validation mode.
+/// </para>
 /// </remarks>
 public static class AuthorizationStartupValidationExtensions {
 
@@ -52,12 +58,15 @@ public static class AuthorizationStartupValidationExtensions {
 
 		ArgumentNullException.ThrowIfNull(services);
 
-		var registry = services.GetRequiredService<IAuthorizationRoleRegistry>();
+		using var scope = services.CreateScope();
+		var sp = scope.ServiceProvider;
+
+		var registry = sp.GetRequiredService<IAuthorizationRoleRegistry>();
 
 		// Ensure the domain model has scanned (idempotent if already initialized).
-		DomainModel.Instance.Initialize(services);
+		DomainModel.Instance.Initialize(sp);
 
-		var analyzer = DomainAnalyzerProvider.CreateAnalyzer(registry, services, options);
+		var analyzer = DomainAnalyzerProvider.CreateAnalyzer(registry, sp, options);
 		var report = analyzer.AnalyzeAll();
 		var summary = report.GetSummary();
 
@@ -83,10 +92,13 @@ public static class AuthorizationStartupValidationExtensions {
 
 		ArgumentNullException.ThrowIfNull(services);
 
-		var registry = services.GetRequiredService<IAuthorizationRoleRegistry>();
-		DomainModel.Instance.Initialize(services);
+		using var scope = services.CreateScope();
+		var sp = scope.ServiceProvider;
 
-		var analyzer = DomainAnalyzerProvider.CreateAnalyzer(registry, services, options);
+		var registry = sp.GetRequiredService<IAuthorizationRoleRegistry>();
+		DomainModel.Instance.Initialize(sp);
+
+		var analyzer = DomainAnalyzerProvider.CreateAnalyzer(registry, sp, options);
 		var report = analyzer.AnalyzeAll();
 		var summary = report.GetSummary();
 

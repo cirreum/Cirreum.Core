@@ -16,6 +16,14 @@ _(no unreleased changes)_
 
 ---
 
+## [4.0.1] — 2026-04-27
+
+### Fixed
+
+- **`ValidateAuthorizationConfiguration` / `CheckAuthorizationConfiguration` now create a DI scope internally.** Both extension methods previously resolved scoped services (`IAuthorizationRoleRegistry`, `IPolicyValidator[]`, `IOperationGrantProvider`, etc.) directly from the root `IServiceProvider`, which throws under .NET's default scope-validation mode in ASP.NET Core hosts. They now wrap the resolution in `IServiceProvider.CreateScope()` so the boot-time validation works correctly in scope-validated hosts.
+
+---
+
 ## [4.0.0] — 2026-04-25
 
 Authorization vocabulary clarity, runtime security signals, boot-time validation,
