@@ -1,10 +1,8 @@
 namespace Cirreum.Conductor.Tests;
 
 using Cirreum.Authorization;
-using Cirreum.Authorization.Validators;
 using FluentValidation;
 using FluentValidation.TestHelper;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 /// <summary>
@@ -17,7 +15,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 [TestClass]
 public class RoleInheritanceTests {
 
-	private static AuthorizationRoleRegistryBase BuildRegistry() {
+	private static TestAuthorizationRoleRegistry BuildRegistry() {
 		var registry = new TestAuthorizationRoleRegistry(NullLogger<TestAuthorizationRoleRegistry>.Instance);
 		registry.InitializeAsync().AsTask().Wait();
 		return registry;
@@ -31,12 +29,12 @@ public class RoleInheritanceTests {
 
 		var effectiveRoles = registry.GetEffectiveRoles([ApplicationRoles.AppManagerRole]);
 
-		Assert.IsTrue(effectiveRoles.Contains(ApplicationRoles.AppManagerRole),
-			"EffectiveRoles must include the directly-assigned role.");
-		Assert.IsTrue(effectiveRoles.Contains(ApplicationRoles.AppInternalRole),
-			"EffectiveRoles must include directly-inherited role (Internal).");
-		Assert.IsTrue(effectiveRoles.Contains(ApplicationRoles.AppUserRole),
-			"EffectiveRoles must include transitively-inherited role (User via Internal). " +
+		Assert.Contains(ApplicationRoles.AppManagerRole,
+effectiveRoles, "EffectiveRoles must include the directly-assigned role.");
+		Assert.Contains(ApplicationRoles.AppInternalRole,
+effectiveRoles, "EffectiveRoles must include directly-inherited role (Internal).");
+		Assert.Contains(ApplicationRoles.AppUserRole,
+effectiveRoles, "EffectiveRoles must include transitively-inherited role (User via Internal). " +
 			"A bug here breaks the contract that 'HasRole(User)' passes for higher-privileged callers.");
 	}
 
@@ -50,7 +48,7 @@ public class RoleInheritanceTests {
 		var validator = new TestRoleValidator(ApplicationRoles.AppUserRole);
 		var result = validator.TestValidate(effectiveRoles);
 
-		Assert.IsFalse(result.Errors.Any(),
+		Assert.IsEmpty(result.Errors,
 			"HasRole(User) must pass for Manager-assigned caller. " +
 			"Validator works against EffectiveRoles, which is inheritance-expanded.");
 	}
@@ -64,7 +62,7 @@ public class RoleInheritanceTests {
 		var validator = new TestAnyRoleValidator(ApplicationRoles.AppUserRole);
 		var result = validator.TestValidate(effectiveRoles);
 
-		Assert.IsFalse(result.Errors.Any(),
+		Assert.IsEmpty(result.Errors,
 			"HasAnyRole([User]) must pass for Manager-assigned caller via role inheritance.");
 	}
 
@@ -76,12 +74,12 @@ public class RoleInheritanceTests {
 
 		var effectiveRoles = registry.GetEffectiveRoles([ApplicationRoles.AppAdminRole]);
 
-		Assert.IsTrue(effectiveRoles.Contains(ApplicationRoles.AppAdminRole));
-		Assert.IsTrue(effectiveRoles.Contains(ApplicationRoles.AppManagerRole));
-		Assert.IsTrue(effectiveRoles.Contains(ApplicationRoles.AppAgentRole));
-		Assert.IsTrue(effectiveRoles.Contains(ApplicationRoles.AppInternalRole));
-		Assert.IsTrue(effectiveRoles.Contains(ApplicationRoles.AppUserRole),
-			"Admin must transitively inherit User through the full hierarchy chain.");
+		Assert.Contains(ApplicationRoles.AppAdminRole, effectiveRoles);
+		Assert.Contains(ApplicationRoles.AppManagerRole, effectiveRoles);
+		Assert.Contains(ApplicationRoles.AppAgentRole, effectiveRoles);
+		Assert.Contains(ApplicationRoles.AppInternalRole, effectiveRoles);
+		Assert.Contains(ApplicationRoles.AppUserRole,
+effectiveRoles, "Admin must transitively inherit User through the full hierarchy chain.");
 	}
 
 	[TestMethod]
@@ -91,7 +89,7 @@ public class RoleInheritanceTests {
 
 		var effectiveRoles = registry.GetEffectiveRoles([ApplicationRoles.AppUserRole]);
 
-		Assert.IsTrue(effectiveRoles.Contains(ApplicationRoles.AppUserRole));
+		Assert.Contains(ApplicationRoles.AppUserRole, effectiveRoles);
 		Assert.DoesNotContain(ApplicationRoles.AppInternalRole, effectiveRoles,
 			"User must not inherit Internal — that would invert the hierarchy.");
 		Assert.DoesNotContain(ApplicationRoles.AppManagerRole, effectiveRoles,
