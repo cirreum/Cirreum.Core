@@ -16,6 +16,61 @@ _(no unreleased changes)_
 
 ---
 
+## [4.0.2] — 2026-04-28
+
+Cancel-and-replace for 4.0.0 / 4.0.1. Both prior 4.0 releases will be unlisted on
+NuGet; 4.0.2 is the real 4.0. Closes a captured-scope leak by removing
+introspection from Core entirely and re-homing it in a dedicated, opt-in package.
+
+### Removed
+
+- **`Introspection/**` namespace and types** (`DomainModel`, all analyzers,
+  `DomainAnalyzerProvider`, `DomainDocumenter` / `IDomainDocumenter`,
+  `AnalysisReport` and friends, `DomainSnapshot`, `AuthorizationConfigurationException`,
+  `ValidateAuthorizationConfiguration` / `CheckAuthorizationConfiguration`
+  extensions). All of these now live in the new **`Cirreum.Introspection 1.0.0`**
+  package and are namespace-compatible (`Cirreum.Introspection.*`).
+- **`AddDefaultDomainDocumenter`** removed from `ServiceCollectionExtensions`.
+  Replacement: `services.AddIntrospection()` in `Cirreum.Introspection`, which
+  registers both `IDomainModel` and `IDomainDocumenter` as singletons.
+
+### Changed
+
+- **`DomainFeatureResolver` (class + both `Resolve` overloads) is now `public`.**
+  Promoted from `internal` so the new `Cirreum.Introspection` package can use it
+  across the assembly boundary. No behavior change; still used internally by
+  `RequiredGrantCache`, `AuthorizationContext`, and `OperationContext`.
+
+### Fixed
+
+- **Captured-scope leak (4.0.1 regression).** `DomainModel.Instance.Initialize(sp)`
+  retained the scoped provider in a singleton field; later accesses (other
+  consumers, second validate call) hit a disposed scope and threw
+  `ObjectDisposedException`. With introspection extracted, **no Core type retains
+  `IServiceProvider`** for authorization analysis. The replacement `IDomainModel`
+  in `Cirreum.Introspection` holds an `IServiceScopeFactory` (singleton-safe) and
+  snapshots DI-derived data on first access into immutable structures.
+
+### Migration
+
+```csharp
+// Before
+builder.Services.AddDefaultDomainDocumenter();
+app.ValidateAuthorization();   // member method on DomainApplication (Server)
+
+// After (add a PackageReference to Cirreum.Introspection)
+builder.Services.AddIntrospection();
+app.Services.ValidateAuthorizationConfiguration();
+```
+
+The `Cirreum.Runtime.Server.DomainApplication.ValidateAuthorization()` /
+`AnalyzeAuthorization()` member methods are removed in the matching
+`Cirreum.Runtime.Server` patch release.
+
+See `RELEASE-NOTES-v4.0.2.md` for the full architectural rationale.
+
+---
+
 ## [4.0.1] — 2026-04-27
 
 ### Fixed

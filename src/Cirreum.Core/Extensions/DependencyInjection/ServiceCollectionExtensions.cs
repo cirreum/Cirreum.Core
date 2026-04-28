@@ -4,7 +4,6 @@ using Cirreum.Authorization;
 using Cirreum.Authorization.Operations;
 using Cirreum.Conductor.Configuration;
 using Cirreum.Extensions.Internal;
-using Cirreum.Introspection.Documentation;
 using Cirreum.Presence;
 using Cirreum.Security;
 using FluentValidation;
@@ -32,23 +31,6 @@ public static class ServiceCollectionExtensions {
 		this IServiceCollection services) {
 		services.TryAddScoped<IAuthorizationEvaluator, DefaultAuthorizationEvaluator>();
 		services.TryAddScoped<IAuthorizationContextAccessor, DefaultAuthorizationContextAccessor>();
-	}
-
-
-	/// <summary>
-	/// Tries to add the default built-in implementation of the
-	/// <see cref="IDomainDocumenter"/> service if one is not already registered.
-	/// </summary>
-	/// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
-	/// <param name="serviceLifetime">The desired lifetime. Default: <see cref="ServiceLifetime.Singleton"/></param>
-	public static void AddDefaultDomainDocumenter(
-		this IServiceCollection services,
-		ServiceLifetime serviceLifetime = ServiceLifetime.Singleton) {
-		if (serviceLifetime == ServiceLifetime.Singleton) {
-			services.TryAddSingleton<IDomainDocumenter, DomainDocumenter>();
-			return;
-		}
-		services.TryAddScoped<IDomainDocumenter, DomainDocumenter>();
 	}
 
 

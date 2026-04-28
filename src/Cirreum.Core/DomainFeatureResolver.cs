@@ -19,7 +19,7 @@ using System.Collections.Concurrent;
 /// feature structurally rather than from attributes or marker interfaces.
 /// </para>
 /// </remarks>
-internal static class DomainFeatureResolver {
+public static class DomainFeatureResolver {
 
 	private static readonly ConcurrentDictionary<Type, string?> Cache = new();
 
@@ -32,7 +32,7 @@ internal static class DomainFeatureResolver {
 	/// namespace does not contain a <c>"Domain"</c> segment followed by at least one
 	/// additional segment.
 	/// </returns>
-	internal static string? Resolve(Type type) =>
+	public static string? Resolve(Type type) =>
 		Cache.GetOrAdd(type, static t => {
 			var parts = t.Namespace?.Split('.') ?? [];
 			var idx = Array.IndexOf(parts, "Domain");
@@ -44,5 +44,5 @@ internal static class DomainFeatureResolver {
 	/// <summary>
 	/// Resolves the domain feature for <typeparamref name="T"/> from its namespace.
 	/// </summary>
-	internal static string? Resolve<T>() => Resolve(typeof(T));
+	public static string? Resolve<T>() => Resolve(typeof(T));
 }

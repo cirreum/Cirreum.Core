@@ -13,6 +13,7 @@
     <File Path="docs/MIGRATION-v3.md" />
     <File Path="docs/MIGRATION-v4.md" />
     <File Path="docs/RELEASE-NOTES-v4.0.0.md" />
+    <File Path="docs/RELEASE-NOTES-v4.0.2.md" />
     <File Path="README.md" />
   </Folder>
   <Folder Name="/publish/">
