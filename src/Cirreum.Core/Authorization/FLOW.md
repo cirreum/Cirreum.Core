@@ -10,9 +10,23 @@
 High-level view of how an authorized operation moves through Cirreum, from
 HTTP entry to the three-stage authorization pipeline and back.
 
-Authority comes from the **app-user layer** (`IOwnedApplicationUser`), not
-from IdP claims. Tokens identify who is calling; Cirreum's own user store
-decides what they can do.
+Authority resolution depends on the caller's authentication track:
+
+- **Tenant track** (customer IdP — Entra External ID, Descope, generic OIDC):
+  authority comes from the **app-user layer** (`IApplicationUser` /
+  `IOwnedApplicationUser`) loaded from the application's user store. Tokens
+  identify *who* is calling; the app-user record decides *what* they can do.
+- **Operator track** (workforce IdP — typically Entra workforce):
+  authority comes from token claims (roles, group memberships). There is no
+  application user record — `IUserState.ApplicationUser` is `null` by design,
+  and `IApplicationUserResolver` is not invoked for these callers.
+- **Machine track** (`ApiKey`, `SignedRequest`, `External` BYOID):
+  authenticates partners or integrations, not human users. Authority flows
+  from claims/policy directly; no `IApplicationUser` is involved.
+
+The grant evaluator accommodates all three tracks. For tenant requests it
+loads the app-user; for operator and machine requests it falls through
+cleanly via documented null-safe pattern matching.
 
 ```mermaid
 sequenceDiagram
@@ -30,9 +44,9 @@ sequenceDiagram
     RR->>RR: Register roles + inheritance
 
     Note over C,US: 2. Per-request flow
-    C->>HTTP: HTTP request (bearer token)
+    C->>HTTP: HTTP request (bearer token / API key / signed request)
     HTTP->>CT: Enrich ClaimsPrincipal
-    CT->>CT: Load IOwnedApplicationUser<br/>from store (cached)
+    Note over CT: Tenant track only:<br/>load IApplicationUser from store<br/>via IApplicationUserResolver,<br/>cache on HttpContext.Items.<br/>Operator + machine tracks skip.
     CT-->>HTTP: Enriched principal
     HTTP->>CN: Dispatch IOperation / IOperation[T]
 
@@ -82,9 +96,14 @@ sequenceDiagram
 
 ## Key Points
 
-- **Identity vs. authority.** `IClaimsTransformer` runs once per principal
-  to hydrate the app-user from the store. All authorization decisions use
-  that app-user — never IdP claims directly.
+- **Identity vs. authority.** For tenant-track principals,
+  `IClaimsTransformer` runs once per request to hydrate the app-user from
+  the store; downstream authorization decisions use that app-user. For
+  operator-track and machine-track principals there is no app-user — the
+  transformer short-circuits via `RolesAlreadyPresent` (or skips entirely)
+  and authorization decisions read role/scope claims directly. The grant
+  evaluator handles both paths via null-fall-through; see
+  [Operations/Grants/README.md](Operations/Grants/README.md#pre-flight-user-enabled-check).
 - **Intercept placement.** Authorization runs after Validation but before
   the handler. The handler can assume a valid, authorized operation.
 - **Grants (Stage 1 Step 0).** When an authorizable object implements a grant interface

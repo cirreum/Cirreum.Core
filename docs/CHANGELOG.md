@@ -12,6 +12,28 @@ guides linked at the bottom of each entry.
 
 ## [Unreleased]
 
+Doc-only follow-up to v5.0.0. No code or API changes.
+
+### Fixed
+
+- **`Authorization/FLOW.md` and `Authorization/README.md` overstated the
+  authority model.** The line "Authority comes from the app-user layer
+  (`IOwnedApplicationUser`)" was accurate for the tenant track but treated
+  it as universal — operator-track (workforce) and machine-track
+  (ApiKey/SignedRequest/External BYOID) callers don't have an
+  `IApplicationUser` and never did. Both files now describe authority
+  resolution as track-dependent, with a per-track table covering tenant,
+  operator, and machine paths and how the grant evaluator accommodates each
+  via documented null-fall-through. The Mermaid sequence in `FLOW.md` now
+  notes the application user load step is tenant-only.
+- **`IApplicationUser` XML doc.** Added remarks explicitly scoping the
+  interface to the tenant track and noting that operator and machine tracks
+  legitimately have a `null` `IApplicationUser` — the runtime already
+  handled this correctly, but the doc previously implied the type applied
+  universally.
+
+---
+
 ## [5.0.0] - 2026-05-01
 
 Per-scheme application user resolution and centralized authentication

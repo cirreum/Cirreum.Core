@@ -39,9 +39,20 @@ The pipeline runs once per operation and never sees the loaded data; the
 data-time check runs after the handler reads it. Both can apply to the same
 request — they answer different questions.
 
-Authority always comes from the **app-user layer**
-(`IOwnedApplicationUser`), not from IdP claims. Tokens identify *who* is
-calling; the Cirreum user store decides *what* they can do.
+Authority resolution follows the caller's **authentication track**:
+
+| Track | Authenticated via | `IApplicationUser` | Authority source |
+|---|---|---|---|
+| **Tenant** | Customer IdP (Entra External ID, Descope, OIDC) | DB-backed via `IApplicationUserResolver` | `IApplicationUser` / `IOwnedApplicationUser` (`Roles`, `IsEnabled`, `OwnerId`) |
+| **Operator** | Workforce IdP (typically Entra workforce) | always `null` | token claims (roles, group memberships) |
+| **Machine** | `ApiKey`, `SignedRequest`, `External` (BYOID) | always `null` | claims / policy |
+
+For tenant callers, tokens identify *who* is calling and the Cirreum user
+store decides *what* they can do. For operator and machine callers, the IdP
+or credential issuer is the authority source — no app-user record exists or
+needs to. The grant evaluator accommodates all three tracks via documented
+null-fall-through; see
+[Operations/Grants/README.md](Operations/Grants/README.md#pre-flight-user-enabled-check).
 
 Failures flow as `Result.Fail(...)`, never exceptions.
 
