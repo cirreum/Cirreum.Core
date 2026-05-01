@@ -19,7 +19,7 @@ namespace Cirreum.Security;
 public static class AuthenticationContextKeys {
 
 	/// <summary>
-	/// The authentication scheme that actually authenticated the request.
+	/// The authentication scheme that authenticated the current request.
 	/// </summary>
 	/// <remarks>
 	/// Stamped during dynamic scheme dispatch by the forward selector in
@@ -28,7 +28,7 @@ public static class AuthenticationContextKeys {
 	/// Read by <see cref="IAuthenticationBoundaryResolver"/> consumers (e.g. <c>UserAccessor</c>)
 	/// and by the per-scheme <c>IApplicationUserResolver</c> dispatcher.
 	/// </remarks>
-	public const string ResolvedScheme = "__Cirreum_ResolvedAuthScheme";
+	public const string AuthenticatedScheme = "__Cirreum_AuthenticatedScheme";
 
 	/// <summary>
 	/// The resolved <see cref="IApplicationUser"/> for the current request.

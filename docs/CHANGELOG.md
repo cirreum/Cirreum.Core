@@ -12,7 +12,75 @@ guides linked at the bottom of each entry.
 
 ## [Unreleased]
 
-_(no unreleased changes)_
+Per-scheme application user resolution and centralized authentication
+context coordination keys. Sets up multi-IdP server hosts (e.g., portals
+backed by workforce + customer IdP + machine credentials) to register one
+`IApplicationUserResolver` per scheme and dispatch by the request's
+authenticated scheme rather than gymnastics inside a single resolver.
+
+### Added
+
+- **`Cirreum.Security.AuthenticationContextKeys`** — new public static class
+  centralizing the well-known `HttpContext.Items` keys used to coordinate
+  authentication context across pipeline stages. Holds:
+  - `AuthenticatedScheme` — the authentication scheme that authenticated
+    the current request, written by the dynamic scheme forward selector
+    and the role claims transformer, read by `IAuthenticationBoundaryResolver`
+    consumers and the application user resolver dispatcher.
+  - `ApplicationUserCache` — the resolved `IApplicationUser` for the current
+    request, populated during role enrichment so downstream consumers
+    (e.g., `UserAccessor`) avoid a redundant resolver call.
+- **`IApplicationUserResolver.Scheme`** (`string?`, default `null`) — declares
+  which authentication scheme the resolver handles. Default interface
+  implementation returns `null`, marking the resolver as the fallback for
+  schemes with no exact match. Singular by design — enforces a 1:1
+  scheme→resolver→store mapping. Apps that need to share a store across
+  schemes own their own discriminator.
+
+### Removed
+
+- **`IAuthenticationBoundaryResolver.ResolvedSchemeKey`** — replaced by
+  `AuthenticationContextKeys.AuthenticatedScheme`. The key is read and
+  written by multiple subsystems beyond the boundary resolver, so its home
+  moved off the per-interface const.
+- **`IApplicationUserResolver.CacheKey`** — replaced by
+  `AuthenticationContextKeys.ApplicationUserCache`. Same reasoning: a
+  cross-pipeline coordination key doesn't belong on a domain interface.
+
+### Fixed
+
+- **`IUserState.Id` XML doc.** The remarks called `Id` the "primary key for
+  application-user resolution," conflating the IdP's stable external
+  identifier with the application user's database primary key. Reworded to
+  describe `Id` as the external identifier passed to
+  `IApplicationUserResolver.ResolveAsync`, with grant cache keys and audit
+  trails as secondary uses.
+
+### Migration
+
+```csharp
+// Before — HttpContext.Items keys
+context.Items[IAuthenticationBoundaryResolver.ResolvedSchemeKey]
+context.Items[IApplicationUserResolver.CacheKey]
+
+// After
+context.Items[AuthenticationContextKeys.AuthenticatedScheme]
+context.Items[AuthenticationContextKeys.ApplicationUserCache]
+
+```
+
+Existing `IApplicationUserResolver` implementations compile unchanged thanks
+to the default interface implementation of Scheme (returns null); they
+continue working as the fallback resolver. Multi-IdP server hosts that want
+per-scheme dispatch override `Scheme` to declare the matching authentication
+scheme name.
+
+Downstream Cirreum packages (Cirreum.Runtime.AuthorizationProvider,
+Cirreum.Runtime.Authorization, Cirreum.Services.Server,
+Cirreum.Runtime.Wasm) require coordinated updates to switch to the new
+constants and to allow N resolver registrations.
+
+See `RELEASE-NOTES-v5.0.0.md` for the full architectural rationale.
 
 ---
 
