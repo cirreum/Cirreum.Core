@@ -12,6 +12,8 @@ guides linked at the bottom of each entry.
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-05-01
+
 Per-scheme application user resolution and centralized authentication
 context coordination keys. Sets up multi-IdP server hosts (e.g., portals
 backed by workforce + customer IdP + machine credentials) to register one
