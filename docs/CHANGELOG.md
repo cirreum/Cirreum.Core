@@ -12,6 +12,8 @@ guides linked at the bottom of each entry.
 
 ## [Unreleased]
 
+## [5.0.1] - 2026-05-01
+
 Doc-only follow-up to v5.0.0. No code or API changes.
 
 ### Fixed
