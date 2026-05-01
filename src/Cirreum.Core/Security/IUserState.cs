@@ -48,8 +48,9 @@ public interface IUserState : IUserSession {
 	/// </para>
 	/// <para>
 	/// This value is immutable for the lifetime of the user's identity in the IdP and is used
-	/// as the primary key for application-user resolution
-	/// (<see cref="IApplicationUserResolver"/>), grant cache keys, and audit trails.
+	/// as the external identifier on <see cref="IApplicationUser"/> — the lookup key passed to
+	/// <see cref="IApplicationUserResolver.ResolveAsync(string, CancellationToken)"/>
+	/// to resolve the application user — and as the basis for grant cache keys and audit trails.
 	/// </para>
 	/// </remarks>
 	string Id { get; }

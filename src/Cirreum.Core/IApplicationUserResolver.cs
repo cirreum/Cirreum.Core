@@ -19,10 +19,26 @@ namespace Cirreum;
 public interface IApplicationUserResolver {
 
 	/// <summary>
-	/// Well-known key for caching the resolved <see cref="IApplicationUser"/>
-	/// in per-request or per-session state.
+	/// The authentication scheme this resolver handles, or <see langword="null"/>
+	/// for the default fallback resolver.
 	/// </summary>
-	const string CacheKey = "__Cirreum_ApplicationUser";
+	/// <remarks>
+	/// <para>
+	/// In multi-IdP server hosts, multiple <see cref="IApplicationUserResolver"/>
+	/// implementations may be registered — one per IdP scheme that backs a distinct
+	/// application user store. The dispatching consumer reads the request's
+	/// authenticated scheme and selects the resolver whose <see cref="Scheme"/> matches,
+	/// falling back to the resolver whose <see cref="Scheme"/> is <see langword="null"/>
+	/// when no match is found.
+	/// </para>
+	/// <para>
+	/// Singular by design — enforces a 1:1 scheme→resolver→store mapping. Apps that
+	/// genuinely need to share a single store across multiple schemes own their own
+	/// discriminator and can register the same resolver class with distinct
+	/// <see cref="Scheme"/> values, or compose schemes inside a single resolver.
+	/// </para>
+	/// </remarks>
+	string? Scheme => null;
 
 	/// <summary>
 	/// Resolves the application user for the given external identity.
