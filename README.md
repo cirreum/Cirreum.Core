@@ -178,6 +178,28 @@ builder.Services.AddOpenTelemetry()
 | `cirreum.cache.operations` | Counter | status, caller, consumer |
 | `cirreum.cache.duration` | Histogram (ms) | status, caller, consumer |
 
+### 🌐 Remote Services
+
+The `Cirreum.RemoteServices` namespace is the home for **caller-side, outbound** abstractions — "the caller's view of remote resources" — regardless of host (WASM, server-side microservice, serverless function). Two shapes share the family:
+
+- **`RemoteClient`** — abstract base for typed outbound HTTP clients (request/response). Pairs with `RemoteClientLogging`, `RemoteClientTelemetry`, `RemoteServiceOptions`, and `AuthorizationHeaderSettings` for observability and auth.
+- **`IRemoteConnection`** *(added in 5.1.0)* — transport-agnostic handle for long-lived bidirectional connections (SignalR `HubConnection`, raw `ClientWebSocket`, gRPC streaming). Concrete impls ship in the `Cirreum.Runtime.Invocation.{Source}.Wasm` family; `RemoteConnectionBase` provides the `State` machine and `StateChanged` plumbing for derived adapters.
+
+```csharp
+using Cirreum.RemoteServices;
+
+public sealed class ChatPage(IRemoteConnection chat, ChatApiClient api) {
+    public async Task Initialize() {
+        var history = await api.LoadHistoryAsync();    // request/response  — RemoteClient
+        await chat.ConnectAsync();
+        chat.On<ChatMessage>("Receive", async msg => { /* ... */ });
+        await chat.SendAsync("SendMessage", "hello");  // bidirectional/push — IRemoteConnection
+    }
+}
+```
+
+One `using`, one namespace, one mental model for "I am calling something remote." See [`docs/RELEASE-NOTES-v5.1.0.md`](docs/RELEASE-NOTES-v5.1.0.md) for the design rationale.
+
 ### 🏗️ Primitives & Utilities
 
 Battle-tested building blocks:

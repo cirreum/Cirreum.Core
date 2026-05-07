@@ -12,6 +12,15 @@ guides linked at the bottom of each entry.
 
 ## [Unreleased]
 
+### Added
+
+- **`Cirreum.RemoteServices.IRemoteConnection`** — caller-side typed handle for long-lived bidirectional connections (SignalR Hub clients, raw WebSocket clients, gRPC streaming, …). Pairs with the existing `RemoteClient` in the same family: `RemoteClient` abstracts request/response; `IRemoteConnection` abstracts persistent bidirectional channels. Cross-host: works in WASM apps connecting to a backend, server-side microservices subscribing to events from another service, or anywhere else a long-lived outbound connection is needed.
+- **`Cirreum.RemoteServices.RemoteConnectionBase`** — abstract base for `IRemoteConnection` implementations. Provides the public-surface state machine, `StateChanged` event plumbing, and a `TransitionTo(...)` helper for derived classes to call when their underlying transport state changes. Concrete impls in the `Cirreum.Runtime.Invocation.{Source}.Wasm` family derive from this and adapt SignalR, raw WebSocket, gRPC streaming, etc.
+- **`Cirreum.RemoteServices.RemoteConnectionState`** — enum with `Disconnected`, `Connecting`, `Connected`, `Reconnecting`, `Disconnecting` values for reporting connection lifecycle state.
+- **`Cirreum.RemoteServices.RemoteConnectionStateChangedEventArgs`** — record payload for the `IRemoteConnection.StateChanged` event with `PreviousState` and `NewState`.
+
+These additions slot into the existing `Cirreum.RemoteServices` family alongside `RemoteClient` and friends. No changes to existing types; strictly additive. See [`docs/RELEASE-NOTES-v5.1.0.md`](RELEASE-NOTES-v5.1.0.md) for the full rationale and architectural framing.
+
 ## [5.0.1] - 2026-05-01
 
 Doc-only follow-up to v5.0.0. No code or API changes.
