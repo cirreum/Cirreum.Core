@@ -19,6 +19,51 @@ upgrade, a coordinated multi-repo rollout).
 
 ## Queued
 
+### Document `IUserStateAccessor` lifetime / usage contract
+
+- **SemVer:** Patch
+- **Trigger:** Next Cirreum.Core patch release (no specific blocker)
+- **Noted:** 2026-05-07
+
+**Why:** The `IUserStateAccessor` interface XML doc currently says:
+
+```csharp
+/// <summary>
+/// Defines the service for resolving the Cirreum.Security.IUserState
+/// for the current user.
+/// </summary>
+public interface IUserStateAccessor {
+    /// <summary>Gets the current user's state</summary>
+    /// <returns>The current user's state</returns>
+    ValueTask<IUserState> GetUser();
+}
+```
+
+That documentation does not communicate the load-bearing lifetime invariants that consumers must respect:
+
+- The service depends on an **active invocation context** (HTTP request,
+  SignalR Hub method, WebSocket frame, queue trigger, etc.) populated by
+  the host's invocation-source adapter at the inbound seam.
+- It is intended to be called from **within an executing invocation** —
+  typically from CQRS handlers, authorization evaluators, repositories,
+  or other invocation-scoped framework code.
+- The returned `IUserState` reflects the *current* invocation only;
+  consumers must not capture it in singletons, static state, or
+  fire-and-forget background work — analogous to the standard
+  `IHttpContextAccessor.HttpContext` capture warning.
+- When called outside an active invocation (background `IHostedService`,
+  timer-driven work without a synthesized invocation), the result is an
+  anonymous `IUserState`. This is a contract guarantee, not an
+  implementation detail.
+
+Consumers reading the interface today have no signal that any of these
+constraints exist. The omission is especially harmful for the
+"capture-and-stash" anti-pattern: the leak surface is silent until the
+captured reference is read against an unrelated invocation.
+
+Patch-eligible: docs-only change, no API surface or behavior change.
+Could fold into any future Core patch; no specific blocking trigger.
+
 ### `IUserStateAccessor.GetUser()` → `GetUserState()`
 
 - **SemVer:** Major
