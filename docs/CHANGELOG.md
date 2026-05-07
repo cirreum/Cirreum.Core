@@ -12,6 +12,8 @@ guides linked at the bottom of each entry.
 
 ## [Unreleased]
 
+## [5.1.0] - 2026-05-07
+
 ### Added
 
 - **`Cirreum.RemoteServices.IRemoteConnection`** — caller-side typed handle for long-lived bidirectional connections (SignalR Hub clients, raw WebSocket clients, gRPC streaming, …). Pairs with the existing `RemoteClient` in the same family: `RemoteClient` abstracts request/response; `IRemoteConnection` abstracts persistent bidirectional channels. Cross-host: works in WASM apps connecting to a backend, server-side microservices subscribing to events from another service, or anywhere else a long-lived outbound connection is needed.
