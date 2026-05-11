@@ -23,6 +23,10 @@ guides linked at the bottom of each entry.
 
 - **`DistributedMessageEnvelope.PublishedAt`** — new optional `DateTimeOffset?` property stamped at envelope creation by `Create<TMessage>(...)` and `CreateWithSerializer<TMessage>(...)`. Backward-compatible: envelopes serialized prior to this release deserialize with `PublishedAt = null`. Provides handlers and consumers a portable publish timestamp independent of broker-specific properties (e.g., Service Bus `EnqueuedTimeUtc`).
 
+### Fixed
+
+- **`IUserStateAccessor` XML documentation** — expanded to communicate the load-bearing lifetime and usage invariants consumers must respect: dependency on an active invocation context, the prohibition on capturing the returned `IUserState` in singletons or background work (analogous to the `IHttpContextAccessor.HttpContext` capture warning), the anonymous-user contract guarantee when called outside an active invocation, and the scoped-lifetime registration expectation. No API surface or behavior change; the runtime already enforced these invariants.
+
 These additions establish the L3 (Core) surface for cross-head distributed message dispatch coming in a follow-up `Cirreum.Runtime.Messaging` minor release. The receiver hosted service, default `INodeIdProvider` implementation, and `DefaultTransportPublisher` ApplicationProperty enrichment all live in L5 and depend on this Core surface being published first. See [`docs/RELEASE-NOTES-v5.2.0.md`](RELEASE-NOTES-v5.2.0.md) for the full architectural framing.
 
 ## [5.1.0] - 2026-05-07
