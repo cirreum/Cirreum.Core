@@ -12,6 +12,8 @@ guides linked at the bottom of each entry.
 
 ## [Unreleased]
 
+## [5.3.0] - 2026-05-11
+
 ### Added
 
 - **`Cirreum.Security.IActorContext`** — interface capturing the original M2M actor that initiated a delegated invocation. Read by audit, telemetry, and delegation-aware authorization rules. Surfaces actor identifier, display name, authentication scheme, and the delegation metadata.
