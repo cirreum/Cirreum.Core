@@ -25,12 +25,14 @@ public record DistributedMessageEnvelope {
 		string messageDefinition,
 		string messageVersion,
 		string messageType,
-		string producerId) {
+		string producerId,
+		DateTimeOffset publishedAt) {
 		this.SerializedMessage = serializedMessage;
 		this.MessageIdentifier = messageDefinition;
 		this.MessageVersion = messageVersion;
 		this.ProducerId = producerId;
 		this.MessageType = messageType;
+		this.PublishedAt = publishedAt;
 	}
 
 	/// <summary>
@@ -74,7 +76,8 @@ public record DistributedMessageEnvelope {
 			definition.Identifier,
 			definition.Version,
 			typeof(TMessage).FullName ?? typeof(TMessage).Name,
-			producerId);
+			producerId,
+			DateTimeOffset.UtcNow);
 	}
 
 	/// <summary>
@@ -126,6 +129,25 @@ public record DistributedMessageEnvelope {
 	/// This can be used for routing, filtering, or auditing purposes.
 	/// </summary>
 	public string ProducerId { get; init; }
+
+	/// <summary>
+	/// Gets the UTC timestamp at which this envelope was created by
+	/// <see cref="Create{TMessage}"/> or <see cref="CreateWithSerializer{TMessage}"/>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Stamped automatically at envelope creation. Provides handlers and consumers a
+	/// portable publish timestamp independent of broker-specific properties (e.g., Service
+	/// Bus <c>EnqueuedTimeUtc</c>, AWS SNS message timestamps).
+	/// </para>
+	/// <para>
+	/// Nullable to preserve backward compatibility: envelopes serialized prior to the
+	/// introduction of this field deserialize with <see cref="PublishedAt"/> set to
+	/// <see langword="null"/>. Consumers that depend on the value should check
+	/// <c>HasValue</c> and fall through gracefully when reading older payloads.
+	/// </para>
+	/// </remarks>
+	public DateTimeOffset? PublishedAt { get; init; }
 
 	/// <summary>
 	/// Deserializes the message payload using the stored .NET type information.

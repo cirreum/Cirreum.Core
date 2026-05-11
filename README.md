@@ -200,6 +200,38 @@ public sealed class ChatPage(IRemoteConnection chat, ChatApiClient api) {
 
 One `using`, one namespace, one mental model for "I am calling something remote." See [`docs/RELEASE-NOTES-v5.1.0.md`](docs/RELEASE-NOTES-v5.1.0.md) for the design rationale.
 
+### 📨 Distributed Messaging
+
+Cross-broker contracts for publishing and receiving messages via configured providers (Service Bus, AWS, etc.). Cirreum.Core defines the abstractions; concrete transport and runtime infrastructure ships in `Cirreum.Messaging.*` and `Cirreum.Runtime.Messaging`.
+
+**Message contracts**
+- `DistributedMessage` — abstract base for messages crossing the application boundary; implements `INotification` so authoring is identical to in-process events
+- `MessageDefinitionAttribute` — stable `Identifier` + `Version` declaration required on every message type
+- `DistributedMessageEnvelope` — wire-format wrapper with type metadata, producer ID, and (added 5.2.0) a portable `PublishedAt` timestamp stamped at envelope creation
+
+**Outbound dispatch**
+- `IDistributedTransportPublisher` — transport seam (default `EmptyTransportPublisher` no-op when no provider is configured)
+- `DistributedMessageHandler<T>` — Conductor notification interceptor that routes `DistributedMessage` publishes through the configured transport
+
+**Inbound dispatch** *(added 5.2.0)*
+- `DistributedMessageReceived<T>` — wrapper notification dispatched by the receiver via Conductor; handlers implement `INotificationHandler<DistributedMessageReceived<T>>`
+- `INodeIdProvider` + `DefaultNodeIdProvider` — replica-level identity for self-echo prevention across multi-node / multi-head deployments (distinct from head-level `ProducerId`). The default impl resolves via env-var chain (Container Apps replica → App Service instance → container hostname → machine + PID → generated GUID); apps with bespoke requirements register a custom `INodeIdProvider` in DI.
+- `ReceiverOptions` — configuration for queue source (competing-consumer work) and/or topic subscription source (broadcast events); `SubscriptionName` is the per-deployment differentiator for the topic side. Mirrors `SenderOptions`'s queue/topic symmetry.
+
+```csharp
+// Handler — same patterns as any other Conductor notification
+public sealed class EvidenceInstanceChangeHandler
+    : INotificationHandler<DistributedMessageReceived<EvidenceInstanceChangedV1>>
+{
+    public Task HandleAsync(
+        DistributedMessageReceived<EvidenceInstanceChangedV1> notification,
+        CancellationToken ct)
+        => /* react to the change locally */;
+}
+```
+
+The hosted receiver service and the publisher's application-property enrichment for broker-side filtering live in `Cirreum.Runtime.Messaging`. See [`docs/RELEASE-NOTES-v5.2.0.md`](docs/RELEASE-NOTES-v5.2.0.md) for the architectural framing and routing convention.
+
 ### 🏗️ Primitives & Utilities
 
 Battle-tested building blocks:

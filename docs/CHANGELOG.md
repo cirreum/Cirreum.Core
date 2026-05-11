@@ -12,6 +12,19 @@ guides linked at the bottom of each entry.
 
 ## [Unreleased]
 
+### Added
+
+- **`Cirreum.Messaging.INodeIdProvider`** — interface providing a stable identifier for the current process replica/node, distinct from `ProducerId` (which identifies the application/head and is shared across replicas). Enables broker-level and in-process self-echo prevention for inbound distributed messages where multi-replica deployments may receive their own publishes via a shared subscription.
+- **`Cirreum.Messaging.DefaultNodeIdProvider`** — default parameterless implementation of `INodeIdProvider` that resolves the current process's node identity via a chain of environment-based hints (Container Apps replica name → App Service instance ID → container hostname → machine name + PID → generated GUID). Computed once at construction. Apps needing custom resolution replace via DI before the framework's `TryAddSingleton` registration runs.
+- **`Cirreum.Messaging.DistributedMessageReceived<TMessage>`** — wrapper notification for inbound distributed messages dispatched via Conductor's notification pipeline. Uses a distinct wrapper type to prevent the outbound `DistributedMessageHandler<T>` interceptor from re-publishing received messages back to the bus. Carries the original typed message and the deserialized `DistributedMessageEnvelope`.
+- **`Cirreum.Messaging.ReceiverOptions`** — configuration class for the distributed message receiver (consumed by `Cirreum.Runtime.Messaging` in a coordinated follow-up release). Binds from `Cirreum:Messaging:Distribution:Receiver` and specifies the messaging provider instance plus a queue source (`QueueName` for competing-consumer work distribution) and/or a topic source (`TopicName` + per-head `SubscriptionName` for broadcast). Mirrors `SenderOptions`'s queue/topic symmetry; either or both sources may be configured. Node identity is not a config concern — custom resolution registers a custom `INodeIdProvider` in DI rather than mutating options.
+
+### Changed
+
+- **`DistributedMessageEnvelope.PublishedAt`** — new optional `DateTimeOffset?` property stamped at envelope creation by `Create<TMessage>(...)` and `CreateWithSerializer<TMessage>(...)`. Backward-compatible: envelopes serialized prior to this release deserialize with `PublishedAt = null`. Provides handlers and consumers a portable publish timestamp independent of broker-specific properties (e.g., Service Bus `EnqueuedTimeUtc`).
+
+These additions establish the L3 (Core) surface for cross-head distributed message dispatch coming in a follow-up `Cirreum.Runtime.Messaging` minor release. The receiver hosted service, default `INodeIdProvider` implementation, and `DefaultTransportPublisher` ApplicationProperty enrichment all live in L5 and depend on this Core surface being published first. See [`docs/RELEASE-NOTES-v5.2.0.md`](RELEASE-NOTES-v5.2.0.md) for the full architectural framing.
+
 ## [5.1.0] - 2026-05-07
 
 ### Added
