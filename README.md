@@ -232,6 +232,74 @@ public sealed class EvidenceInstanceChangeHandler
 
 The hosted receiver service and the publisher's application-property enrichment for broker-side filtering live in `Cirreum.Runtime.Messaging`. See [`docs/RELEASE-NOTES-v5.2.0.md`](docs/RELEASE-NOTES-v5.2.0.md) for the architectural framing and routing convention.
 
+### 🎭 Delegation (M2M On-Behalf-Of) *(added 5.3.0)*
+
+Cirreum's in-app analog of OAuth 2.0 Token Exchange (RFC 8693) for authentication schemes that don't (or can't) get on-behalf-of from an IdP — header-based M2M credentials (ApiKey, SignedRequest, etc.) acting on behalf of a human subject. The IVA / call-center / partner-LLM scenario, first-class.
+
+When a delegation upgrade succeeds, the `IUserState`'s primary view (`Id`, `Name`, `Principal`, `Profile`, `ApplicationUser`) represents the **subject** — every authorization stage, every cache key, every audit log shifts to the subject automatically. The original M2M caller is preserved on `IUserState.Actor` for non-repudiable audit. Delegation, never impersonation — aligned with RFC 8693's `act` claim model.
+
+**Observable surface**
+- `IUserState.Actor` — `IActorContext?` capturing the original M2M caller post-upgrade (null when not delegated)
+- `IUserState.IsDelegated` — boolean convenience for "this invocation was upgraded via delegation"
+- `IActorContext` — actor identifier, display name, authentication scheme, and `DelegationMetadata`
+- `DelegationMetadata` — `EvidenceType`, `Scope` (`PermissionSet` — same vocabulary as the authorization pipeline), `DelegatedAt`
+
+**Declarative authorization** — decorate operations directly. Eight attributes; the six facet attributes (`[RequiresDelegation*]` beyond the bare `[RequiresDelegation]`) fail-closed for direct callers, so a facet without an explicit channel gate is still safe:
+
+```csharp
+[RequiresDirectCaller]
+public sealed record InitiateWireTransfer(...) : IAuthorizableCommand;
+
+[RequiresDelegation]
+[RequiresDelegationEvidence("ivr-session-validated", "voice-biometric-verified")]
+[RequiresDelegationWithin(Minutes = 2)]
+[RequiresAnyDelegationScope("iva:account-inspect", "iva:balance-inquiry")]
+public sealed record IvaToolCall(...) : IAuthorizableQuery<ToolCallResult>;
+```
+
+**Imperative authorization** — paired convenience methods on `AuthorizerBase<T>` for conditional / expression-based rules, matching the existing `HasRole` / `HasClaim` pattern:
+
+```csharp
+public sealed class GetAccountBalanceAuthorizer : AuthorizerBase<GetAccountBalanceQuery> {
+    public GetAccountBalanceAuthorizer() {
+
+        // Direct callers — standard role gate
+        this.UnlessDelegated(() => {
+            this.HasAnyRole(Roles.AccountOwner, Roles.SupportAgent);
+        });
+
+        // Delegated invocations — stricter
+        this.WhenDelegated(() => {
+            this.HasDelegationActor("SignedRequest");                      // restrict actor scheme
+            this.HasDelegationWithin(TimeSpan.FromMinutes(5));             // anti-replay window
+            this.HasDelegationScope(AccountPermissions.Balance);           // scope containment
+        });
+    }
+}
+
+public sealed class InitiateWireTransferAuthorizer : AuthorizerBase<InitiateWireTransferCommand> {
+    public InitiateWireTransferAuthorizer() {
+        this.NotDelegated();                                               // never via delegation
+        this.HasRole(Roles.WireTransferInitiator);
+    }
+}
+
+public sealed class IvaToolCallAuthorizer : AuthorizerBase<IvaToolCommand> {
+    public IvaToolCallAuthorizer() {
+        this.Delegated();                                                  // delegation mandatory
+        this.HasDelegationEvidence("ivr-session-validated", "voice-biometric-verified");
+        this.HasDelegationWithin(TimeSpan.FromMinutes(2));
+        this.HasAnyDelegationScope(IvaPermissions.AccountInspect, IvaPermissions.BalanceInquiry);
+    }
+}
+```
+
+**Audit + telemetry** — every authorization log line and OpenTelemetry decision tag carries delegation context when present (actor name, scheme, evidence type). Three new tag dimensions (`cirreum.authz.delegation.is_delegated`, `cirreum.authz.delegation.actor_scheme`, `cirreum.authz.delegation.evidence_type`) emitted from `AuthorizationTelemetry.RecordDecision` for both per-operation and per-grant decisions. Non-delegated requests pay zero allocation.
+
+**Cross-cycle composition** — this release lands D1 (Core contracts + UserState surface + authorization vocabulary). The orchestrator (D2 `Cirreum.AuthorizationProvider`), the server-side bridge (D3 `Cirreum.Services.Server`), per-scheme auth-handler integration (D4 `Cirreum.Authorization.ApiKey` / `.SignedRequest`), and app-facing hosting (D5 `Cirreum.Runtime.Authorization`) ship in subsequent coordinated minor releases. Apps consuming `5.3.0` can author delegation-aware authorizers against the new vocabulary today; rules begin enforcing automatically as the downstream cycles land.
+
+See [`docs/RELEASE-NOTES-v5.3.0.md`](docs/RELEASE-NOTES-v5.3.0.md) for the full architectural framing and RFC 8693 alignment.
+
 ### 🏗️ Primitives & Utilities
 
 Battle-tested building blocks:

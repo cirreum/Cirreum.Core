@@ -1,5 +1,6 @@
 namespace Cirreum.Authorization.Resources;
 
+using Cirreum.Authorization.Diagnostics;
 using Cirreum.Exceptions;
 using Cirreum.Security;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,6 +37,7 @@ internal sealed class ResourceAccessEvaluator(
 		where T : IProtectedResource {
 
 		var (userState, effectiveRoles) = this.ResolveCaller();
+		var delegationLog = DelegationLogContext.From(userState);
 
 		if (effectiveRoles.Count == 0) {
 			logger.LogResourceAccessDenied(
@@ -43,9 +45,13 @@ internal sealed class ResourceAccessEvaluator(
 				typeof(T).Name,
 				resource.ResourceId,
 				permission.ToString(),
-				DenyCodes.ResourceAccessDenied);
+				DenyCodes.ResourceAccessDenied,
+				delegationLog.DelegationSuffix,
+				delegationLog.ActorId,
+				delegationLog.ActorScheme,
+				delegationLog.EvidenceType);
 
-			EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceAccessDenied);
+			EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceAccessDenied, delegationLog);
 			return Result.Fail(new ForbiddenAccessException(
 				$"User '{userState.Name}' has no roles — access denied to {typeof(T).Name}."));
 		}
@@ -58,9 +64,13 @@ internal sealed class ResourceAccessEvaluator(
 				userState.Name,
 				typeof(T).Name,
 				resource.ResourceId,
-				permission);
+				permission,
+				delegationLog.DelegationSuffix,
+				delegationLog.ActorId,
+				delegationLog.ActorScheme,
+				delegationLog.EvidenceType);
 
-			EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionPass, AuthorizationTelemetry.ReasonPass);
+			EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionPass, AuthorizationTelemetry.ReasonPass, delegationLog);
 			return Result.Success;
 		}
 
@@ -69,9 +79,13 @@ internal sealed class ResourceAccessEvaluator(
 			typeof(T).Name,
 			resource.ResourceId,
 			permission.ToString(),
-			DenyCodes.ResourceAccessDenied);
+			DenyCodes.ResourceAccessDenied,
+			delegationLog.DelegationSuffix,
+			delegationLog.ActorId,
+			delegationLog.ActorScheme,
+			delegationLog.EvidenceType);
 
-		EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceAccessDenied);
+		EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceAccessDenied, delegationLog);
 		return Result.Fail(new ForbiddenAccessException(
 			$"User '{userState.Name}' does not have '{permission}' on {typeof(T).Name} '{resource.ResourceId}'."));
 	}
@@ -89,19 +103,20 @@ internal sealed class ResourceAccessEvaluator(
 		if (resourceId is null) {
 			var rootAccess = new EffectiveAccess(provider.RootDefaults);
 			var (userState, effectiveRoles) = this.ResolveCaller();
+			var delegationLog = DelegationLogContext.From(userState);
 
 			if (effectiveRoles.Count == 0) {
-				EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceAccessDenied);
+				EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceAccessDenied, delegationLog);
 				return Result.Fail(new ForbiddenAccessException(
 					$"User '{userState.Name}' has no roles — access denied to {typeof(T).Name}."));
 			}
 
 			if (rootAccess.IsAuthorized(permission, effectiveRoles)) {
-				EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionPass, AuthorizationTelemetry.ReasonPass);
+				EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionPass, AuthorizationTelemetry.ReasonPass, delegationLog);
 				return Result.Success;
 			}
 
-			EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceAccessDenied);
+			EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceAccessDenied, delegationLog);
 			return Result.Fail(new ForbiddenAccessException(
 				$"User '{userState.Name}' does not have '{permission}' at root of {typeof(T).Name}."));
 		}
@@ -109,7 +124,9 @@ internal sealed class ResourceAccessEvaluator(
 		var resource = await provider.GetByIdAsync(resourceId, cancellationToken).ConfigureAwait(false);
 
 		if (resource is null) {
-			EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceNotFound);
+			var (userState, _) = this.ResolveCaller();
+			var delegationLog = DelegationLogContext.From(userState);
+			EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceNotFound, delegationLog);
 			return Result.Fail(new NotFoundException(resourceId));
 		}
 
@@ -391,12 +408,15 @@ internal sealed class ResourceAccessEvaluator(
 		resourceId is not null ? $"{typeof(T).Name}:{resourceId}" : null;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static void EmitTelemetry(string resourceType, string decision, string reason) {
+	private static void EmitTelemetry(string resourceType, string decision, string reason, DelegationLogContext delegationLog) {
 		AuthorizationTelemetry.RecordDecision(
 			AuthorizationTelemetry.StageResourceAccess,
 			AuthorizationTelemetry.StepResourceAccessCheck,
 			decision,
 			reason,
-			resourceType: resourceType);
+			resourceType: resourceType,
+			isDelegated: delegationLog.IsDelegated,
+			actorScheme: delegationLog.ActorScheme,
+			evidenceType: delegationLog.EvidenceType);
 	}
 }

@@ -19,6 +19,8 @@ public abstract class UserStateBase : IUserState {
 	private IApplicationUser? _applicationUser;
 	private bool _authenticationBoundaryResolved;
 	private AuthenticationBoundary _authenticationBoundary = AuthenticationBoundary.None;
+	private IActorContext? _actor;
+	private bool _delegationResolved;
 
 	/// <inheritdoc/>
 	public bool IsAuthenticated => this._isAuthenticated;
@@ -137,6 +139,47 @@ public abstract class UserStateBase : IUserState {
 		this._applicationUser = null;
 		this._applicationUserType = null;
 		this._applicationUserLoaded = false;
+	}
+
+
+	// Actor / Delegation
+	// -------------------------------------------------------------
+
+	/// <inheritdoc/>
+	public IActorContext? Actor => this._actor;
+
+	/// <inheritdoc/>
+	public bool IsDelegated => this._actor is not null;
+
+	/// <inheritdoc/>
+	public bool IsDelegationResolved => this._delegationResolved;
+
+	/// <summary>
+	/// Resolves the delegation state for this user state — both successful delegation
+	/// (non-null <paramref name="actor"/>) and "delegation processed, none applied"
+	/// (null <paramref name="actor"/>) cases. Called exactly once by the upstream auth
+	/// handler (via the server's user state accessor) after the delegation orchestration
+	/// step completes.
+	/// </summary>
+	/// <param name="actor">
+	/// The actor snapshot when delegation was applied, or <see langword="null"/> when
+	/// the auth handler completed delegation processing without finding a delegation
+	/// to apply (no evidence present in the request).
+	/// </param>
+	/// <exception cref="InvalidOperationException">
+	/// Thrown when delegation has already been resolved on this user state. Delegation
+	/// chains (actor-of-actor) are not supported — each user state can represent at most
+	/// one resolution event. The framework's M2M auth handler enforces this naturally by
+	/// running at most once per invocation; this guard catches programmatic misuse.
+	/// </exception>
+	protected virtual void SetActor(IActorContext? actor) {
+		if (this._delegationResolved) {
+			throw new InvalidOperationException(
+				"Delegation has already been resolved on this user state. " +
+				"Delegation chains (actor-of-actor) are not supported.");
+		}
+		this._actor = actor;
+		this._delegationResolved = true;
 	}
 
 }

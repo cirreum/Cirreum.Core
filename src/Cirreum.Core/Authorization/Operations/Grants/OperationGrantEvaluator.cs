@@ -255,6 +255,12 @@ public sealed class OperationGrantEvaluator(
 		var boundary = ctx.AuthenticationBoundary.ToString().ToLowerInvariant();
 		var resourceType = ctx.AuthorizableObject.GetType().Name;
 
+		// Surface delegation channel on the grant decision so SOC/SIEM dashboards can
+		// slice deny rates by delegated vs. direct callers — critical for non-repudiation.
+		var isDelegated = ctx.UserState.IsDelegated;
+		var actorScheme = ctx.UserState.Actor?.Scheme;
+		var evidenceType = ctx.UserState.Actor?.Delegation.EvidenceType;
+
 		var activity = Activity.Current;
 		if (activity is not null) {
 			activity.SetTag(AuthorizationTelemetry.StageTag, AuthorizationTelemetry.StageScope);
@@ -264,6 +270,13 @@ public sealed class OperationGrantEvaluator(
 			activity.SetTag(AuthorizationTelemetry.ReasonTag, outcome);
 			activity.SetTag(AuthorizationTelemetry.EvaluatorTag, nameof(OperationGrantEvaluator));
 			activity.SetTag(AuthorizationTelemetry.ResourceTypeTag, resourceType);
+			activity.SetTag(AuthorizationTelemetry.IsDelegatedTag, isDelegated);
+			if (actorScheme is not null) {
+				activity.SetTag(AuthorizationTelemetry.ActorSchemeTag, actorScheme);
+			}
+			if (evidenceType is not null) {
+				activity.SetTag(AuthorizationTelemetry.EvidenceTypeTag, evidenceType);
+			}
 		}
 
 		AuthorizationTelemetry.RecordDecision(
@@ -273,6 +286,9 @@ public sealed class OperationGrantEvaluator(
 			reason: outcome,
 			scope: boundary,
 			evaluator: nameof(OperationGrantEvaluator),
-			resourceType: resourceType);
+			resourceType: resourceType,
+			isDelegated: isDelegated,
+			actorScheme: actorScheme,
+			evidenceType: evidenceType);
 	}
 }

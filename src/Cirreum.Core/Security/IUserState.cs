@@ -178,12 +178,12 @@ public interface IUserState : IUserSession {
 	/// The type of application user to retrieve. Must implement <see cref="IApplicationUser"/>.
 	/// </typeparam>
 	/// <returns>
-	/// The application user cast to type <typeparamref name="T"/>, or <see langword="null"/> 
+	/// The application user cast to type <typeparamref name="T"/>, or <see langword="null"/>
 	/// if no application user is loaded or the loaded user is not of type <typeparamref name="T"/>.
 	/// </returns>
 	/// <remarks>
 	/// <para>
-	/// This method provides type-safe access to the application user. It will only return 
+	/// This method provides type-safe access to the application user. It will only return
 	/// a non-null value if:
 	/// </para>
 	/// <list type="bullet">
@@ -206,5 +206,75 @@ public interface IUserState : IUserSession {
 	/// </code>
 	/// </example>
 	T? GetApplicationUser<T>() where T : class, IApplicationUser;
+
+	/// <summary>
+	/// Gets the original M2M actor that initiated this invocation, when this user state
+	/// represents a delegated identity. Non-null only when an upstream M2M auth handler
+	/// successfully upgraded this user state to act on behalf of a subject via delegation.
+	/// </summary>
+	/// <value>
+	/// The captured snapshot of the actor's identity, or <see langword="null"/> when this
+	/// user state was not produced through delegation (direct sign-in, direct M2M without
+	/// evidence, anonymous, etc.).
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// After a delegation upgrade, every existing <see cref="IUserState"/> property
+	/// (<see cref="Id"/>, <see cref="Name"/>, <see cref="Principal"/>, <see cref="Profile"/>,
+	/// <see cref="ApplicationUser"/>) represents the <b>subject</b> — the human or app user
+	/// the actor is acting on behalf of. <see cref="Actor"/> is the only property that
+	/// surfaces the original actor's identity, preserved for audit and delegation-aware
+	/// authorization decisions.
+	/// </para>
+	/// <para>
+	/// Code that needs to distinguish "this is a direct user" from "this is delegated"
+	/// should read <see cref="IsDelegated"/> rather than null-check <see cref="Actor"/>
+	/// directly; the boolean form is more readable at call sites and matches the
+	/// <see cref="IsAuthenticated"/> / <see cref="IsApplicationUserLoaded"/> conventions on
+	/// this interface.
+	/// </para>
+	/// <para>
+	/// Aligns with RFC 8693 Token Exchange's <c>act</c> claim model — actor identity is
+	/// always preserved alongside subject identity. Delegation, never impersonation.
+	/// </para>
+	/// </remarks>
+	IActorContext? Actor => null;
+
+	/// <summary>
+	/// Gets a value indicating whether this user state represents a delegated identity —
+	/// i.e., an M2M actor that has been upgraded to act on behalf of a subject.
+	/// </summary>
+	/// <value>
+	/// <see langword="true"/> when <see cref="Actor"/> is non-null; otherwise
+	/// <see langword="false"/>. Provided as a boolean convenience for authorization rules
+	/// and audit predicates that need to distinguish delegated from direct invocations.
+	/// </value>
+	bool IsDelegated => this.Actor is not null;
+
+	/// <summary>
+	/// Gets a value indicating whether delegation resolution has completed for this user
+	/// state — i.e., the upstream M2M auth handler has processed any delegation evidence
+	/// (or confirmed none was present).
+	/// </summary>
+	/// <value>
+	/// <see langword="true"/> when the delegation processing step has run to completion,
+	/// regardless of whether delegation was applied. A value of <see langword="true"/>
+	/// together with <c><see cref="Actor"/> == null</c> means "we checked for delegation
+	/// and none was present" — distinct from "we haven't checked yet."
+	/// </value>
+	/// <remarks>
+	/// <para>
+	/// Mirrors <see cref="IsApplicationUserLoaded"/> — captures the "processing has run"
+	/// state independent of whether an entity was found. Useful for diagnostics
+	/// (confirming the auth handler ran the delegation check) and for downstream consumers
+	/// that need to distinguish "not-yet-resolved" from "resolved-as-direct-caller."
+	/// </para>
+	/// <para>
+	/// Default-implemented as <see langword="false"/> so existing <see cref="IUserState"/>
+	/// implementations don't break. The framework's <c>UserStateBase</c> tracks the value
+	/// internally and flips it via <c>SetActor(...)</c>.
+	/// </para>
+	/// </remarks>
+	bool IsDelegationResolved => false;
 
 }

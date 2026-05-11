@@ -217,4 +217,131 @@ public abstract class AuthorizerBase<TAuthorizableObject>
 		return this.When(ctx => !ctx.RequiredGrants.ContainsAll(permissions), configure);
 	}
 
+
+	// Delegation rules
+	// -------------------------------------------------------------
+	// Convention: rules that constrain delegated invocations short-circuit to pass for
+	// direct callers. The exception is Delegated, which is the explicit
+	// "this operation must be delegated" gate.
+
+	/// <summary>
+	/// The user state must not be delegated — i.e. the caller is direct, not an
+	/// M2M actor on behalf of a subject. Use for operations that must not be invoked through
+	/// a delegated channel (e.g., wire transfers, sensitive admin actions).
+	/// </summary>
+	protected void NotDelegated() {
+		this.RuleFor(context => context.UserState).NotDelegated();
+	}
+
+	/// <summary>
+	/// The user state must have a delegation context — an M2M actor acting on behalf of a
+	/// subject. Use for operations that must only be invoked through delegation.
+	/// </summary>
+	protected void Delegated() {
+		this.RuleFor(context => context.UserState).Delegated();
+	}
+
+	/// <summary>
+	/// When delegated, the actor must have authenticated via one of the allowed schemes
+	/// (e.g. <c>"ApiKey"</c>, <c>"SignedRequest"</c>). Short-circuits to pass for direct callers.
+	/// </summary>
+	/// <param name="allowedSchemes">The authentication schemes permitted for the actor.</param>
+	protected void HasDelegationActor(params string[] allowedSchemes) {
+		this.RuleFor(context => context.UserState).HasDelegationActor(allowedSchemes);
+	}
+
+	/// <summary>
+	/// When delegated, the delegation must have been applied within the specified
+	/// maximum age. Anti-replay / staleness gate. Short-circuits to pass for direct callers.
+	/// </summary>
+	/// <param name="maxAge">The maximum age allowed since the delegation was applied.</param>
+	protected void HasDelegationWithin(TimeSpan maxAge) {
+		this.RuleFor(context => context.UserState).HasDelegationWithin(maxAge);
+	}
+
+	/// <summary>
+	/// When delegated, the delegation must have been authorized via one of the allowed
+	/// evidence types (e.g. <c>"ivr-session-validated"</c>, <c>"voice-biometric-verified"</c>).
+	/// Short-circuits to pass for direct callers.
+	/// </summary>
+	/// <param name="allowedEvidenceTypes">The evidence types permitted for this operation.</param>
+	protected void HasDelegationEvidence(params string[] allowedEvidenceTypes) {
+		this.RuleFor(context => context.UserState).HasDelegationEvidence(allowedEvidenceTypes);
+	}
+
+	/// <summary>
+	/// When delegated, the delegated scope must contain the specified permission.
+	/// Per-operation scope-narrowing on delegated invocations. Short-circuits to pass for
+	/// direct callers (whose authorization is governed by roles and grant attributes).
+	/// </summary>
+	/// <param name="required">The permission that must be present in the delegated scope.</param>
+	protected void HasDelegationScope(Permission required) {
+		this.RuleFor(context => context.UserState).HasDelegationScope(required);
+	}
+
+	/// <summary>
+	/// When delegated, the delegated scope must contain at least one of the specified
+	/// permissions. Short-circuits to pass for direct callers.
+	/// </summary>
+	/// <param name="permissions">The permissions — at least one must be present.</param>
+	protected void HasAnyDelegationScope(params Permission[] permissions) {
+		this.RuleFor(context => context.UserState).HasAnyDelegationScope(permissions);
+	}
+
+	/// <summary>
+	/// When delegated, the delegated scope must contain all of the specified permissions.
+	/// Short-circuits to pass for direct callers.
+	/// </summary>
+	/// <param name="permissions">The permissions — all must be present.</param>
+	protected void HasAllDelegationScopes(params Permission[] permissions) {
+		this.RuleFor(context => context.UserState).HasAllDelegationScopes(permissions);
+	}
+
+	/// <summary>
+	/// Registers nested rules under a gate that applies them only when the user state
+	/// represents a delegated identity (an M2M actor acting on behalf of a subject).
+	/// </summary>
+	/// <param name="configure">The action that defines the nested rules.</param>
+	/// <returns>
+	/// An <see cref="IConditionBuilder"/> that can be chained with <c>.Otherwise(...)</c>
+	/// to register rules for the inverse (direct-caller) case.
+	/// </returns>
+	/// <example>
+	/// <code>
+	/// this.WhenDelegated(() =&gt; {
+	///     this.HasActor("SignedRequest");
+	///     this.HasFreshDelegation(TimeSpan.FromMinutes(5));
+	///     this.HasDelegationScope(new Permission("loans", "read"));
+	/// })
+	/// .Otherwise(() =&gt; {
+	///     this.HasRole(Roles.LoanOfficer);
+	/// });
+	/// </code>
+	/// </example>
+	protected IConditionBuilder WhenDelegated(Action configure) {
+		ArgumentNullException.ThrowIfNull(configure);
+		return this.When(ctx => ctx.UserState.IsDelegated, configure);
+	}
+
+	/// <summary>
+	/// Registers nested rules under a gate that applies them only when the user state
+	/// represents a direct caller (i.e., NOT delegated).
+	/// </summary>
+	/// <param name="configure">The action that defines the nested rules.</param>
+	/// <returns>
+	/// An <see cref="IConditionBuilder"/> that can be chained with <c>.Otherwise(...)</c>
+	/// to register rules for the inverse (delegated) case.
+	/// </returns>
+	/// <example>
+	/// <code>
+	/// this.UnlessDelegated(() =&gt; {
+	///     this.HasRole(Roles.AdminUser);
+	/// });
+	/// </code>
+	/// </example>
+	protected IConditionBuilder UnlessDelegated(Action configure) {
+		ArgumentNullException.ThrowIfNull(configure);
+		return this.Unless(ctx => ctx.UserState.IsDelegated, configure);
+	}
+
 }

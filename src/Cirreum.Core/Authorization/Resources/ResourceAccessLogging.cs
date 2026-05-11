@@ -12,25 +12,33 @@ internal static partial class ResourceAccessLogging {
 	[LoggerMessage(
 		EventId = EventBase + 1,
 		Level = LogLevel.Information,
-		Message = "User '{UserName}' was ALLOWED '{Permission}' on {ResourceType} '{ResourceId}'")]
+		Message = "User '{UserName}' was ALLOWED '{Permission}' on {ResourceType} '{ResourceId}'.{DelegationSuffix}")]
 	public static partial void LogResourceAccessAllowed(
 		this ILogger logger,
 		string userName,
 		string resourceType,
 		string? resourceId,
-		string permission);
+		string permission,
+		string? delegationSuffix = null,
+		string? actorId = null,
+		string? actorScheme = null,
+		string? evidenceType = null);
 
 	[LoggerMessage(
 		EventId = EventBase + 2,
 		Level = LogLevel.Warning,
-		Message = "User '{UserName}' was DENIED '{Permission}' on {ResourceType} '{ResourceId}' — {DenyCode}")]
+		Message = "User '{UserName}' was DENIED '{Permission}' on {ResourceType} '{ResourceId}'.{DelegationSuffix} — {DenyCode}")]
 	public static partial void LogResourceAccessDenied(
 		this ILogger logger,
 		string userName,
 		string resourceType,
 		string? resourceId,
 		string permission,
-		string denyCode);
+		string denyCode,
+		string? delegationSuffix = null,
+		string? actorId = null,
+		string? actorScheme = null,
+		string? evidenceType = null);
 
 	[LoggerMessage(
 		EventId = EventBase + 3,

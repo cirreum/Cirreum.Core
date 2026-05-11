@@ -100,6 +100,11 @@ sealed class DefaultAuthorizationEvaluator(
 		using var activity = AuthorizationTelemetry.StartActivity(objectName);
 		var startTimestamp = Timing.Start();
 
+		// Build delegation log/telemetry context once per evaluation — used by every
+		// log message and metric tag in this pipeline to surface actor/evidence/channel
+		// state for non-repudiable audit. None / null when the invocation is not delegated.
+		var delegationLog = DelegationLogContext.From(userState);
+
 		// Check authentication
 		if (!userState.IsAuthenticated) {
 			//******************************************
@@ -112,7 +117,11 @@ sealed class DefaultAuthorizationEvaluator(
 			logger.LogAuthorizingDenied(
 				userState.Name,
 				objectName,
-				ex.Message);
+				ex.Message,
+				delegationLog.DelegationSuffix,
+				delegationLog.ActorId,
+				delegationLog.ActorScheme,
+				delegationLog.EvidenceType);
 
 			AuthorizationTelemetry.RecordDuration(
 				activity, objectName,
@@ -173,7 +182,11 @@ sealed class DefaultAuthorizationEvaluator(
 			logger.LogAuthorizingDenied(
 				userState.Name,
 				objectName,
-				emptyAuthContainerEx.Message);
+				emptyAuthContainerEx.Message,
+				delegationLog.DelegationSuffix,
+				delegationLog.ActorId,
+				delegationLog.ActorScheme,
+				delegationLog.EvidenceType);
 
 			AuthorizationTelemetry.RecordDuration(
 				activity, objectName,
@@ -205,7 +218,11 @@ sealed class DefaultAuthorizationEvaluator(
 			logger.LogAuthorizingDenied(
 				userState.Name,
 				objectName,
-				noRolesEx.Message);
+				noRolesEx.Message,
+				delegationLog.DelegationSuffix,
+				delegationLog.ActorId,
+				delegationLog.ActorScheme,
+				delegationLog.EvidenceType);
 
 			AuthorizationTelemetry.RecordDuration(
 				activity, objectName,
@@ -260,7 +277,7 @@ sealed class DefaultAuthorizationEvaluator(
 						Timing.GetElapsedMilliseconds(startTimestamp),
 						AuthorizationTelemetry.DecisionDeny,
 						denyStage: AuthorizationTelemetry.StageScope);
-					return this.DenyFromStage(grantResult.Errors, userState.Name, objectName);
+					return this.DenyFromStage(grantResult.Errors, userState.Name, objectName, delegationLog);
 				}
 			}
 
@@ -278,13 +295,16 @@ sealed class DefaultAuthorizationEvaluator(
 						decision: AuthorizationTelemetry.DecisionDeny,
 						reason: constraintResult.Errors.FirstOrDefault()?.ErrorCode ?? "UNKNOWN",
 						evaluator: constraint.GetType().Name,
-						resourceType: objectName);
+						resourceType: objectName,
+						isDelegated: delegationLog.IsDelegated,
+						actorScheme: delegationLog.ActorScheme,
+						evidenceType: delegationLog.EvidenceType);
 					AuthorizationTelemetry.RecordDuration(
 						activity, objectName,
 						Timing.GetElapsedMilliseconds(startTimestamp),
 						AuthorizationTelemetry.DecisionDeny,
 						denyStage: AuthorizationTelemetry.StageScope);
-					return this.DenyFromStage(constraintResult.Errors, userState.Name, objectName);
+					return this.DenyFromStage(constraintResult.Errors, userState.Name, objectName, delegationLog);
 				}
 			}
 
@@ -333,13 +353,16 @@ sealed class DefaultAuthorizationEvaluator(
 					decision: AuthorizationTelemetry.DecisionDeny,
 					reason: stageFailures[0].ErrorCode ?? "UNKNOWN",
 					evaluator: objectAuthorizers[0].GetType().Name,
-					resourceType: objectName);
+					resourceType: objectName,
+					isDelegated: delegationLog.IsDelegated,
+					actorScheme: delegationLog.ActorScheme,
+					evidenceType: delegationLog.EvidenceType);
 				AuthorizationTelemetry.RecordDuration(
 					activity, objectName,
 					Timing.GetElapsedMilliseconds(startTimestamp),
 					AuthorizationTelemetry.DecisionDeny,
 					denyStage: AuthorizationTelemetry.StageResource);
-				return this.DenyFromStage(stageFailures, userState.Name, objectName);
+				return this.DenyFromStage(stageFailures, userState.Name, objectName, delegationLog);
 			}
 
 			//******************************************
@@ -373,13 +396,16 @@ sealed class DefaultAuthorizationEvaluator(
 					step: AuthorizationTelemetry.StepPolicyValidator,
 					decision: AuthorizationTelemetry.DecisionDeny,
 					reason: stageFailures[0].ErrorCode ?? "UNKNOWN",
-					resourceType: objectName);
+					resourceType: objectName,
+					isDelegated: delegationLog.IsDelegated,
+					actorScheme: delegationLog.ActorScheme,
+					evidenceType: delegationLog.EvidenceType);
 				AuthorizationTelemetry.RecordDuration(
 					activity, objectName,
 					Timing.GetElapsedMilliseconds(startTimestamp),
 					AuthorizationTelemetry.DecisionDeny,
 					denyStage: AuthorizationTelemetry.StagePolicy);
-				return this.DenyFromStage(stageFailures, userState.Name, objectName);
+				return this.DenyFromStage(stageFailures, userState.Name, objectName, delegationLog);
 			}
 
 			//******************************************
@@ -389,7 +415,11 @@ sealed class DefaultAuthorizationEvaluator(
 			//******************************************
 			logger.LogAuthorizingAllowed(
 				userState.Name,
-				objectName);
+				objectName,
+				delegationLog.DelegationSuffix,
+				delegationLog.ActorId,
+				delegationLog.ActorScheme,
+				delegationLog.EvidenceType);
 
 			AuthorizationTelemetry.RecordDuration(
 				activity, objectName,
@@ -410,7 +440,11 @@ sealed class DefaultAuthorizationEvaluator(
 				ex,
 				userState.Name,
 				objectName,
-				ex.Message);
+				ex.Message,
+				delegationLog.DelegationSuffix,
+				delegationLog.ActorId,
+				delegationLog.ActorScheme,
+				delegationLog.EvidenceType);
 
 			AuthorizationTelemetry.RecordDuration(
 				activity, objectName,
@@ -444,9 +478,16 @@ sealed class DefaultAuthorizationEvaluator(
 		return applicable;
 	}
 
-	private Result DenyFromStage(List<ValidationFailure> failures, string userName, string objectName) {
+	private Result DenyFromStage(List<ValidationFailure> failures, string userName, string objectName, DelegationLogContext delegationLog) {
 		var message = string.Join(',', failures.Select(f => f.ErrorMessage));
-		logger.LogAuthorizingDenied(userName, objectName, message);
+		logger.LogAuthorizingDenied(
+			userName,
+			objectName,
+			message,
+			delegationLog.DelegationSuffix,
+			delegationLog.ActorId,
+			delegationLog.ActorScheme,
+			delegationLog.EvidenceType);
 		return Result.Fail(new ForbiddenAccessException(message));
 	}
 }

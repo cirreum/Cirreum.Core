@@ -88,6 +88,17 @@ public static class AuthorizationTelemetry {
 	/// <summary>Tag: resource CLR type name.</summary>
 	public const string ResourceTypeTag = "cirreum.authz.resource_type";
 
+	// Delegation tag names ————————————————————————————————————
+
+	/// <summary>Tag: <see langword="true"/> when the invocation represents a delegated identity (an M2M actor acting on behalf of a subject).</summary>
+	public const string IsDelegatedTag = "cirreum.authz.delegation.is_delegated";
+
+	/// <summary>Tag: the actor's authentication scheme (e.g. <c>"ApiKey"</c>, <c>"SignedRequest"</c>) when the invocation is delegated.</summary>
+	public const string ActorSchemeTag = "cirreum.authz.delegation.actor_scheme";
+
+	/// <summary>Tag: the evidence-type identifier that authorized the delegation (e.g. <c>"ivr-session-validated"</c>) when the invocation is delegated.</summary>
+	public const string EvidenceTypeTag = "cirreum.authz.delegation.evidence_type";
+
 	// Grant cache level values ————————————————————————————————
 
 	/// <summary>Grant resolved via admin bypass (always live, never cached).</summary>
@@ -257,6 +268,9 @@ public static class AuthorizationTelemetry {
 	/// <param name="scope">Access scope name (none / global / tenant).</param>
 	/// <param name="evaluator">Evaluator type name.</param>
 	/// <param name="resourceType">Resource CLR type name.</param>
+	/// <param name="isDelegated"><see langword="true"/> when the invocation is delegated; <see langword="null"/> when the field is unknown or not applicable to the call site.</param>
+	/// <param name="actorScheme">The actor's authentication scheme when the invocation is delegated; <see langword="null"/> otherwise.</param>
+	/// <param name="evidenceType">The evidence-type identifier that authorized the delegation when the invocation is delegated; <see langword="null"/> otherwise.</param>
 	public static void RecordDecision(
 		string stage,
 		string step,
@@ -264,7 +278,10 @@ public static class AuthorizationTelemetry {
 		string reason,
 		string? scope = null,
 		string? evaluator = null,
-		string? resourceType = null) {
+		string? resourceType = null,
+		bool? isDelegated = null,
+		string? actorScheme = null,
+		string? evidenceType = null) {
 
 		var tags = new TagList {
 			{ StageTag, stage },
@@ -281,6 +298,15 @@ public static class AuthorizationTelemetry {
 		}
 		if (resourceType is not null) {
 			tags.Add(ResourceTypeTag, resourceType);
+		}
+		if (isDelegated.HasValue) {
+			tags.Add(IsDelegatedTag, isDelegated.Value);
+		}
+		if (actorScheme is not null) {
+			tags.Add(ActorSchemeTag, actorScheme);
+		}
+		if (evidenceType is not null) {
+			tags.Add(EvidenceTypeTag, evidenceType);
 		}
 
 		_decisionsCounter.Add(1, tags);

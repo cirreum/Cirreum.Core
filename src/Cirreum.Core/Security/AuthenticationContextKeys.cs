@@ -40,4 +40,23 @@ public static class AuthenticationContextKeys {
 	/// </remarks>
 	public const string ApplicationUserCache = "__Cirreum_ApplicationUser";
 
+	/// <summary>
+	/// The captured <see cref="IActorContext"/> when the current invocation represents a
+	/// delegated identity — an M2M actor acting on behalf of a subject.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Stamped by the upstream M2M auth handler (e.g., <c>Cirreum.Authorization.ApiKey</c>,
+	/// <c>Cirreum.Authorization.SignedRequest</c>) into <c>HttpContext.Items</c> /
+	/// <c>IInvocationConnection.Items</c> after a successful delegation orchestration.
+	/// Read by the server's <c>UserStateAccessor</c> when constructing the per-invocation
+	/// <see cref="IUserState"/>; surfaced via <see cref="IUserState.Actor"/>.
+	/// </para>
+	/// <para>
+	/// Absent (or <see langword="null"/>) when the invocation is not delegated — direct
+	/// sign-in, direct M2M without evidence, anonymous.
+	/// </para>
+	/// </remarks>
+	public const string Actor = "__Cirreum_Actor";
+
 }
