@@ -118,10 +118,7 @@ sealed class DefaultAuthorizationEvaluator(
 				userState.Name,
 				objectName,
 				ex.Message,
-				delegationLog.DelegationSuffix,
-				delegationLog.ActorId,
-				delegationLog.ActorScheme,
-				delegationLog.EvidenceType);
+				delegationLog.DelegationSuffix);
 
 			AuthorizationTelemetry.RecordDuration(
 				activity, objectName,
@@ -183,10 +180,7 @@ sealed class DefaultAuthorizationEvaluator(
 				userState.Name,
 				objectName,
 				emptyAuthContainerEx.Message,
-				delegationLog.DelegationSuffix,
-				delegationLog.ActorId,
-				delegationLog.ActorScheme,
-				delegationLog.EvidenceType);
+				delegationLog.DelegationSuffix);
 
 			AuthorizationTelemetry.RecordDuration(
 				activity, objectName,
@@ -219,10 +213,7 @@ sealed class DefaultAuthorizationEvaluator(
 				userState.Name,
 				objectName,
 				noRolesEx.Message,
-				delegationLog.DelegationSuffix,
-				delegationLog.ActorId,
-				delegationLog.ActorScheme,
-				delegationLog.EvidenceType);
+				delegationLog.DelegationSuffix);
 
 			AuthorizationTelemetry.RecordDuration(
 				activity, objectName,
@@ -416,10 +407,7 @@ sealed class DefaultAuthorizationEvaluator(
 			logger.LogAuthorizingAllowed(
 				userState.Name,
 				objectName,
-				delegationLog.DelegationSuffix,
-				delegationLog.ActorId,
-				delegationLog.ActorScheme,
-				delegationLog.EvidenceType);
+				delegationLog.DelegationSuffix);
 
 			AuthorizationTelemetry.RecordDuration(
 				activity, objectName,
@@ -441,10 +429,7 @@ sealed class DefaultAuthorizationEvaluator(
 				userState.Name,
 				objectName,
 				ex.Message,
-				delegationLog.DelegationSuffix,
-				delegationLog.ActorId,
-				delegationLog.ActorScheme,
-				delegationLog.EvidenceType);
+				delegationLog.DelegationSuffix);
 
 			AuthorizationTelemetry.RecordDuration(
 				activity, objectName,
@@ -484,10 +469,7 @@ sealed class DefaultAuthorizationEvaluator(
 			userName,
 			objectName,
 			message,
-			delegationLog.DelegationSuffix,
-			delegationLog.ActorId,
-			delegationLog.ActorScheme,
-			delegationLog.EvidenceType);
+			delegationLog.DelegationSuffix);
 		return Result.Fail(new ForbiddenAccessException(message));
 	}
 }

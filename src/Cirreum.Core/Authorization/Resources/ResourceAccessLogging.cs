@@ -19,10 +19,7 @@ internal static partial class ResourceAccessLogging {
 		string resourceType,
 		string? resourceId,
 		string permission,
-		string? delegationSuffix = null,
-		string? actorId = null,
-		string? actorScheme = null,
-		string? evidenceType = null);
+		string? delegationSuffix = null);
 
 	[LoggerMessage(
 		EventId = EventBase + 2,
@@ -35,10 +32,7 @@ internal static partial class ResourceAccessLogging {
 		string? resourceId,
 		string permission,
 		string denyCode,
-		string? delegationSuffix = null,
-		string? actorId = null,
-		string? actorScheme = null,
-		string? evidenceType = null);
+		string? delegationSuffix = null);
 
 	[LoggerMessage(
 		EventId = EventBase + 3,

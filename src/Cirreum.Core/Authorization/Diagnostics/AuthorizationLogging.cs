@@ -13,10 +13,7 @@ internal static partial class AuthorizationLogging {
 		string userName,
 		string objectName,
 		string deniedReason,
-		string? delegationSuffix = null,
-		string? actorId = null,
-		string? actorScheme = null,
-		string? evidenceType = null);
+		string? delegationSuffix = null);
 
 
 	[LoggerMessage(
@@ -29,10 +26,7 @@ internal static partial class AuthorizationLogging {
 		string userName,
 		string objectName,
 		string failureReasons,
-		string? delegationSuffix = null,
-		string? actorId = null,
-		string? actorScheme = null,
-		string? evidenceType = null);
+		string? delegationSuffix = null);
 
 
 	[LoggerMessage(
@@ -43,9 +37,6 @@ internal static partial class AuthorizationLogging {
 		this ILogger logger,
 		string userName,
 		string objectName,
-		string? delegationSuffix = null,
-		string? actorId = null,
-		string? actorScheme = null,
-		string? evidenceType = null);
+		string? delegationSuffix = null);
 
 }

@@ -46,10 +46,7 @@ internal sealed class ResourceAccessEvaluator(
 				resource.ResourceId,
 				permission.ToString(),
 				DenyCodes.ResourceAccessDenied,
-				delegationLog.DelegationSuffix,
-				delegationLog.ActorId,
-				delegationLog.ActorScheme,
-				delegationLog.EvidenceType);
+				delegationLog.DelegationSuffix);
 
 			EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceAccessDenied, delegationLog);
 			return Result.Fail(new ForbiddenAccessException(
@@ -65,10 +62,7 @@ internal sealed class ResourceAccessEvaluator(
 				typeof(T).Name,
 				resource.ResourceId,
 				permission,
-				delegationLog.DelegationSuffix,
-				delegationLog.ActorId,
-				delegationLog.ActorScheme,
-				delegationLog.EvidenceType);
+				delegationLog.DelegationSuffix);
 
 			EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionPass, AuthorizationTelemetry.ReasonPass, delegationLog);
 			return Result.Success;
@@ -80,10 +74,7 @@ internal sealed class ResourceAccessEvaluator(
 			resource.ResourceId,
 			permission.ToString(),
 			DenyCodes.ResourceAccessDenied,
-			delegationLog.DelegationSuffix,
-			delegationLog.ActorId,
-			delegationLog.ActorScheme,
-			delegationLog.EvidenceType);
+			delegationLog.DelegationSuffix);
 
 		EmitTelemetry(typeof(T).Name, AuthorizationTelemetry.DecisionDeny, DenyCodes.ResourceAccessDenied, delegationLog);
 		return Result.Fail(new ForbiddenAccessException(
