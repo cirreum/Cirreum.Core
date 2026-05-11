@@ -9,6 +9,7 @@
     <File Path="build/Versioning.props" />
   </Folder>
   <Folder Name="/docs/">
+    <File Path="docs/BACKLOG.md" />
     <File Path="docs/CHANGELOG.md" />
     <File Path="docs/MIGRATION-v3.md" />
     <File Path="docs/MIGRATION-v4.md" />
