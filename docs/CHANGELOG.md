@@ -12,6 +12,8 @@ guides linked at the bottom of each entry.
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-05-10
+
 ### Added
 
 - **`Cirreum.Messaging.INodeIdProvider`** — interface providing a stable identifier for the current process replica/node, distinct from `ProducerId` (which identifies the application/head and is shared across replicas). Enables broker-level and in-process self-echo prevention for inbound distributed messages where multi-replica deployments may receive their own publishes via a shared subscription.
